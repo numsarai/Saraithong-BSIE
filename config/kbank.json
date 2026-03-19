@@ -1,0 +1,20 @@
+{
+  "bank_name": "KBANK",
+  "sheet_index": 0,
+  "header_row": 0,
+  "skip_rows": [],
+  "column_mapping": {
+    "date": ["วันที่", "Date", "date", "DATE", "Transaction Date"],
+    "time": ["เวลา", "Time", "time", "TIME"],
+    "description": ["รายการ", "Description", "description", "DESC", "Narration", "หมายเหตุ"],
+    "amount": ["จำนวนเงิน", "Amount", "amount", "AMOUNT"],
+    "debit": ["เดบิต", "Debit", "debit", "DEBIT", "ถอน", "ถอนเงิน"],
+    "credit": ["เครดิต", "Credit", "credit", "CREDIT", "ฝาก", "เงินฝาก"],
+    "balance": ["ยอดคงเหลือ", "Balance", "balance", "BALANCE", "คงเหลือ", "จำนวนเงินคงเหลือ"],
+    "channel": ["ช่องทาง", "Channel", "channel", "CHANNEL"],
+    "counterparty_account": ["บัญชีผู้โอน/รับโอน", "Counterparty Account", "From/To Account", "Ref No", "บัญชีผู้รับโอน", "บัญชีผู้โอน"],
+    "counterparty_name": ["ชื่อผู้โอน/รับโอน", "Counterparty Name", "From/To Name", "ชื่อผู้รับโอน", "ชื่อผู้โอน"]
+  },
+  "currency": "THB",
+  "amount_mode": "debit_credit"
+}

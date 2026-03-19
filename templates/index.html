@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BSIE – Bank Statement Intelligence Engine</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- ══ Header ══════════════════════════════════════════════════════════ -->
+<header class="app-header">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>
+  </svg>
+  <div><h1>BSIE</h1><p>Bank Statement Intelligence Engine</p></div>
+  <div class="header-right"><span class="badge-version">v2.0</span></div>
+</header>
+
+<!-- ══ Main layout ═════════════════════════════════════════════════════ -->
+<div class="main-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-title">Pipeline Steps</div>
+    <ul class="step-nav" id="step-nav">
+      <li class="step-item active" data-step="1"><div class="step-badge">1</div><span>Upload File</span></li>
+      <li class="step-item locked" data-step="2"><div class="step-badge">2</div><span>Detect &amp; Map</span></li>
+      <li class="step-item locked" data-step="3"><div class="step-badge">3</div><span>Configure</span></li>
+      <li class="step-item locked" data-step="4"><div class="step-badge">4</div><span>Processing</span></li>
+      <li class="step-item locked" data-step="5"><div class="step-badge">5</div><span>Results</span></li>
+    </ul>
+  </aside>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- ══ Step 1: Upload ══════════════════════════════════════════════ -->
+    <section class="step-panel active" id="step-1">
+      <div class="panel-title">📤 Upload Bank Statement</div>
+      <p class="panel-subtitle">Drag &amp; drop an Excel (.xlsx / .xls) file to begin. The system will auto-detect the bank and column structure.</p>
+
+      <div class="card">
+        <div class="drop-zone" id="drop-zone">
+          <div class="dz-icon">📄</div>
+          <p><strong><a id="browse-link">Click to browse</a></strong> or drag &amp; drop</p>
+          <p>.xlsx / .xls — max 50 MB</p>
+          <input type="file" id="file-input" accept=".xlsx,.xls">
+        </div>
+        <div id="upload-progress" style="display:none; margin-top:14px;">
+          <div class="spin-row"><div class="spinner"></div><span id="upload-status">Uploading and analysing…</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ Step 2: Detect & Map ════════════════════════════════════════ -->
+    <section class="step-panel" id="step-2">
+      <div class="panel-title">🔍 Detection &amp; Column Mapping</div>
+      <p class="panel-subtitle">Review auto-detected bank and column assignments. Adjust using the dropdowns below.</p>
+
+      <!-- Detection summary -->
+      <div class="detect-grid" id="detect-summary"></div>
+
+      <!-- Memory match notice -->
+      <div id="memory-notice" style="display:none" class="card" style="border-color:var(--success);">
+        <div class="card-title">💾 Mapping Profile Matched</div>
+        <p id="memory-detail" style="color:var(--muted);font-size:13px;"></p>
+      </div>
+
+      <!-- Column mapping editor -->
+      <div class="card">
+        <div class="card-title">⚙️ Column Mapping
+          <button class="btn btn-ghost btn-sm" onclick="autoFillMapping()">⚡ Auto-fill All</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearMapping()">🗑 Clear</button>
+        </div>
+        <table class="map-table" id="mapping-table">
+          <thead><tr>
+            <th>Logical Field</th>
+            <th>Mapped Column</th>
+            <th>Confidence</th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody id="mapping-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Sample data preview -->
+      <div class="card">
+        <div class="card-title">📋 Sample Data (first 5 rows)</div>
+        <div class="sample-scroll"><table class="sample-tbl" id="sample-table"></table></div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-ghost" onclick="goStep(1)">← Back</button>
+        <button class="btn btn-primary" onclick="confirmMapping()">Confirm Mapping →</button>
+      </div>
+    </section>
+
+    <!-- ══ Step 3: Configure account ══════════════════════════════════ -->
+    <section class="step-panel" id="step-3">
+      <div class="panel-title">🎯 Subject Account Configuration</div>
+      <p class="panel-subtitle">Enter the account number under investigation. This is the anchor for all relationship logic.</p>
+
+      <div class="card">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Bank <span class="field-req">*</span></label>
+            <select id="bank-select"></select>
+          </div>
+          <div class="form-group">
+            <label>Subject Account Number <span class="field-req">*</span></label>
+            <input type="text" id="account-input" placeholder="10 or 12 digits" maxlength="12">
+            <span class="hint">Digits only, exactly 10 or 12</span>
+          </div>
+          <div class="form-group">
+            <label>Account Holder Name</label>
+            <input type="text" id="name-input" placeholder="e.g. สมชาย ใจดี">
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-ghost" onclick="goStep(2)">← Back</button>
+        <button class="btn btn-primary" onclick="startProcessing()">▶ Run Pipeline</button>
+      </div>
+    </section>
+
+    <!-- ══ Step 4: Processing ══════════════════════════════════════════ -->
+    <section class="step-panel" id="step-4">
+      <div class="panel-title">⚙️ Processing</div>
+      <p class="panel-subtitle">Running the 14-step BSIE pipeline…</p>
+
+      <div class="card">
+        <div class="spin-row" id="processing-spinner">
+          <div class="spinner"></div><span id="proc-status">Starting pipeline…</span>
+        </div>
+        <div class="log-box" id="log-box"></div>
+      </div>
+    </section>
+
+    <!-- ══ Step 5: Results ════════════════════════════════════════════ -->
+    <section class="step-panel" id="step-5">
+      <div class="panel-title">📊 Results</div>
+      <p class="panel-subtitle" id="results-subtitle"></p>
+
+      <!-- Stats bar -->
+      <div class="stats-bar" id="stats-bar"></div>
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:4px;margin-bottom:14px;" id="result-tabs">
+        <button class="btn btn-primary btn-sm" onclick="switchTab('transactions')" id="tab-txn">Transactions</button>
+        <button class="btn btn-ghost btn-sm"   onclick="switchTab('entities')"    id="tab-ent">Entities</button>
+        <button class="btn btn-ghost btn-sm"   onclick="switchTab('links')"       id="tab-lnk">Links</button>
+      </div>
+
+      <!-- Transaction table -->
+      <div id="tab-transactions">
+        <div class="tbl-wrap">
+          <table class="data-table" id="txn-table">
+            <thead id="txn-thead"></thead>
+            <tbody id="txn-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="txn-pagination"></div>
+      </div>
+
+      <!-- Entity table -->
+      <div id="tab-entities" style="display:none">
+        <div class="tbl-wrap">
+          <table class="data-table" id="ent-table">
+            <thead id="ent-thead"></thead>
+            <tbody id="ent-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Links table -->
+      <div id="tab-links" style="display:none">
+        <div class="tbl-wrap">
+          <table class="data-table" id="lnk-table">
+            <thead id="lnk-thead"></thead>
+            <tbody id="lnk-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Downloads -->
+      <div class="card" style="margin-top:18px;">
+        <div class="card-title">📥 Download Account Package</div>
+        <div class="dl-grid" id="download-links"></div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-ghost" onclick="resetAll()">🔄 Process Another File</button>
+      </div>
+    </section>
+
+  </main>
+</div><!-- .main-layout -->
+
+<!-- ══ Override Modal ══════════════════════════════════════════════════ -->
+<div class="overlay" id="override-modal">
+  <div class="modal">
+    <div class="modal-title">🔗 Override Relationship</div>
+    <input type="hidden" id="ov-tid">
+    <div class="form-group" style="margin-bottom:13px;">
+      <label>Transaction ID</label>
+      <input type="text" id="ov-tid-display" readonly style="opacity:.6;">
+    </div>
+    <div class="form-group" style="margin-bottom:13px;">
+      <label>FROM Account <span class="field-req">*</span></label>
+      <input type="text" id="ov-from" placeholder="Account number or UNKNOWN">
+    </div>
+    <div class="form-group" style="margin-bottom:13px;">
+      <label>TO Account <span class="field-req">*</span></label>
+      <input type="text" id="ov-to" placeholder="Account number or UNKNOWN">
+    </div>
+    <div class="form-group" style="margin-bottom:13px;">
+      <label>Reason</label>
+      <input type="text" id="ov-reason" placeholder="Reason for override (optional)">
+    </div>
+    <div class="form-group" style="margin-bottom:6px;">
+      <label>Override by</label>
+      <input type="text" id="ov-by" value="analyst">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeOverride()">Cancel</button>
+      <button class="btn btn-success" onclick="saveOverride()">💾 Save Override</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Toast container ═════════════════════════════════════════════════ -->
+<div id="toast-wrap"></div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

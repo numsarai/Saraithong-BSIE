@@ -76,10 +76,76 @@ def _enforce_schema(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _run_nlp(df: pd.DataFrame) -> pd.DataFrame:
-    """Enrich every row with NLP extraction results."""
+    """Enrich every row with NLP extraction results.
+
+    Counterparty name resolution priority (highest → lowest):
+      1. Column name from bank statement (already in counterparty_name)
+      2. NLP-extracted name from description text
+      3. Counterparty account number (digits as display label)
+      4. Channel label  ← for ATM/CDM cash transactions (no named counterparty)
+    """
+    # Cash channels: no named counterparty — use channel as label
+    _CASH_CHANNELS = {"atm", "cdm", "cash"}
+
+    def _clean(val) -> str:
+        """Convert any value (including pandas NaN) to a clean string."""
+        if val is None:
+            return ""
+        s = str(val).strip()
+        return "" if s.lower() in ("nan", "none", "nat") else s
+
     rows = []
     for _, row in df.iterrows():
-        rows.append(enrich_transaction_row(row.to_dict()))
+        r = enrich_transaction_row(row.to_dict())
+
+        nlp_name  = _clean(r.get("nlp_best_name"))
+        cp_name   = _clean(r.get("counterparty_name"))
+        cp_acc    = _clean(r.get("counterparty_account"))
+        partial   = _clean(r.get("partial_account"))
+        channel   = _clean(r.get("channel"))
+        direction = _clean(r.get("direction"))
+
+        # ① Upgrade with NLP name if current name is blank / is just an account number
+        if nlp_name and (not cp_name or cp_name == cp_acc or cp_name == partial):
+            r["counterparty_name"] = nlp_name
+            cp_name = nlp_name
+
+        # ② Account number as label
+        if not cp_name:
+            cp_name = cp_acc or partial
+            r["counterparty_name"] = cp_name
+
+        # ③ Cash-machine channel as label (ATM withdrawal / CDM deposit)
+        if not cp_name and channel.lower() in _CASH_CHANNELS:
+            # Label: "ถอนเงิน ATM" or "ฝากเงิน CDM" for clarity
+            if direction == "OUT":
+                r["counterparty_name"] = f"ถอนเงิน {channel.upper()}"
+            elif direction == "IN":
+                r["counterparty_name"] = f"ฝากเงิน {channel.upper()}"
+            else:
+                r["counterparty_name"] = channel.upper()
+
+        # ④ Any non-empty channel as last resort
+        if not r.get("counterparty_name") and channel:
+            r["counterparty_name"] = channel
+
+        # ⑤ System/placeholder account → give human label
+        cp_acc_final = _clean(r.get("counterparty_account"))
+        if cp_acc_final and len(set(cp_acc_final)) == 1 and cp_acc_final.isdigit():
+            # All-same-digit account (e.g. 9999999999) = bank system account
+            if not r.get("counterparty_name") or r.get("counterparty_name") == cp_acc_final:
+                r["counterparty_name"] = "หักบัญชีอัตโนมัติ"
+
+        # ⑥ Description = bare time → use channel as description for readability
+        import re as _re
+        desc = _clean(r.get("description"))
+        if _re.fullmatch(r'\d{1,2}:\d{2}(:\d{2})?', desc) or not desc:
+            ch_label = _clean(r.get("channel"))
+            if ch_label:
+                r["description"] = ch_label
+
+        rows.append(r)
+
     enriched = pd.DataFrame(rows)
     # Restore original index
     enriched.index = df.index
@@ -144,10 +210,10 @@ def process_account(
     else:
         logger.info(f"  Using provided bank_key: {_bank_cfg_key}")
 
-    # Fall back to SCB config if detection fails
+    # Fall back to generic (standard format) config if detection fails
     if not _bank_cfg_key:
-        _bank_cfg_key = "scb"
-        logger.warning("  Bank detection failed — falling back to SCB config")
+        _bank_cfg_key = "generic"
+        logger.warning("  Bank detection failed — falling back to generic standard config")
 
     bank_config = load_config(_bank_cfg_key)
     raw_df = load_excel(input_file, bank_config)
@@ -174,12 +240,29 @@ def process_account(
 
     # Build a synthetic bank_config that uses the confirmed mapping
     _effective_config = dict(bank_config)
-    # Convert {field: column} -> {field: [column]} for normalizer
-    _effective_config["column_mapping"] = {
-        field: [col] if col else []
-        for field, col in validated_mapping.items()
-        if col
-    }
+    _format_type = bank_config.get("format_type", "standard")
+
+    if _format_type in ("dual_account", "ktb_transfer"):
+        # For format-specific types, PRESERVE all bank-config column mappings
+        # (sender_account, receiver_account, sender_name, receiver_name, etc.)
+        # and only override the generic common fields that the user confirmed.
+        _common_fields = {"date", "time", "channel", "description"}
+        _base_mapping = {
+            field: list(aliases)
+            for field, aliases in bank_config.get("column_mapping", {}).items()
+        }
+        for field, col in validated_mapping.items():
+            if field in _common_fields and col:
+                _base_mapping[field] = [col]
+        _effective_config["column_mapping"] = _base_mapping
+    else:
+        # Standard format: use confirmed mapping directly
+        # Convert {field: column} -> {field: [column]} for normalizer
+        _effective_config["column_mapping"] = {
+            field: [col] if col else []
+            for field, col in validated_mapping.items()
+            if col
+        }
 
     # ── Step 6: Normalize data ────────────────────────────────────────────
     logger.info("[Step 6] Normalizing data")
@@ -228,6 +311,7 @@ def process_account(
         account_number=subject_account,
         bank=bank_config.get("bank_name", _bank_cfg_key.upper()),
         original_file=input_file,
+        subject_name=subject_name,
     )
 
     logger.info(f"Pipeline COMPLETE -> {output_dir}")

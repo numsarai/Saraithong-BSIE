@@ -42,9 +42,23 @@ def _try_formats(text: str) -> Optional[datetime]:
 
 
 def _adjust_buddhist_era(dt: datetime) -> datetime:
-    """Convert Buddhist Era year to Common Era if detected."""
+    """Convert Buddhist Era year to Common Era if detected.
+
+    Handles two cases:
+      - Full BE year (e.g. 2568 → 2025)   when year > 2400
+      - Short BE year (e.g. 68 parsed as 2068 → 2025)
+        Python %y interprets "68" as 2068 which is far future;
+        in Thai context 68 means พ.ศ. 25 68 → ค.ศ. 2025.
+    """
     if dt.year > _BE_THRESHOLD:
         return dt.replace(year=dt.year - 543)
+    # Short BE: 2-digit year that Python %y expands to far future (> 2050)
+    # e.g. "68" → Python says 2068, but Thai context means พ.ศ. 2568 → ค.ศ. 2025
+    # Convert: 2068 - 2000 = 68, then 2500 + 68 = 2568, then 2568 - 543 = 2025
+    if dt.year > 2050:
+        short = dt.year % 100
+        be_year = 2500 + short
+        return dt.replace(year=be_year - 543)
     return dt
 
 

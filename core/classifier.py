@@ -43,9 +43,10 @@ def classify_transaction(
     description: str,
     nlp_type_hint: str = "unknown",
     nlp_confidence: float = 0.0,
+    channel: str = "",
 ) -> Tuple[str, float]:
     """
-    Classify a single transaction using a 4-rule priority chain.
+    Classify a single transaction using a priority chain.
 
     Parameters
     ----------
@@ -54,12 +55,33 @@ def classify_transaction(
     description          : normalised description text
     nlp_type_hint        : hint from nlp_engine.classify_transaction_nlp
     nlp_confidence       : NLP confidence score
+    channel              : channel label (ATM / CDM / K PLUS / etc.)
 
     Returns
     -------
     (transaction_type, confidence)
     """
-    # RULE 1: Valid counterparty account
+    ch = (channel or "").strip().upper()
+
+    # RULE 0: Channel-based cash classification (highest confidence for ATM/CDM)
+    #   ATM  + OUT → WITHDRAW  (ถอนเงินสด)
+    #   CDM  + IN  → DEPOSIT   (ฝากเงินสด)
+    if ch == "ATM":
+        if direction == "OUT":
+            return WITHDRAW, 0.97
+        # ATM IN (rare reversal) → still cash-related
+        return DEPOSIT, 0.80
+    if ch == "CDM":
+        if direction == "IN":
+            return DEPOSIT, 0.97
+        return WITHDRAW, 0.80
+
+    # RULE 0.5: Mobile app channel with no counterparty → OUT_UNKNOWN (not a cash withdrawal)
+    _MOBILE_CHANNELS = {"k plus", "kplus", "scb easy", "krungthai next", "bay mobile"}
+    if ch.lower() in _MOBILE_CHANNELS and not counterparty_account and direction == "OUT":
+        return OUT_UNKNOWN, 0.72
+
+    # RULE 1: Valid counterparty account → transfer
     if counterparty_account and len(counterparty_account) >= 10:
         return (IN_TRANSFER if direction == "IN" else OUT_TRANSFER), 0.95
 
@@ -71,8 +93,9 @@ def classify_transaction(
         if mapped:
             return mapped, nlp_confidence
 
-    # RULE 3: Keyword detection
-    kw = detect_keyword_type(description)
+    # RULE 3: Keyword detection (description + channel text combined)
+    combined_text = f"{description} {channel}"
+    kw = detect_keyword_type(combined_text)
     if kw["is_transfer"]:
         return (IN_TRANSFER if direction == "IN" else OUT_TRANSFER), 0.80
     if kw["is_deposit"]:
@@ -80,11 +103,11 @@ def classify_transaction(
     if kw["is_withdraw"]:
         return WITHDRAW, 0.80
 
-    # RULE 4: Fallback
+    # RULE 4: Fallback by direction → DEPOSIT / WITHDRAW (0.70)
     if direction == "IN":
-        return IN_UNKNOWN, 0.60
+        return DEPOSIT, 0.70
     if direction == "OUT":
-        return OUT_UNKNOWN, 0.60
+        return WITHDRAW, 0.70
     return IN_UNKNOWN, 0.50
 
 
@@ -103,8 +126,11 @@ def classify_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         desc      = str(row.get("description", "") or "")
         nlp_hint  = str(row.get("nlp_type_hint", "unknown") or "unknown")
         nlp_conf  = float(row.get("nlp_confidence", 0.0) or 0.0)
+        channel   = str(row.get("channel", "") or "")
 
-        txn_type, conf = classify_transaction(direction, cp_acc, desc, nlp_hint, nlp_conf)
+        txn_type, conf = classify_transaction(
+            direction, cp_acc, desc, nlp_hint, nlp_conf, channel
+        )
         types.append(txn_type)
         confs.append(conf)
 

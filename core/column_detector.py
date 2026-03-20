@@ -25,9 +25,10 @@ FIELD_KEYWORDS: Dict[str, List[str]] = {
         "trans time",
     ],
     "description": [
-        "รายการ", "รายละเอียด", "description", "narration", "remark",
-        "details", "detail", "memo", "note", "particulars", "หมายเหตุ",
-        "คำอธิบาย", "transaction description", "txn description",
+        "รายการ", "รายละเอียด", "ประเภทรายการ", "description", "narration",
+        "remark", "details", "detail", "memo", "note", "particulars",
+        "หมายเหตุ", "คำอธิบาย", "รายการ/หมายเหตุ",
+        "transaction description", "txn description",
     ],
     "amount": [
         "จำนวนเงิน", "amount", "net amount", "transaction amount",
@@ -39,7 +40,7 @@ FIELD_KEYWORDS: Dict[str, List[str]] = {
     ],
     "credit": [
         "ฝาก", "เครดิต", "credit", "deposit", "cr", "จำนวนเงินฝาก",
-        "ฝากเงิน", "รายการฝาก", "in",
+        "ฝากเงิน", "เงินฝาก", "รายการฝาก", "in",
     ],
     "balance": [
         "ยอดคงเหลือ", "balance", "running balance", "outstanding",
@@ -51,14 +52,15 @@ FIELD_KEYWORDS: Dict[str, List[str]] = {
         "mode", "source",
     ],
     "counterparty_account": [
-        "บัญชีคู่โอน", "counterparty account", "to/from account",
+        "บัญชีคู่โอน", "เลขที่บัญชีคู่สัญญา", "บัญชีคู่สัญญา",
+        "counterparty account", "to/from account",
         "ref account", "beneficiary account", "บัญชีผู้โอน/รับโอน",
         "บัญชีปลายทาง", "บัญชีผู้รับโอน", "บัญชีผู้โอน",
         "from account", "to account", "account no", "acc no",
         "account number", "ref no", "reference account",
     ],
     "counterparty_name": [
-        "ชื่อคู่โอน", "counterparty name", "to/from name",
+        "ชื่อคู่โอน", "ชื่อคู่สัญญา", "counterparty name", "to/from name",
         "beneficiary name", "ชื่อผู้โอน/รับโอน", "ชื่อผู้รับโอน",
         "ชื่อผู้โอน", "payee", "payer", "receiver name",
     ],
@@ -166,7 +168,16 @@ def detect_columns(
     mapped   = {v for v in suggested.values() if v}
     unmatched = [c for c in actual_cols if c not in mapped]
 
-    required_found = all(suggested.get(f) is not None for f in REQUIRED_FIELDS)
+    # "amount" can be satisfied by either a single amount column OR debit+credit pair
+    has_amount = (
+        suggested.get("amount") is not None
+        or (suggested.get("debit") is not None and suggested.get("credit") is not None)
+    )
+    required_found = (
+        suggested.get("date") is not None
+        and suggested.get("description") is not None
+        and has_amount
+    )
 
     n_mapped = sum(1 for v in suggested.values() if v)
     logger.info(

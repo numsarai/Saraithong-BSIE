@@ -130,8 +130,12 @@ def build_entities(df: pd.DataFrame) -> pd.DataFrame:
             "source_transaction_ids": "|".join(sorted(set(rec["txn_ids"]))),
         })
 
-    entities = pd.DataFrame(rows)
-    entities.sort_values("entity_type", inplace=True)
+    entities = pd.DataFrame(rows) if rows else pd.DataFrame(columns=[
+        "entity_id", "entity_type", "account_number", "name",
+        "first_seen", "last_seen", "transaction_count", "source_transaction_ids",
+    ])
+    if not entities.empty:
+        entities.sort_values("entity_type", inplace=True)
     entities.reset_index(drop=True, inplace=True)
 
     logger.info(f"Built {len(entities)} unique entities")

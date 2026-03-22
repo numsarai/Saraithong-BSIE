@@ -33,7 +33,6 @@ const FIELDS = [
   { key:'amount',                label:'Amount (signed)',        required:false },
   { key:'debit',                 label:'Debit',                 required:false },
   { key:'credit',                label:'Credit',                required:false },
-  { key:'balance',               label:'Balance',               required:false },
   { key:'channel',               label:'Channel',               required:false },
   { key:'counterparty_account',  label:'Counterparty Account',  required:false },
   { key:'counterparty_name',     label:'Counterparty Name',     required:false },
@@ -304,10 +303,12 @@ async function renderResults() {
   // Stats
   const inAmt  = (meta.total_in  || 0).toLocaleString('th-TH', {minimumFractionDigits:2});
   const outAmt = Math.abs(meta.total_out || 0).toLocaleString('th-TH', {minimumFractionDigits:2});
+  const circAmt = (meta.total_circulation || 0).toLocaleString('th-TH', {minimumFractionDigits:2});
   document.getElementById('stats-bar').innerHTML = `
     <div class="stat-card"><div class="sc-label">Transactions</div><div class="sc-value blue">${meta.num_transactions||0}</div></div>
     <div class="stat-card"><div class="sc-label">Total IN</div><div class="sc-value green">฿${inAmt}</div></div>
     <div class="stat-card"><div class="sc-label">Total OUT</div><div class="sc-value red">฿${outAmt}</div></div>
+    <div class="stat-card"><div class="sc-label">เงินหมุนเวียนรวม</div><div class="sc-value" style="color:var(--primary);">฿${circAmt}</div></div>
     <div class="stat-card"><div class="sc-label">Date Range</div><div class="sc-value" style="font-size:13px;">${meta.date_range||'—'}</div></div>
     <div class="stat-card"><div class="sc-label">Unknown CP</div><div class="sc-value">${meta.num_unknown||0}</div></div>
     <div class="stat-card"><div class="sc-label">Partial Accts</div><div class="sc-value">${meta.num_partial_accounts||0}</div></div>`;
@@ -365,18 +366,19 @@ function renderGenericTable(prefix, rows) {
 }
 
 function renderDownloads(account) {
+  const meta = S.results?.meta || {};
+  const reportFile = meta.report_filename || 'report.xlsx';
   const files = [
-    ['processed/transactions.csv',  '📄 transactions.csv'],
-    ['processed/transactions.xlsx', '📊 transactions.xlsx'],
-    ['processed/entities.csv',      '📄 entities.csv'],
-    ['processed/entities.xlsx',     '📊 entities.xlsx'],
+    [`processed/${reportFile}`,      `📊 ${reportFile}`],
+    ['processed/transactions.csv',   '📄 transactions.csv'],
+    ['processed/entities.csv',       '📄 entities.csv'],
+    ['processed/entities.xlsx',      '📊 entities.xlsx'],
     ['processed/links.csv',         '📄 links.csv'],
-    ['processed/links.xlsx',        '📊 links.xlsx'],
     ['raw/original.xlsx',           '📁 original.xlsx'],
     ['meta.json',                   '🗂 meta.json'],
   ];
   document.getElementById('download-links').innerHTML = files.map(([path, label]) =>
-    `<a class="dl-btn" href="/api/download/${account}/${path}" download>⬇ ${label}</a>`
+    `<a class="dl-btn" href="/api/download/${account}/${encodeURI(path)}" download>⬇ ${label}</a>`
   ).join('');
 }
 

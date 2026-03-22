@@ -1,0 +1,19 @@
+{
+  "bank_name": "KTB",
+  "format_type": "ktb_transfer",
+  "header_row": 0,
+  "currency": "THB",
+  "amount_mode": "unsigned",
+  "column_mapping": {
+    "date":             ["วันที่ทำรายการ", "วันที่", "Date", "date"],
+    "time":             ["เวลา", "Time", "time"],
+    "description":      ["รายละเอียด", "หมายเหตุ", "Description"],
+    "amount":           ["จำนวนเงิน", "Amount", "amount"],
+    "sender_bank":      ["ธนาคาร -บัญชีผู้โอน", "ธนาคารผู้โอน"],
+    "sender_account":   ["เลขที่บัญชีผู้โอน", "Unnamed: 7", "บัญชีผู้โอน", "หมายเลขบัญชีผู้โอน"],
+    "sender_name":      ["ชื่อผู้โอน"],
+    "receiver_bank":    ["ธนาคาร -  บัญชีผู้รับโอน", "ธนาคารผู้รับโอน"],
+    "receiver_account": ["เลขที่บัญชีผู้รับโอน", "Unnamed: 9", "บัญชีผู้รับโอน", "หมายเลขบัญชีผู้รับโอน"],
+    "receiver_name":    ["ชื่อผู้รับโอน"]
+  }
+}

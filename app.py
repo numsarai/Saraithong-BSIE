@@ -132,15 +132,20 @@ async def api_upload(file: UploadFile = File(...)):
             header=None, nrows=40, dtype=str,
         ).fillna("")
 
-        # Auto-detect header row (look for date/amount aliases in first 15 rows)
+        # Auto-detect header row (score-based: check date + amount aliases in first 15 rows)
+        _DATE_KW = {"วันที่", "วันที่ทำรายการ", "date", "transaction date"}
+        _AMT_KW  = {"จำนวนเงิน", "amount", "debit", "credit", "เดบิต", "เครดิต",
+                     "ถอนเงิน", "ฝากเงิน", "เงินฝาก", "ถอน",
+                     "หมายเลขบัญชีต้นทาง", "หมายเลขบัญชีปลายทาง",
+                     "บัญชีผู้โอน", "บัญชีผู้รับโอน", "ชื่อผู้โอน", "ชื่อผู้รับโอน"}
         header_row = 0
+        best_score = 0
         for i in range(min(15, len(raw_df))):
-            row_vals = [str(v).lower().strip() for v in raw_df.iloc[i].values]
-            has_date = any(kw in row_vals for kw in ["วันที่", "date", "transaction date"])
-            has_amt  = any(kw in row_vals for kw in ["จำนวนเงิน", "amount", "debit", "credit", "เดบิต", "เครดิต"])
-            if has_date or has_amt:
+            row_vals = {str(v).lower().strip() for v in raw_df.iloc[i].values if pd.notna(v)}
+            score = len(row_vals & _DATE_KW) * 2 + len(row_vals & _AMT_KW)
+            if score > best_score:
+                best_score = score
                 header_row = i
-                break
 
         data_df = pd.read_excel(
             str(save_path),
@@ -427,9 +432,6 @@ def _reapply_overrides_to_csv(changed_txn_id: str) -> None:
                 continue
             df = apply_overrides_to_df(df)
             df.to_csv(txn_csv, index=False, encoding="utf-8-sig")
-            # Also update Excel
-            txn_xlsx = acct_dir / "processed" / "transactions.xlsx"
-            df.to_excel(str(txn_xlsx), index=False, engine="openpyxl")
         except Exception as e:
             logger.warning(f"Could not reapply overrides to {txn_csv}: {e}")
 

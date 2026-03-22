@@ -1,0 +1,19 @@
+{
+  "bank_name": "BAY",
+  "sheet_index": 0,
+  "header_row": 0,
+  "format_type": "standard",
+  "currency": "THB",
+  "amount_mode": "debit_credit",
+  "column_mapping": {
+    "date":                ["วันที่", "Date", "date", "DATE", "วันที่ทำรายการ", "Transaction Date"],
+    "time":                ["เวลา", "Time", "time", "TIME"],
+    "description":         ["รายละเอียด", "Description", "description", "รายการ", "Narration", "Remark"],
+    "debit":               ["เดบิต", "ถอนเงิน", "ถอน", "Debit", "debit", "DEBIT", "Withdrawal"],
+    "credit":              ["เครดิต", "ฝากเงิน", "ฝาก", "Credit", "credit", "CREDIT", "Deposit"],
+    "balance":             ["ยอดคงเหลือ", "Balance", "balance", "BALANCE", "จำนวนเงินคงเหลือ"],
+    "channel":             ["ช่องทาง", "Channel", "channel", "CHANNEL"],
+    "counterparty_account":["เลขที่บัญชีคู่สัญญา", "บัญชีคู่สัญญา", "Counterparty Account"],
+    "counterparty_name":   ["ชื่อคู่สัญญา", "Counterparty Name"]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "bank_name": "UNKNOWN",
+  "sheet_index": 0,
+  "header_row": 0,
+  "format_type": "standard",
+  "currency": "THB",
+  "amount_mode": "signed",
+  "column_mapping": {
+    "date":                ["วันที่", "วันที่ทำรายการ", "Date", "date", "DATE", "Transaction Date"],
+    "time":                ["เวลา", "Time", "time", "TIME", "เวลาทำรายการ"],
+    "description":         ["รายการ", "รายละเอียด", "ประเภทรายการ", "รายการ/หมายเหตุ", "Description", "description", "Narration", "Remark", "หมายเหตุ"],
+    "amount":              ["จำนวนเงิน", "จำนวนเงิน (บาท)", "Amount", "amount", "AMOUNT", "Net Amount"],
+    "debit":               ["ถอน", "ถอนเงิน", "เดบิต", "Debit", "debit", "Withdrawal"],
+    "credit":              ["ฝาก", "ฝากเงิน", "เงินฝาก", "เครดิต", "Credit", "credit", "Deposit"],
+    "balance":             ["ยอดคงเหลือ", "ยอดคงเหลือ (บาท)", "ยอดเงินคงเหลือ", "จำนวนเงินคงเหลือ", "Balance", "balance", "Outstanding Balance"],
+    "channel":             ["ช่องทาง", "ช่องทางทำรายการ", "Channel", "channel"],
+    "counterparty_account":["บัญชีคู่สัญญา", "เลขที่บัญชีคู่สัญญา", "Counterparty Account", "counterparty account"],
+    "counterparty_name":   ["ชื่อคู่สัญญา", "Counterparty Name", "counterparty name"]
+  }
+}

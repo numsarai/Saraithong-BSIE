@@ -3,6 +3,12 @@ normalizer.py
 -------------
 Applies bank-config column mapping to a raw DataFrame, cleans amounts,
 normalises dates/times, and calls account_parser on account columns.
+
+Supports three format types:
+  standard      – single amount/debit/credit + optional counterparty columns
+  dual_account  – separate sender/receiver account+name columns (KBANK, SCB)
+                  Direction determined by debit/credit values.
+  ktb_transfer  – KTB transfer log: unsigned amount, direction from blank side
 """
 
 import re
@@ -53,8 +59,366 @@ def _clean_amount(value: object) -> Optional[float]:
         return None
 
 
+def _get_col_value(row, df, mapping, field):
+    """Get raw value for a logical field by alias lookup."""
+    aliases = mapping.get(field, [])
+    col = detect_column(df, aliases)
+    if col is None:
+        return None
+    return row.get(col)
+
+
+def _parse_cp_account(val, subject_account):
+    """Parse a counterparty account value; return parsed dict."""
+    if not val or (isinstance(val, float) and pd.isna(val)):
+        return {"raw": "", "clean": "", "type": "UNKNOWN"}
+    p = parse_account(val)
+    # Accept ACCOUNT or PARTIAL even if it equals subject (will show as self-transfer)
+    return p
+
+
 # ---------------------------------------------------------------------------
-# Core normalizer
+# Format: dual_account (KBANK, SCB)
+# ---------------------------------------------------------------------------
+
+def _normalize_dual_account(row, df, mapping, subject_account, subject_name, bank_name, currency):
+    """
+    Normalise a single row for dual_account format (KBANK, SCB).
+
+    Direction logic:
+      debit  > 0 → OUT  → subject sent money  → counterparty = receiver side
+      credit > 0 → IN   → subject received    → counterparty = sender side
+
+    Counterparty name fallback:
+      1. name from sender/receiver name column
+      2. account number from sender/receiver account column
+      3. ""
+    """
+    def get(field):
+        return _get_col_value(row, df, mapping, field)
+
+    rec = {}
+
+    # ── Date / Time ─────────────────────────────────────────────────────────
+    raw_date = get("date")
+    raw_time = get("time")
+    rec["date"] = str(parse_date(raw_date)) if parse_date(raw_date) else ""
+    rec["time"] = parse_time(raw_time) or ""
+
+    # ── Description ─────────────────────────────────────────────────────────
+    rec["description"] = normalize_text(get("description"))
+
+    # ── Amount via debit/credit ──────────────────────────────────────────────
+    raw_debit  = _clean_amount(get("debit"))  or 0.0
+    raw_credit = _clean_amount(get("credit")) or 0.0
+    amount = round(raw_credit - raw_debit, 6) if (raw_debit or raw_credit) else None
+    rec["amount"]   = amount
+    rec["currency"] = currency
+
+    # ── Balance / Channel ────────────────────────────────────────────────────
+    rec["balance"] = _clean_amount(get("balance"))
+    rec["channel"] = normalize_text(get("channel"))
+
+    # ── Subject ──────────────────────────────────────────────────────────────
+    rec["subject_account"] = subject_account
+    rec["subject_name"]    = subject_name
+    rec["bank"]            = bank_name
+
+    # ── Direction determines which side is the counterparty ──────────────────
+    if raw_debit > 0:
+        direction = "OUT"
+        cp_acc_raw  = get("receiver_account")
+        cp_name_raw = get("receiver_name")
+    elif raw_credit > 0:
+        direction = "IN"
+        cp_acc_raw  = get("sender_account")
+        cp_name_raw = get("sender_name")
+    else:
+        direction = "UNKNOWN"
+        # Try both sides; pick non-subject
+        cp_acc_raw  = get("receiver_account") or get("sender_account")
+        cp_name_raw = get("receiver_name")    or get("sender_name")
+
+    rec["direction"] = direction
+
+    # ── Parse counterparty account ───────────────────────────────────────────
+    parsed_cp = _parse_cp_account(cp_acc_raw, subject_account)
+    rec["raw_account_value"]   = parsed_cp["raw"]
+    rec["parsed_account_type"] = parsed_cp["type"]
+
+    if parsed_cp["type"] == "ACCOUNT":
+        rec["counterparty_account"] = parsed_cp["clean"]
+        rec["partial_account"]      = ""
+    elif parsed_cp["type"] == "PARTIAL_ACCOUNT":
+        rec["counterparty_account"] = ""
+        rec["partial_account"]      = parsed_cp["clean"]
+    else:
+        rec["counterparty_account"] = ""
+        rec["partial_account"]      = ""
+
+    # ── Counterparty name ────────────────────────────────────────────────────
+    cp_name = normalize_text(cp_name_raw) or ""
+    # Reject if name looks like subject name or is the subject account number
+    if cp_name and (cp_name == subject_name or cp_name == subject_account):
+        cp_name = ""
+    rec["counterparty_name"] = cp_name
+
+    # ── Extract accounts from description (augment missing account) ──────────
+    extracted = extract_accounts_from_description(rec["description"])
+    if not rec["counterparty_account"] and extracted["valid_accounts"]:
+        rec["counterparty_account"] = extracted["valid_accounts"][0]
+        rec["parsed_account_type"]  = "ACCOUNT"
+    if not rec["partial_account"] and extracted["partial_accounts"]:
+        rec["partial_account"] = extracted["partial_accounts"][0]
+
+    # ── Fallback: use account number as name when no name available ──────────
+    if not rec["counterparty_name"]:
+        rec["counterparty_name"] = (
+            rec["counterparty_account"]
+            or rec["partial_account"]
+            or ""
+        )
+
+    return rec
+
+
+# ---------------------------------------------------------------------------
+# Format: standard
+# ---------------------------------------------------------------------------
+
+def _normalize_standard(row, df, mapping, subject_account, subject_name, bank_name, currency, amount_mode):
+    """Normalise a single row for standard format."""
+    def get(field):
+        return _get_col_value(row, df, mapping, field)
+
+    rec = {}
+
+    # ── Date / Time ─────────────────────────────────────────────────────────
+    raw_date = get("date")
+    raw_time = get("time")
+    rec["date"] = str(parse_date(raw_date)) if parse_date(raw_date) else ""
+    rec["time"] = parse_time(raw_time) or ""
+
+    # ── Description ─────────────────────────────────────────────────────────
+    rec["description"] = normalize_text(get("description"))
+
+    # ── Amount ──────────────────────────────────────────────────────────────
+    if amount_mode == "debit_credit":
+        raw_debit  = _clean_amount(get("debit"))  or 0.0
+        raw_credit = _clean_amount(get("credit")) or 0.0
+        amount = round(raw_credit - raw_debit, 6)
+    else:
+        amount = _clean_amount(get("amount"))
+        if amount is None:
+            raw_debit  = _clean_amount(get("debit"))  or 0.0
+            raw_credit = _clean_amount(get("credit")) or 0.0
+            amount = round(raw_credit - raw_debit, 6) if (raw_debit or raw_credit) else None
+
+    rec["amount"]   = amount
+    rec["currency"] = currency
+
+    # ── Balance / Channel ────────────────────────────────────────────────────
+    rec["balance"] = _clean_amount(get("balance"))
+    rec["channel"] = normalize_text(get("channel"))
+
+    # ── Subject ──────────────────────────────────────────────────────────────
+    rec["subject_account"] = subject_account
+    rec["subject_name"]    = subject_name
+    rec["bank"]            = bank_name
+
+    # ── Counterparty account ─────────────────────────────────────────────────
+    cp_aliases = mapping.get("counterparty_account", [])
+    cp_cols = [c for c in df.columns if c.lower().strip() in [a.lower().strip() for a in cp_aliases]]
+
+    parsed_cp = {"raw": "", "clean": "", "type": "UNKNOWN"}
+    for col in cp_cols:
+        val = row.get(col)
+        if not val or (isinstance(val, float) and pd.isna(val)):
+            continue
+        p = parse_account(val)
+        if p["type"] in ("ACCOUNT", "PARTIAL_ACCOUNT") and p["clean"] != subject_account:
+            parsed_cp = p
+            break
+    if parsed_cp["type"] == "UNKNOWN" and cp_cols:
+        parsed_cp = parse_account(row.get(cp_cols[0]))
+
+    rec["raw_account_value"]   = parsed_cp["raw"]
+    rec["parsed_account_type"] = parsed_cp["type"]
+
+    if parsed_cp["type"] == "ACCOUNT":
+        rec["counterparty_account"] = parsed_cp["clean"]
+        rec["partial_account"]      = ""
+    elif parsed_cp["type"] == "PARTIAL_ACCOUNT":
+        rec["counterparty_account"] = ""
+        rec["partial_account"]      = parsed_cp["clean"]
+    else:
+        rec["counterparty_account"] = ""
+        rec["partial_account"]      = ""
+
+    # ── Counterparty name ────────────────────────────────────────────────────
+    name_aliases = mapping.get("counterparty_name", [])
+    name_cols = [c for c in df.columns if c.lower().strip() in [a.lower().strip() for a in name_aliases]]
+
+    best_name = ""
+    for col in name_cols:
+        val = normalize_text(row.get(col))
+        if val and val != subject_name:
+            best_name = val
+            break
+    if not best_name and name_cols:
+        best_name = normalize_text(row.get(name_cols[0])) or ""
+
+    rec["counterparty_name"] = best_name
+
+    # ── Extract accounts from description ────────────────────────────────────
+    extracted = extract_accounts_from_description(rec["description"])
+    if not rec["counterparty_account"] and extracted["valid_accounts"]:
+        rec["counterparty_account"] = extracted["valid_accounts"][0]
+        rec["parsed_account_type"]  = "ACCOUNT"
+    if not rec["partial_account"] and extracted["partial_accounts"]:
+        rec["partial_account"] = extracted["partial_accounts"][0]
+
+    # ── Fallback: account number as name ────────────────────────────────────
+    if not rec["counterparty_name"]:
+        rec["counterparty_name"] = (
+            rec["counterparty_account"]
+            or rec["partial_account"]
+            or ""
+        )
+
+    # ── Direction ────────────────────────────────────────────────────────────
+    if rec["amount"] is not None:
+        rec["direction"] = "IN" if rec["amount"] > 0 else "OUT"
+    else:
+        rec["direction"] = "UNKNOWN"
+
+    return rec
+
+
+# ---------------------------------------------------------------------------
+# Format: ktb_transfer (KTB transfer log — unsigned amounts, direction from side)
+# ---------------------------------------------------------------------------
+
+def _normalize_ktb_transfer(row, df, mapping, subject_account, subject_name, bank_name, currency):
+    """
+    Normalise a single row for KTB transfer format.
+
+    The KTB log has separate sender_account / receiver_account columns.
+    Direction is determined by comparing each side to the subject_account:
+      sender_account == subject  → OUT (subject sent money)
+      receiver_account == subject → IN  (subject received money)
+      Neither matches → UNKNOWN (use sender side as counterparty)
+    Amount is always unsigned (positive); direction sign is derived from above.
+    """
+    def get(field):
+        return _get_col_value(row, df, mapping, field)
+
+    rec = {}
+
+    # ── Date / Time ──────────────────────────────────────────────────────
+    raw_date = get("date")
+    raw_time = get("time")
+    rec["date"] = str(parse_date(raw_date)) if parse_date(raw_date) else ""
+    rec["time"] = parse_time(raw_time) or ""
+
+    # ── Description ──────────────────────────────────────────────────────
+    rec["description"] = normalize_text(get("description"))
+
+    # ── Amount ───────────────────────────────────────────────────────────
+    amount = _clean_amount(get("amount"))
+    rec["amount"]   = amount
+    rec["currency"] = currency
+
+    # ── Balance / Channel ────────────────────────────────────────────────
+    rec["balance"] = _clean_amount(get("balance"))
+    rec["channel"] = normalize_text(get("channel"))
+
+    # ── Subject ──────────────────────────────────────────────────────────
+    rec["subject_account"] = subject_account
+    rec["subject_name"]    = subject_name
+    rec["bank"]            = bank_name
+
+    # ── Parse both sides ─────────────────────────────────────────────────
+    sender_raw   = get("sender_account")
+    receiver_raw = get("receiver_account")
+
+    sender_parsed   = _parse_cp_account(sender_raw,   subject_account)
+    receiver_parsed = _parse_cp_account(receiver_raw, subject_account)
+
+    sender_clean   = sender_parsed.get("clean", "")   if sender_parsed["type"] == "ACCOUNT" else ""
+    receiver_clean = receiver_parsed.get("clean", "") if receiver_parsed["type"] == "ACCOUNT" else ""
+
+    # ── Determine direction ───────────────────────────────────────────────
+    if sender_clean == subject_account:
+        direction   = "OUT"
+        cp_acc      = receiver_clean
+        cp_name_raw = get("receiver_name") if hasattr(get, "__call__") else None
+    elif receiver_clean == subject_account:
+        direction   = "IN"
+        cp_acc      = sender_clean
+        cp_name_raw = get("sender_name") if hasattr(get, "__call__") else None
+    else:
+        # Neither side matches subject — record as UNKNOWN, use receiver as counterparty
+        direction   = "UNKNOWN"
+        cp_acc      = receiver_clean or sender_clean
+        cp_name_raw = None
+
+    # Re-fetch names properly using the mapping function
+    if direction == "OUT":
+        cp_name_raw = _get_col_value(row, df, mapping, "receiver_name")
+    elif direction == "IN":
+        cp_name_raw = _get_col_value(row, df, mapping, "sender_name")
+    else:
+        cp_name_raw = _get_col_value(row, df, mapping, "receiver_name") or _get_col_value(row, df, mapping, "sender_name")
+
+    rec["direction"] = direction
+
+    # ── Counterparty ─────────────────────────────────────────────────────
+    if cp_acc:
+        rec["counterparty_account"] = cp_acc
+        rec["partial_account"]      = ""
+        rec["raw_account_value"]    = cp_acc
+        rec["parsed_account_type"]  = "ACCOUNT"
+    else:
+        # Try partial
+        if direction == "OUT" and receiver_parsed["type"] == "PARTIAL_ACCOUNT":
+            rec["counterparty_account"] = ""
+            rec["partial_account"]      = receiver_parsed["clean"]
+        elif direction == "IN" and sender_parsed["type"] == "PARTIAL_ACCOUNT":
+            rec["counterparty_account"] = ""
+            rec["partial_account"]      = sender_parsed["clean"]
+        else:
+            rec["counterparty_account"] = ""
+            rec["partial_account"]      = ""
+        rec["raw_account_value"]   = ""
+        rec["parsed_account_type"] = "UNKNOWN"
+
+    # ── Counterparty name ────────────────────────────────────────────────
+    cp_name = normalize_text(cp_name_raw) or ""
+    if cp_name and (cp_name == subject_name or cp_name == subject_account):
+        cp_name = ""
+    rec["counterparty_name"] = cp_name
+
+    # ── Fallback: account as name ────────────────────────────────────────
+    if not rec["counterparty_name"]:
+        rec["counterparty_name"] = (
+            rec["counterparty_account"]
+            or rec.get("partial_account", "")
+            or ""
+        )
+
+    # ── Adjust amount sign to match direction ────────────────────────────
+    if rec["amount"] is not None:
+        if direction == "OUT" and rec["amount"] > 0:
+            rec["amount"] = -rec["amount"]
+        elif direction == "IN" and rec["amount"] < 0:
+            rec["amount"] = -rec["amount"]
+
+    return rec
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
 # ---------------------------------------------------------------------------
 
 def normalize(
@@ -62,9 +426,12 @@ def normalize(
     bank_config: dict,
     subject_account: str,
     subject_name: str = "",
+    source_file: str = "",
 ) -> pd.DataFrame:
     """
     Apply config-driven column mapping; clean, parse, and standardise all fields.
+
+    Dispatches to the correct normaliser based on bank_config["format_type"].
 
     Parameters
     ----------
@@ -72,146 +439,50 @@ def normalize(
     bank_config      : parsed bank config JSON
     subject_account  : the account number under investigation
     subject_name     : optional name of account holder
+    source_file      : original filename for traceability
 
     Returns
     -------
     pd.DataFrame with STANDARD schema columns
     """
-    mapping: dict = bank_config.get("column_mapping", {})
-    bank_name: str = bank_config.get("bank_name", "UNKNOWN")
-    currency: str  = bank_config.get("currency", "THB")
-    amount_mode: str = bank_config.get("amount_mode", "signed")
+    mapping:     dict = bank_config.get("column_mapping", {})
+    bank_name:   str  = bank_config.get("bank_name", "UNKNOWN")
+    currency:    str  = bank_config.get("currency", "THB")
+    amount_mode: str  = bank_config.get("amount_mode", "signed")
+    fmt_type:    str  = bank_config.get("format_type", "standard")
 
     records = []
 
     for idx, row in df.iterrows():
-        rec: dict = {}
+        try:
+            if fmt_type == "dual_account":
+                rec = _normalize_dual_account(
+                    row, df, mapping, subject_account, subject_name, bank_name, currency
+                )
+            elif fmt_type == "ktb_transfer":
+                rec = _normalize_ktb_transfer(
+                    row, df, mapping, subject_account, subject_name, bank_name, currency
+                )
+            else:
+                rec = _normalize_standard(
+                    row, df, mapping, subject_account, subject_name, bank_name, currency, amount_mode
+                )
+        except Exception as e:
+            logger.debug(f"Row {idx} normalisation error: {e}")
+            continue
 
-        # ── Helpers ─────────────────────────────────────────────────────────
-        def get_col(field: str) -> Optional[object]:
-            """Get raw value for a logical field by alias lookup."""
-            aliases = mapping.get(field, [])
-            col = detect_column(df, aliases)
-            if col is None:
-                return None
-            return row.get(col)
+        # ── Traceability ─────────────────────────────────────────────────────
+        rec["_raw_idx"]    = idx
+        rec["source_file"] = source_file or ""
+        rec["row_number"]  = int(idx) + 2  # +2: 1-indexed + header row
 
-        # ── Date / Time ──────────────────────────────────────────────────────
-        raw_date = get_col("date")
-        raw_time = get_col("time")
-        rec["date"] = str(parse_date(raw_date)) if parse_date(raw_date) else ""
-        rec["time"] = parse_time(raw_time) or ""
-
-        # ── Description ──────────────────────────────────────────────────────
-        raw_desc = get_col("description")
-        rec["description"] = normalize_text(raw_desc)
-
-        # ── Amount (signed vs debit/credit mode) ─────────────────────────────
-        if amount_mode == "debit_credit":
-            raw_debit  = _clean_amount(get_col("debit"))   or 0.0
-            raw_credit = _clean_amount(get_col("credit"))  or 0.0
-            amount = round(raw_credit - raw_debit, 6)
-        else:
-            amount = _clean_amount(get_col("amount"))
-            if amount is None:
-                # Try debit/credit fallback even for "signed" mode
-                raw_debit  = _clean_amount(get_col("debit"))  or 0.0
-                raw_credit = _clean_amount(get_col("credit")) or 0.0
-                amount = round(raw_credit - raw_debit, 6) if (raw_debit or raw_credit) else None
-
-        rec["amount"]   = amount
-        rec["currency"] = currency
-
-        # ── Balance ──────────────────────────────────────────────────────────
-        raw_balance = get_col("balance")
-        rec["balance"] = _clean_amount(raw_balance)
-
-        # ── Channel ───────────────────────────────────────────────────────────
-        rec["channel"] = normalize_text(get_col("channel"))
-
-        # ── Subject ───────────────────────────────────────────────────────────
-        rec["subject_account"] = subject_account
-        rec["subject_name"]    = subject_name
-        rec["bank"]            = bank_name
-
-        # ── Counterparty account ──────────────────────────────────────────────
-        cp_aliases = mapping.get("counterparty_account", [])
-        cp_cols = []
-        for c in df.columns:
-            if c.lower().strip() in [a.lower().strip() for a in cp_aliases]:
-                cp_cols.append(c)
-
-        parsed_cp = {"raw": "", "clean": "", "type": "UNKNOWN"}
-        raw_cp_account = ""
-
-        # Try to find a counterparty account that is NOT the subject account
-        for col in cp_cols:
-            val = row.get(col)
-            if not val or pd.isna(val):
-                continue
-            p = parse_account(val)
-            if p["type"] in ("ACCOUNT", "PARTIAL_ACCOUNT") and p["clean"] != subject_account:
-                parsed_cp = p
-                raw_cp_account = val
-                break
-        
-        # If none found, grab the first one as fallback
-        if parsed_cp["type"] == "UNKNOWN" and cp_cols:
-            raw_cp_account = row.get(cp_cols[0])
-            parsed_cp = parse_account(raw_cp_account)
-
-        rec["raw_account_value"]    = parsed_cp["raw"]
-        rec["parsed_account_type"]  = parsed_cp["type"]
-
-        if parsed_cp["type"] == "ACCOUNT":
-            rec["counterparty_account"] = parsed_cp["clean"]
-            rec["partial_account"]       = ""
-        elif parsed_cp["type"] == "PARTIAL_ACCOUNT":
-            rec["counterparty_account"] = ""
-            rec["partial_account"]       = parsed_cp["clean"]
-        else:
-            rec["counterparty_account"] = ""
-            rec["partial_account"]       = ""
-
-        # ── Counterparty name ─────────────────────────────────────────────────
-        name_aliases = mapping.get("counterparty_name", [])
-        name_cols = []
-        for c in df.columns:
-            if c.lower().strip() in [a.lower().strip() for a in name_aliases]:
-                name_cols.append(c)
-                
-        # Try to find a name that is NOT the subject name
-        best_name = ""
-        for col in name_cols:
-            val = normalize_text(row.get(col))
-            if val and val != subject_name:
-                best_name = val
-                break
-        
-        # Fallback
-        if not best_name and name_cols:
-            best_name = normalize_text(row.get(name_cols[0]))
-            
-        rec["counterparty_name"] = best_name
-
-        # ── Extract accounts from description (augment if still missing) ──────
-        extracted = extract_accounts_from_description(rec["description"])
-
-        if not rec["counterparty_account"] and extracted["valid_accounts"]:
-            rec["counterparty_account"]  = extracted["valid_accounts"][0]
-            rec["parsed_account_type"]   = "ACCOUNT"
-
-        if not rec["partial_account"] and extracted["partial_accounts"]:
-            rec["partial_account"] = extracted["partial_accounts"][0]
-
-        # ── Direction ─────────────────────────────────────────────────────────
-        if rec["amount"] is not None:
-            rec["direction"] = "IN" if rec["amount"] > 0 else "OUT"
-        else:
-            rec["direction"] = "UNKNOWN"
-
-        # ── Preserve raw row for traceability ─────────────────────────────────
-        rec["_raw_idx"] = idx
+        # ── Direction (set for dual_account if still missing) ────────────────
+        if "direction" not in rec:
+            amount = rec.get("amount")
+            if amount is not None:
+                rec["direction"] = "IN" if amount > 0 else "OUT"
+            else:
+                rec["direction"] = "UNKNOWN"
 
         records.append(rec)
 
@@ -220,5 +491,18 @@ def normalize(
     result = result[result["amount"].notna()].copy()
     result.reset_index(drop=True, inplace=True)
 
-    logger.info(f"Normalized {len(result)} valid transaction rows")
+    # ── Auto-calculate balance if bank statement didn't provide it ─────────
+    # Balance = running cumulative sum of amounts (ยอดคงเหลือสะสม)
+    if "balance" in result.columns:
+        has_balance = result["balance"].notna().any()
+    else:
+        has_balance = False
+
+    if not has_balance:
+        result["balance"] = result["amount"].astype(float).cumsum().round(2)
+        logger.info("  Balance auto-calculated (running cumulative sum)")
+    else:
+        logger.info("  Balance from bank statement column")
+
+    logger.info(f"Normalized {len(result)} valid transaction rows [{fmt_type}]")
     return result

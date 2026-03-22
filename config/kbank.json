@@ -1,0 +1,21 @@
+{
+  "bank_name": "KBANK",
+  "sheet_index": 0,
+  "header_row": 0,
+  "format_type": "dual_account",
+  "currency": "THB",
+  "amount_mode": "debit_credit",
+  "column_mapping": {
+    "date":             ["วันที่ทำรายการ", "วันที่", "Date", "date", "DATE", "Transaction Date"],
+    "time":             ["เวลาที่ทำรายการ", "เวลา", "Time", "time", "TIME"],
+    "description":      ["ประเภทรายการ", "รายการ", "Description", "description", "DESC", "Narration", "หมายเหตุ"],
+    "channel":          ["ช่องทาง", "Channel", "channel", "CHANNEL"],
+    "sender_account":   ["หมายเลขบัญชีต้นทาง"],
+    "sender_name":      ["ชื่อบัญชีต้นทาง"],
+    "receiver_account": ["หมายเลขบัญชีปลายทาง"],
+    "receiver_name":    ["ชื่อบัญชีปลายทาง"],
+    "debit":            ["ถอนเงิน", "เดบิต", "Debit", "debit", "DEBIT", "ถอน"],
+    "credit":           ["ฝากเงิน", "เครดิต", "Credit", "credit", "CREDIT", "ฝาก", "เงินฝาก"],
+    "balance":          ["ยอดเงินคงเหลือ", "ยอดคงเหลือ", "Balance", "balance", "BALANCE", "คงเหลือ", "จำนวนเงินคงเหลือ"]
+  }
+}

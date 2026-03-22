@@ -1,0 +1,19 @@
+{
+  "bank_name": "TTB",
+  "sheet_index": 0,
+  "header_row": 0,
+  "format_type": "standard",
+  "currency": "THB",
+  "amount_mode": "debit_credit",
+  "column_mapping": {
+    "date":                ["Transaction Date", "วันที่", "Date", "date", "DATE", "วันที่ทำรายการ"],
+    "time":                ["Transaction Time", "เวลา", "Time", "time", "TIME"],
+    "description":         ["Description", "รายการ", "description", "DESC", "Narration", "รายละเอียด"],
+    "debit":               ["Debit", "ถอนเงิน", "ถอน", "เดบิต", "debit", "DEBIT"],
+    "credit":              ["Credit", "ฝากเงิน", "ฝาก", "เครดิต", "credit", "CREDIT"],
+    "balance":             ["Outstanding Balance", "Balance", "ยอดคงเหลือ", "balance", "BALANCE"],
+    "channel":             ["Channel", "ช่องทาง", "channel", "CHANNEL"],
+    "counterparty_account":["Counterparty Account", "เลขที่บัญชีคู่สัญญา", "บัญชีคู่สัญญา"],
+    "counterparty_name":   ["Counterparty Name", "ชื่อคู่สัญญา"]
+  }
+}

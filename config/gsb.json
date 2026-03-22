@@ -1,0 +1,16 @@
+{
+  "bank_name": "GSB",
+  "sheet_index": 0,
+  "header_row": 3,
+  "format_type": "standard",
+  "currency": "THB",
+  "amount_mode": "debit_credit",
+  "column_mapping": {
+    "date":        ["วันที่", "Date", "date", "DATE", "วันที่ทำรายการ", "Transaction Date"],
+    "time":        ["เวลา", "Time", "time", "TIME"],
+    "description": ["รายการ", "Description", "description", "DESC", "รายละเอียด", "Narration"],
+    "debit":       ["ถอน", "ถอนเงิน", "เดบิต", "Debit", "debit", "DEBIT", "Withdrawal"],
+    "credit":      ["ฝาก", "ฝากเงิน", "เครดิต", "Credit", "credit", "CREDIT", "Deposit"],
+    "balance":     ["ยอดคงเหลือ", "Balance", "balance", "BALANCE", "จำนวนเงินคงเหลือ"]
+  }
+}

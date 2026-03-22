@@ -1,0 +1,18 @@
+{
+  "bank_name": "BBL",
+  "sheet_index": 0,
+  "header_row": 2,
+  "format_type": "standard",
+  "currency": "THB",
+  "amount_mode": "signed",
+  "column_mapping": {
+    "date":                ["Transaction Date", "วันที่", "Date", "date", "DATE", "วันที่ทำรายการ"],
+    "time":                ["Time", "เวลา", "time", "TIME"],
+    "description":         ["Description", "รายการ", "description", "DESC", "Narration", "Remark", "รายละเอียด"],
+    "amount":              ["Amount", "จำนวนเงิน", "amount", "AMOUNT"],
+    "balance":             ["Balance", "ยอดคงเหลือ", "balance", "BALANCE", "Outstanding Balance"],
+    "channel":             ["Channel", "ช่องทาง", "channel", "CHANNEL"],
+    "counterparty_account":["Counterparty Account", "เลขที่บัญชีคู่สัญญา", "บัญชีคู่สัญญา"],
+    "counterparty_name":   ["Counterparty Name", "ชื่อคู่สัญญา"]
+  }
+}

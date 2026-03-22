@@ -1,0 +1,116 @@
+"""
+classifier.py
+-------------
+Rule-based transaction classifier with confidence scoring.
+
+Priority:
+  RULE 1 – Valid counterparty_account exists              → IN/OUT_TRANSFER (0.95)
+  RULE 2 – Keyword detection (Thai + English)             → DEPOSIT/WITHDRAW/TRANSFER (0.85-0.90)
+  RULE 3 – Fallback by direction                          → IN/OUT_UNKNOWN (0.60)
+"""
+
+import logging
+from typing import Optional
+
+import pandas as pd
+
+from utils.text_utils import detect_keyword_type
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Transaction type constants
+# ---------------------------------------------------------------------------
+IN_TRANSFER   = "IN_TRANSFER"
+OUT_TRANSFER  = "OUT_TRANSFER"
+DEPOSIT       = "DEPOSIT"
+WITHDRAW      = "WITHDRAW"
+IN_UNKNOWN    = "IN_UNKNOWN"
+OUT_UNKNOWN   = "OUT_UNKNOWN"
+
+
+def classify_transaction(
+    direction: str,
+    counterparty_account: str,
+    description: str,
+) -> tuple[str, float]:
+    """
+    Classify a single transaction into a type with a confidence score.
+
+    Parameters
+    ----------
+    direction            : "IN" | "OUT" | "UNKNOWN"
+    counterparty_account : validated counterparty account number (may be "")
+    description          : normalised transaction description
+
+    Returns
+    -------
+    (transaction_type: str, confidence: float)
+    """
+    # RULE 1: Valid counterparty account → TRANSFER
+    if counterparty_account and len(counterparty_account) >= 10:
+        if direction == "IN":
+            return IN_TRANSFER, 0.95
+        elif direction == "OUT":
+            return OUT_TRANSFER, 0.95
+
+    # RULE 2: Keyword detection
+    kw = detect_keyword_type(description)
+
+    if kw["is_transfer"]:
+        # A transfer keyword without a valid account — still call it transfer if we can
+        if direction == "IN":
+            return IN_TRANSFER, 0.87
+        elif direction == "OUT":
+            return OUT_TRANSFER, 0.87
+
+    if kw["is_deposit"]:
+        return DEPOSIT, 0.90
+
+    if kw["is_withdraw"]:
+        return WITHDRAW, 0.88
+
+    # RULE 3: Fallback
+    if direction == "IN":
+        return IN_UNKNOWN, 0.60
+    elif direction == "OUT":
+        return OUT_UNKNOWN, 0.60
+
+    return IN_UNKNOWN, 0.50
+
+
+def classify_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply classification to an entire normalised DataFrame.
+    Adds columns: transaction_type, confidence.
+
+    Parameters
+    ----------
+    df : normalised DataFrame (output of normalizer.normalize)
+
+    Returns
+    -------
+    pd.DataFrame with added transaction_type and confidence columns
+    """
+    types: list[str]   = []
+    confs: list[float] = []
+
+    for _, row in df.iterrows():
+        direction = str(row.get("direction", "UNKNOWN"))
+        cp_acc    = str(row.get("counterparty_account", "") or "")
+        desc      = str(row.get("description", "") or "")
+
+        txn_type, conf = classify_transaction(direction, cp_acc, desc)
+        types.append(txn_type)
+        confs.append(conf)
+
+    df = df.copy()
+    df["transaction_type"] = types
+    df["confidence"]       = confs
+
+    logger.info(
+        f"Classification complete. Types: "
+        f"{ {t: types.count(t) for t in set(types)} }"
+    )
+    return df

@@ -1,0 +1,21 @@
+{
+  "bank_name": "SCB",
+  "sheet_index": 0,
+  "header_row": 1,
+  "format_type": "dual_account",
+  "currency": "THB",
+  "amount_mode": "debit_credit",
+  "column_mapping": {
+    "date":             ["วันที่", "Date", "date", "DATE", "Transaction Date"],
+    "time":             ["เวลา", "Time", "time", "TIME"],
+    "description":      ["รายการ", "Description", "description", "DESC", "Narration", "Remark"],
+    "debit":            ["ถอนเงิน", "ถอน", "Debit", "debit", "DEBIT", "Withdrawal"],
+    "credit":           ["เงินฝาก", "ฝาก", "Credit", "credit", "CREDIT", "Deposit"],
+    "balance":          ["จำนวนเงินคงเหลือ", "ยอดคงเหลือ", "Balance", "balance", "BALANCE"],
+    "channel":          ["ช่องทาง", "Channel", "channel", "CHANNEL"],
+    "sender_account":   ["บัญชีผู้โอน"],
+    "sender_name":      ["ชื่อผู้โอน"],
+    "receiver_account": ["บัญชีผู้รับโอน"],
+    "receiver_name":    ["ชื่อผู้รับโอน"]
+  }
+}

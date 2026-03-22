@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "BSIE Web App",
+      "runtimeExecutable": "/bin/sleep",
+      "runtimeArgs": ["9999"],
+      "port": 5001
+    }
+  ]
+}

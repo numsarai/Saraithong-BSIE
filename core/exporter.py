@@ -25,10 +25,11 @@ from typing import Union, Tuple
 import pandas as pd
 
 from utils.date_utils import format_date_range
+from core.export_anx import export_anx
 
 logger = logging.getLogger(__name__)
 
-BASE_OUTPUT = Path(__file__).parent.parent / "data" / "output"
+from paths import OUTPUT_DIR as BASE_OUTPUT
 
 
 def _safe_filename(name: str) -> str:
@@ -157,6 +158,13 @@ def export_package(
     # 4. Export links CSV
     links.to_csv(processed_dir / "links.csv", index=False, encoding="utf-8-sig")
     logger.info("  Exported: links.csv")
+
+    # 4b. Export i2 Analyst's Notebook XML (.anx)
+    anx_path = processed_dir / "i2_chart.anx"
+    try:
+        export_anx(entities, transactions, anx_path)
+    except Exception as e:
+        logger.warning(f"  ANX export failed (non-fatal): {e}")
 
     # 5. Multi-sheet report Excel (all sheets in one file)
     #    Filename: {subject_name}_{bank}_report.xlsx  (or report.xlsx if no name)

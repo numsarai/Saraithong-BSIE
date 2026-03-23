@@ -34,8 +34,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 # ── Path setup ───────────────────────────────────────────────────────────
+# _BASE is intentionally retained: sys.path.insert ensures `pipeline`, `core`,
+# etc. are importable when app.py is loaded by uvicorn in both source mode and
+# bundle mode (PyInstaller sets sys._MEIPASS but uvicorn imports app lazily).
 _BASE = Path(__file__).parent
 sys.path.insert(0, str(_BASE))
+
+from paths import (
+    STATIC_DIR, TEMPLATES_DIR, CONFIG_DIR,
+    INPUT_DIR, OUTPUT_DIR,
+)
 
 from pipeline.process_account import process_account
 from core.loader               import load_config
@@ -54,12 +62,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bsie.api")
 
-# ── Directory setup ───────────────────────────────────────────────────────
-UPLOAD_DIR = _BASE / "data" / "input"
-OUTPUT_DIR = _BASE / "data" / "output"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-(_BASE / "overrides").mkdir(exist_ok=True)
-(_BASE / "mapping_profiles").mkdir(exist_ok=True)
 
 # ── FastAPI app ───────────────────────────────────────────────────────────
 app = FastAPI(
@@ -68,8 +70,8 @@ app = FastAPI(
     root_path="",
 )
 
-app.mount("/static", StaticFiles(directory=str(_BASE / "static")), name="static")
-templates = Jinja2Templates(directory=str(_BASE / "templates"))
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # ── In-memory job store ───────────────────────────────────────────────────
 _jobs: Dict[str, Dict[str, Any]] = {}
@@ -85,13 +87,18 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@app.get("/health")
+def health():
+    return JSONResponse({"status": "ok"})
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Helper: list available bank configs
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _get_banks() -> List[Dict]:
     banks = []
-    for f in sorted((_BASE / "config").glob("*.json")):
+    for f in sorted(CONFIG_DIR.glob("*.json")):
         try:
             cfg = json.loads(f.read_text(encoding="utf-8"))
             banks.append({"key": f.stem, "name": cfg.get("bank_name", f.stem.upper())})
@@ -119,7 +126,7 @@ async def api_upload(file: UploadFile = File(...)):
 
     job_id    = str(uuid.uuid4())
     safe_name = f"{job_id}_{file.filename.replace(' ', '_')}"
-    save_path = UPLOAD_DIR / safe_name
+    save_path = INPUT_DIR / safe_name
 
     contents = await file.read()
     save_path.write_bytes(contents)

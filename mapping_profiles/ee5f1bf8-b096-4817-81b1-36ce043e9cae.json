@@ -1,0 +1,30 @@
+{
+  "profile_id": "ee5f1bf8-b096-4817-81b1-36ce043e9cae",
+  "bank": "UNKNOWN",
+  "columns": [
+    "วันที่ทำรายการ",
+    "เวลา",
+    "รายการ/หมายเหตุ",
+    "จำนวนเงิน (บาท)",
+    "ยอดคงเหลือ (บาท)",
+    "ช่องทางทำรายการ",
+    "เลขที่อ้างอิง",
+    "บัญชีคู่สัญญา"
+  ],
+  "columns_signature": "df5b036f52bf786f9bee",
+  "mapping": {
+    "date": "วันที่ทำรายการ",
+    "amount": "จำนวนเงิน (บาท)",
+    "description": "รายการ/หมายเหตุ",
+    "time": "เวลา",
+    "debit": null,
+    "credit": null,
+    "balance": "ยอดคงเหลือ (บาท)",
+    "channel": "ช่องทางทำรายการ",
+    "counterparty_account": "บัญชีคู่สัญญา",
+    "counterparty_name": null
+  },
+  "usage_count": 1,
+  "last_used": "2026-03-22T10:46:53.095079+00:00",
+  "created_at": "2026-03-22T10:46:53.095079+00:00"
+}

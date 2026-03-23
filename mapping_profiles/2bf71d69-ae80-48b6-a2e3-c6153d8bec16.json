@@ -1,0 +1,29 @@
+{
+  "profile_id": "2bf71d69-ae80-48b6-a2e3-c6153d8bec16",
+  "bank": "BBL",
+  "columns": [
+    "Transaction Date",
+    "Time",
+    "Description",
+    "Amount",
+    "Balance",
+    "Channel",
+    "Ref No."
+  ],
+  "columns_signature": "a12d6c71aefa2b11a45f",
+  "mapping": {
+    "date": "Transaction Date",
+    "amount": "Amount",
+    "description": "Description",
+    "time": "Time",
+    "debit": null,
+    "credit": null,
+    "balance": "Balance",
+    "channel": "Channel",
+    "counterparty_account": "Ref No.",
+    "counterparty_name": null
+  },
+  "usage_count": 1,
+  "last_used": "2026-03-22T10:46:51.837193+00:00",
+  "created_at": "2026-03-22T10:46:51.837193+00:00"
+}

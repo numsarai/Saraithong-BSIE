@@ -10,6 +10,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Union
 
+from paths import CONFIG_DIR
+
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -28,7 +30,7 @@ def load_config(bank_key: str) -> dict:
     -------
     dict – parsed JSON config
     """
-    config_path = Path(__file__).parent.parent / "config" / f"{bank_key.lower()}.json"
+    config_path = CONFIG_DIR / f"{bank_key.lower()}.json"
     if not config_path.exists():
         raise FileNotFoundError(f"Bank config not found: {config_path}")
     with config_path.open(encoding="utf-8") as f:

@@ -13,6 +13,11 @@ DMG_STAGING="${DIST_DIR}/dmg_staging"
 
 echo "Building DMG: ${DMG_NAME}.dmg"
 
+if [[ ! -d "${DIST_DIR}/${APP_NAME}.app" ]]; then
+  echo "Error: ${DIST_DIR}/${APP_NAME}.app not found. Run 'pyinstaller bsie.spec' first." >&2
+  exit 1
+fi
+
 rm -rf "${DMG_STAGING}"
 mkdir -p "${DMG_STAGING}"
 cp -r "${DIST_DIR}/${APP_NAME}.app" "${DMG_STAGING}/"

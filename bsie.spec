@@ -64,9 +64,8 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
+    [],
+    [],
     [],
     name="BSIE",
     debug=False,
@@ -84,9 +83,21 @@ exe = EXE(
     icon=_icon,
 )
 
+# One-dir bundle: COLLECT produces dist/BSIE/ folder (matching setup.iss Source path)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name="BSIE",
+)
+
 if sys.platform == "darwin":
     app = BUNDLE(
-        exe,
+        coll,
         name="BSIE.app",
         icon=_icns,
         bundle_identifier="com.bsie.app",

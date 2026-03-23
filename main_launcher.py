@@ -36,13 +36,23 @@ MAX_WAIT_SECONDS = 10
 
 
 def _setup_user_dirs() -> None:
-    """Create user data directories on first launch (idempotent)."""
+    """Create user data directories on first launch (idempotent).
+
+    USER_DATA_DIR is created implicitly as a parent of INPUT_DIR, but we create
+    it explicitly first so _redirect_output_to_log can safely open bsie.log.
+    """
+    USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
     for directory in [INPUT_DIR, OUTPUT_DIR, OVERRIDES_DIR, PROFILES_DIR]:
         directory.mkdir(parents=True, exist_ok=True)
 
 
 def _redirect_output_to_log() -> None:
-    """Redirect stdout/stderr to bsie.log (PyInstaller suppresses the console)."""
+    """Redirect stdout/stderr to bsie.log (PyInstaller suppresses the console).
+
+    Must be called after _setup_user_dirs() so USER_DATA_DIR exists.
+    The log file handle is intentionally never closed — it must stay open for
+    the lifetime of the process; os._exit(0) in _quit_app lets the OS close it.
+    """
     log_path = USER_DATA_DIR / "bsie.log"
     log_file = open(log_path, "a", encoding="utf-8", buffering=1)
     sys.stdout = log_file
@@ -56,7 +66,14 @@ def _redirect_output_to_log() -> None:
 
 
 def _start_server() -> None:
-    """Start the uvicorn server in a daemon thread. Stores server ref for shutdown."""
+    """Start the uvicorn server in a daemon thread. Stores server ref for shutdown.
+
+    The server reference is stored as a function attribute before server.run()
+    blocks.  _quit_app uses hasattr() to guard against reading it before it is
+    set — but in practice _quit_app is only reachable after the tray icon runs,
+    which only starts after _wait_for_server() succeeds, by which point this
+    thread has already stored the reference.
+    """
     import uvicorn
     config = uvicorn.Config(
         "app:app",

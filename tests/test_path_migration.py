@@ -12,6 +12,9 @@ MIGRATED_FILES = [
     "core/exporter.py",
     "core/mapping_memory.py",
     "core/override_manager.py",
+    # app.py is intentionally excluded: it retains `_BASE = Path(__file__).parent`
+    # for `sys.path.insert(0, str(_BASE))` which is needed so uvicorn can import
+    # the `pipeline` and `core` packages when it loads the app module lazily.
 ]
 
 ROOT = pathlib.Path(__file__).parent.parent

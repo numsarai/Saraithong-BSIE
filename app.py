@@ -34,6 +34,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 # ── Path setup ───────────────────────────────────────────────────────────
+# _BASE is intentionally retained: sys.path.insert ensures `pipeline`, `core`,
+# etc. are importable when app.py is loaded by uvicorn in both source mode and
+# bundle mode (PyInstaller sets sys._MEIPASS but uvicorn imports app lazily).
 _BASE = Path(__file__).parent
 sys.path.insert(0, str(_BASE))
 

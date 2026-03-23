@@ -88,7 +88,7 @@ async def index(request: Request):
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return JSONResponse({"status": "ok"})
 
 
 # ═══════════════════════════════════════════════════════════════════════════

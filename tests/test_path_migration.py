@@ -1,7 +1,7 @@
 # tests/test_path_migration.py
 """
 Regression test: ensure migrated core modules use paths.py, not Path(__file__).
-Catches both Path(__file__).parent and Path(__file__).parent.parent forms.
+Catches any Path(__file__) usage in any form.
 """
 import ast
 import pathlib
@@ -30,27 +30,17 @@ def _is_path_file_call(node) -> bool:
 
 
 def _contains_file_path_construction(source: str) -> bool:
-    """Return True if source contains Path(__file__).parent[.parent...] usage.
+    """Return True if source contains any Path(__file__) call.
 
-    ast.walk() descends into all nodes including function bodies, so inline
-    path constructions inside functions (like loader.py's load_config()) are
-    correctly detected.
+    Catches all forms: Path(__file__).parent, Path(__file__).resolve().parent,
+    bare Path(__file__), etc.  ast.walk() descends into all nodes including
+    function bodies, so inline path constructions inside functions are detected.
     """
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return False
-    for node in ast.walk(tree):
-        # node is an Attribute(.parent) access
-        if not (isinstance(node, ast.Attribute) and node.attr == "parent"):
-            continue
-        # Walk the chain to see if it terminates at Path(__file__)
-        inner = node.value
-        while isinstance(inner, ast.Attribute) and inner.attr == "parent":
-            inner = inner.value
-        if _is_path_file_call(inner):
-            return True
-    return False
+    return any(_is_path_file_call(node) for node in ast.walk(tree))
 
 
 def test_no_file_relative_paths_in_migrated_modules():

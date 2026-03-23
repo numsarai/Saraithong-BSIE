@@ -1,0 +1,33 @@
+{
+  "profile_id": "d4299d76-5095-402b-bc7e-626b306dadbf",
+  "bank": "KBANK",
+  "columns": [
+    "Transaction Date",
+    "Transaction Time",
+    "Description",
+    "Channel",
+    "Source Account",
+    "Source Account Name",
+    "Destination Account",
+    "Destination Account Name",
+    "Debit",
+    "Credit",
+    "Balance"
+  ],
+  "columns_signature": "dad2faf5435bb98cca0d",
+  "mapping": {
+    "date": "Transaction Date",
+    "amount": "Debit",
+    "description": "Description",
+    "time": "Transaction Time",
+    "debit": null,
+    "credit": "Credit",
+    "balance": "Balance",
+    "channel": "Channel",
+    "counterparty_account": "Source Account",
+    "counterparty_name": "Destination Account Name"
+  },
+  "usage_count": 1,
+  "last_used": "2026-03-22T10:46:52.698398+00:00",
+  "created_at": "2026-03-22T10:46:52.698398+00:00"
+}

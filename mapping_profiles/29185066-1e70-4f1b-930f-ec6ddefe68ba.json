@@ -1,0 +1,31 @@
+{
+  "profile_id": "29185066-1e70-4f1b-930f-ec6ddefe68ba",
+  "bank": "TTB",
+  "columns": [
+    "Transaction Date",
+    "Transaction Time",
+    "Description",
+    "Debit",
+    "Credit",
+    "Outstanding Balance",
+    "Channel",
+    "Counterparty Account",
+    "Counterparty Name"
+  ],
+  "columns_signature": "d0a25839d7f6e72862b7",
+  "mapping": {
+    "date": "Transaction Date",
+    "amount": "Debit",
+    "description": "Description",
+    "time": "Transaction Time",
+    "debit": "Outstanding Balance",
+    "credit": "Credit",
+    "balance": null,
+    "channel": "Channel",
+    "counterparty_account": "Counterparty Account",
+    "counterparty_name": "Counterparty Name"
+  },
+  "usage_count": 1,
+  "last_used": "2026-03-22T10:46:52.307194+00:00",
+  "created_at": "2026-03-22T10:46:52.307194+00:00"
+}

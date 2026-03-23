@@ -1,0 +1,28 @@
+{
+  "profile_id": "7f963ef5-44bf-4b2d-8559-a7a003c3c1d6",
+  "bank": "GSB",
+  "columns": [
+    "วันที่",
+    "เวลา",
+    "รายการ",
+    "ถอน",
+    "ฝาก",
+    "ยอดคงเหลือ"
+  ],
+  "columns_signature": "8aa1fe59a83935d2b8bc",
+  "mapping": {
+    "date": "วันที่",
+    "amount": null,
+    "description": "รายการ",
+    "time": "เวลา",
+    "debit": "ถอน",
+    "credit": "ฝาก",
+    "balance": "ยอดคงเหลือ",
+    "channel": null,
+    "counterparty_account": null,
+    "counterparty_name": null
+  },
+  "usage_count": 1,
+  "last_used": "2026-03-22T10:46:52.501483+00:00",
+  "created_at": "2026-03-22T10:46:52.501483+00:00"
+}

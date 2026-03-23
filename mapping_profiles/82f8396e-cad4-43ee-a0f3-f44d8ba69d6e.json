@@ -1,0 +1,29 @@
+{
+  "profile_id": "82f8396e-cad4-43ee-a0f3-f44d8ba69d6e",
+  "bank": "SCB",
+  "columns": [
+    "วันที่",
+    "เวลา",
+    "รายการ",
+    "ถอนเงิน",
+    "เงินฝาก",
+    "จำนวนเงินคงเหลือ",
+    "ช่องทาง"
+  ],
+  "columns_signature": "f9636ab10ab5b2b2c25b",
+  "mapping": {
+    "date": "วันที่",
+    "amount": "จำนวนเงินคงเหลือ",
+    "description": "รายการ",
+    "time": "เวลา",
+    "debit": "ถอนเงิน",
+    "credit": "เงินฝาก",
+    "balance": null,
+    "channel": "ช่องทาง",
+    "counterparty_account": null,
+    "counterparty_name": null
+  },
+  "usage_count": 1,
+  "last_used": "2026-03-22T10:46:52.887245+00:00",
+  "created_at": "2026-03-22T10:46:52.887245+00:00"
+}

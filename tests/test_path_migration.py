@@ -48,6 +48,6 @@ def test_no_file_relative_paths_in_migrated_modules():
     for rel_path in MIGRATED_FILES:
         source = (ROOT / rel_path).read_text(encoding="utf-8")
         assert not _contains_file_path_construction(source), (
-            f"{rel_path} still contains Path(__file__).parent — "
+            f"{rel_path} still contains Path(__file__) — "
             "migrate to paths.py imports"
         )

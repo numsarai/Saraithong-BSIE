@@ -62,8 +62,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bsie.api")
 
-# ── Directory aliases ─────────────────────────────────────────────────────
-UPLOAD_DIR = INPUT_DIR   # alias preserved for existing code references
 
 # ── FastAPI app ───────────────────────────────────────────────────────────
 app = FastAPI(
@@ -128,7 +126,7 @@ async def api_upload(file: UploadFile = File(...)):
 
     job_id    = str(uuid.uuid4())
     safe_name = f"{job_id}_{file.filename.replace(' ', '_')}"
-    save_path = UPLOAD_DIR / safe_name
+    save_path = INPUT_DIR / safe_name
 
     contents = await file.read()
     save_path.write_bytes(contents)

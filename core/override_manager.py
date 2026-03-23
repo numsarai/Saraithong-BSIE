@@ -25,7 +25,8 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-_OVERRIDES_FILE = Path(__file__).parent.parent / "overrides" / "overrides.json"
+from paths import OVERRIDES_DIR as _OVERRIDES_DIR
+_OVERRIDES_FILE = _OVERRIDES_DIR / "overrides.json"
 
 
 # ── Persistence helpers ────────────────────────────────────────────────────

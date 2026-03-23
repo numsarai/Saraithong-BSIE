@@ -29,7 +29,7 @@ from core.export_anx import export_anx
 
 logger = logging.getLogger(__name__)
 
-BASE_OUTPUT = Path(__file__).parent.parent / "data" / "output"
+from paths import OUTPUT_DIR as BASE_OUTPUT
 
 
 def _safe_filename(name: str) -> str:

@@ -27,7 +27,7 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-_PROFILES_DIR = Path(__file__).parent.parent / "mapping_profiles"
+from paths import PROFILES_DIR as _PROFILES_DIR
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────

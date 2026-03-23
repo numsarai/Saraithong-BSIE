@@ -15,7 +15,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-_CONFIG_DIR = Path(__file__).parent.parent / "config"
+from paths import CONFIG_DIR as _CONFIG_DIR
 
 # Hard-coded bank signatures for banks NOT yet in config/
 _EXTRA_SIGNATURES: Dict[str, Dict] = {

@@ -21,11 +21,10 @@ import json
 import logging
 import os
 import sys
-import threading
-import traceback
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
@@ -40,12 +39,40 @@ from fastapi.templating import Jinja2Templates
 _BASE = Path(__file__).parent
 sys.path.insert(0, str(_BASE))
 
+# ── Bundled mode detection ────────────────────────────────────────────────
+# When frozen by PyInstaller, skip Celery+Redis and run pipeline in-thread.
+IS_BUNDLED = getattr(sys, "frozen", False)
+
 from paths import (
     STATIC_DIR, TEMPLATES_DIR, CONFIG_DIR,
     INPUT_DIR, OUTPUT_DIR,
 )
 
-from pipeline.process_account import process_account
+from database import (
+    init_db,
+    db_create_job, db_update_job, db_get_job, db_append_log, insert_job_meta,
+)
+from migrate_to_db import migrate_json_to_db
+
+if not IS_BUNDLED:
+    from tasks import run_pipeline_task
+
+
+def _dispatch_pipeline(job_id: str, upload_path_str: str, bank_key: str,
+                        account: str, name: str, confirmed_mapping: dict) -> None:
+    """Dispatch pipeline — thread in bundled mode, Celery in server mode."""
+    if IS_BUNDLED:
+        import threading
+        from tasks import run_pipeline_sync
+        t = threading.Thread(
+            target=run_pipeline_sync,
+            args=(job_id, upload_path_str, bank_key, account, name, confirmed_mapping),
+            daemon=True,
+        )
+        t.start()
+    else:
+        run_pipeline_task.delay(job_id, upload_path_str, bank_key, account, name, confirmed_mapping)
+
 from core.loader               import load_config
 from core.bank_detector        import detect_bank
 from core.column_detector      import detect_columns
@@ -63,19 +90,39 @@ logging.basicConfig(
 logger = logging.getLogger("bsie.api")
 
 
+# ── Startup / shutdown ────────────────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ensure all directories exist
+    INPUT_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Initialise DB tables
+    init_db()
+    # Migrate any existing JSON data to DB (no-op if already done)
+    try:
+        migrate_json_to_db()
+    except Exception as e:
+        logger.warning(f"Migration step encountered an issue (non-fatal): {e}")
+    yield
+    # shutdown — nothing to do
+
+
 # ── FastAPI app ───────────────────────────────────────────────────────────
 app = FastAPI(
     title="BSIE – Bank Statement Intelligence Engine",
     version="2.0.0",
     root_path="",
+    lifespan=lifespan,
 )
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-# ── In-memory job store ───────────────────────────────────────────────────
-_jobs: Dict[str, Dict[str, Any]] = {}
-_jobs_lock = threading.Lock()
+# Serve the React build if it exists
+_REACT_DIST = STATIC_DIR / "dist"
+if _REACT_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=str(_REACT_DIST / "assets")), name="assets")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -84,7 +131,22 @@ _jobs_lock = threading.Lock()
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
+    # Serve the React SPA if built, fallback to legacy Jinja2 template
+    react_index = _REACT_DIST / "index.html"
+    if react_index.exists():
+        return FileResponse(str(react_index))
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/app", response_class=HTMLResponse)
+@app.get("/bank-manager", response_class=HTMLResponse)
+async def react_spa():
+    """Serve React SPA for all frontend routes."""
+    react_index = _REACT_DIST / "index.html"
+    if react_index.exists():
+        return FileResponse(str(react_index))
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/")
 
 
 @app.get("/health")
@@ -249,106 +311,34 @@ async def api_process(request: Request):
         raise HTTPException(400, "account must be exactly 10 or 12 digits")
 
     job_id = str(uuid.uuid4())
-    with _jobs_lock:
-        _jobs[job_id] = {"status": "queued", "log": [], "result": None, "error": None}
+    db_create_job(job_id, account=account)
 
-    t = threading.Thread(
-        target=_run_pipeline,
-        args=(job_id, Path(temp_file_path), bank_key, account, name, confirmed_mapping),
-        daemon=True,
-    )
-    t.start()
+    _dispatch_pipeline(job_id, temp_file_path, bank_key, account, name, confirmed_mapping)
     return JSONResponse({"job_id": job_id})
-
-
-def _run_pipeline(
-    job_id: str,
-    upload_path: Path,
-    bank_key: str,
-    account: str,
-    name: str,
-    confirmed_mapping: Optional[Dict],
-) -> None:
-    """Background worker — runs the full pipeline and stores results."""
-
-    class _JobHandler(logging.Handler):
-        def emit(self, record):
-            with _jobs_lock:
-                if job_id in _jobs:
-                    _jobs[job_id]["log"].append(self.format(record))
-
-    handler = _JobHandler()
-    handler.setFormatter(logging.Formatter("%(levelname)-8s %(name)s — %(message)s"))
-    root_logger = logging.getLogger()
-    root_logger.addHandler(handler)
-
-    try:
-        with _jobs_lock:
-            _jobs[job_id]["status"] = "running"
-
-        output_dir = process_account(
-            input_file=upload_path,
-            subject_account=account,
-            subject_name=name,
-            bank_key=bank_key,
-            confirmed_mapping=confirmed_mapping,
-        )
-
-        meta = {}
-        meta_path = output_dir / "meta.json"
-        if meta_path.exists():
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-
-        # Load transaction preview (first 500 rows)
-        txn_path = output_dir / "processed" / "transactions.csv"
-        txn_data = []
-        if txn_path.exists():
-            df = pd.read_csv(txn_path, dtype=str, encoding="utf-8-sig", nrows=500)
-            txn_data = df.fillna("").to_dict(orient="records")
-
-        ent_path = output_dir / "processed" / "entities.csv"
-        ent_data = []
-        if ent_path.exists():
-            df = pd.read_csv(ent_path, dtype=str, encoding="utf-8-sig")
-            ent_data = df.fillna("").to_dict(orient="records")
-
-        lnk_path = output_dir / "processed" / "links.csv"
-        lnk_data = []
-        if lnk_path.exists():
-            df = pd.read_csv(lnk_path, dtype=str, encoding="utf-8-sig")
-            lnk_data = df.fillna("").to_dict(orient="records")
-
-        with _jobs_lock:
-            _jobs[job_id].update({
-                "status": "done",
-                "result": {
-                    "meta":         meta,
-                    "transactions": txn_data,
-                    "entities":     ent_data,
-                    "links":        lnk_data,
-                    "output_dir":   str(output_dir),
-                    "account":      account,
-                },
-            })
-
-    except Exception as e:
-        logger.error(f"Job {job_id} failed: {e}\n{traceback.format_exc()}")
-        with _jobs_lock:
-            _jobs[job_id].update({"status": "error", "error": str(e)})
-    finally:
-        root_logger.removeHandler(handler)
 
 
 @app.get("/api/job/{job_id}")
 async def api_job_status(job_id: str):
-    with _jobs_lock:
-        job = _jobs.get(job_id)
+    job = db_get_job(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
+
+    # Parse log_text into a list of lines (last 200)
+    log_lines = (job["log_text"] or "").splitlines()
+    log_lines = log_lines[-200:]
+
+    # Parse result_json back to dict
+    result = None
+    if job["result_json"]:
+        try:
+            result = json.loads(job["result_json"])
+        except Exception:
+            result = None
+
     return JSONResponse({
         "status": job["status"],
-        "log":    job["log"][-200:],
-        "result": job["result"],
+        "log":    log_lines,
+        "result": result,
         "error":  job["error"],
     })
 
@@ -472,6 +462,89 @@ async def api_download(account: str, file_path: str):
 @app.get("/api/banks")
 async def api_banks():
     return JSONResponse(_get_banks())
+
+
+@app.get("/api/banks/{key}")
+async def api_bank_get(key: str):
+    """Return full config for a specific bank."""
+    f = CONFIG_DIR / f"{key}.json"
+    if not f.exists():
+        raise HTTPException(404, f"Bank '{key}' not found")
+    cfg = json.loads(f.read_text(encoding="utf-8"))
+    return JSONResponse({"key": key, **cfg})
+
+
+@app.post("/api/banks")
+async def api_bank_create(request: Request):
+    """Create or update a bank config file from JSON body."""
+    body = await request.json()
+    key  = body.get("key", "").strip().lower().replace(" ", "_")
+    if not key:
+        raise HTTPException(400, "Bank key is required")
+    # Protect built-in banks from overwrite unless flagged
+    builtin = {"generic", "scb", "kbank", "ktb", "bbl", "bay", "ttb", "gsb", "baac"}
+    if key in builtin and not body.get("overwrite_builtin"):
+        raise HTTPException(400, f"'{key}' is a built-in bank. Set overwrite_builtin=true to overwrite.")
+    cfg = {
+        "bank_name":       body.get("bank_name", key.upper()),
+        "sheet_index":     int(body.get("sheet_index", 0)),
+        "header_row":      int(body.get("header_row", 0)),
+        "format_type":     body.get("format_type", "standard"),
+        "currency":        body.get("currency", "THB"),
+        "amount_mode":     body.get("amount_mode", "signed"),
+        "column_mapping":  body.get("column_mapping", {}),
+    }
+    dest = CONFIG_DIR / f"{key}.json"
+    dest.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    log.info("Bank config saved: %s", dest)
+    return JSONResponse({"status": "ok", "key": key, "name": cfg["bank_name"]})
+
+
+@app.delete("/api/banks/{key}")
+async def api_bank_delete(key: str):
+    """Delete a bank config. Built-in banks are protected."""
+    builtin = {"generic", "scb", "kbank", "ktb", "bbl", "bay", "ttb", "gsb", "baac"}
+    if key in builtin:
+        raise HTTPException(400, f"Cannot delete built-in bank '{key}'")
+    f = CONFIG_DIR / f"{key}.json"
+    if not f.exists():
+        raise HTTPException(404, f"Bank '{key}' not found")
+    f.unlink()
+    return JSONResponse({"status": "deleted", "key": key})
+
+
+@app.post("/api/banks/learn")
+async def api_bank_learn(request: Request):
+    """
+    Learn a new bank template from a confirmed column mapping.
+    Accepts: { key, bank_name, format_type, amount_mode, confirmed_mapping, all_columns }
+    Generates a bank config with the actual column names as aliases.
+    """
+    body = await request.json()
+    key  = body.get("key", "").strip().lower().replace(" ", "_")
+    if not key:
+        raise HTTPException(400, "Bank key is required")
+
+    confirmed_mapping: dict = body.get("confirmed_mapping", {})
+    # Build column_mapping: each logical field → [the actual column name used]
+    col_mapping = {}
+    for field, col in confirmed_mapping.items():
+        if col:
+            col_mapping[field] = [col]
+
+    cfg = {
+        "bank_name":      body.get("bank_name", key.upper()),
+        "sheet_index":    int(body.get("sheet_index", 0)),
+        "header_row":     int(body.get("header_row", 0)),
+        "format_type":    body.get("format_type", "standard"),
+        "currency":       "THB",
+        "amount_mode":    body.get("amount_mode", "signed"),
+        "column_mapping": col_mapping,
+    }
+    dest = CONFIG_DIR / f"{key}.json"
+    dest.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    log.info("Learned new bank config: %s (%s)", key, cfg["bank_name"])
+    return JSONResponse({"status": "learned", "key": key, "name": cfg["bank_name"]})
 
 
 # ═══════════════════════════════════════════════════════════════════════════

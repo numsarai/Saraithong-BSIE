@@ -20,10 +20,19 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install dependencies
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build React frontend
         run: |
-          pip install -r requirements.txt
-          pip install pyinstaller pystray Pillow
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pyinstaller
 
       - name: Generate placeholder icons
         run: |
@@ -37,7 +46,7 @@ jobs:
           "
 
       - name: Build with PyInstaller
-        run: pyinstaller bsie.spec
+        run: python -m PyInstaller bsie.spec --noconfirm
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
@@ -65,10 +74,19 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install dependencies
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build React frontend
         run: |
-          pip install -r requirements.txt
-          pip install pyinstaller pystray Pillow
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pyinstaller
 
       - name: Generate placeholder icons
         run: |
@@ -82,7 +100,7 @@ jobs:
           "
 
       - name: Build with PyInstaller
-        run: pyinstaller bsie.spec
+        run: python -m PyInstaller bsie.spec --noconfirm
 
       - name: Install create-dmg
         run: brew install create-dmg

@@ -20,7 +20,7 @@ import re
 import shutil
 from pathlib import Path
 from datetime import date
-from typing import Union, Tuple
+from typing import Optional, Union, Tuple
 
 import pandas as pd
 
@@ -119,6 +119,7 @@ def export_package(
     bank: str,
     original_file: Union[str, Path],
     subject_name: str = "",
+    job_id: Optional[str] = None,
 ) -> Path:
     """
     Export the full Account Package to disk.
@@ -184,8 +185,40 @@ def export_package(
         json.dump(meta, f, ensure_ascii=False, indent=2, default=str)
     logger.info(f"  Meta written: {meta_path}")
 
+    # Write JobMeta row to DB (non-fatal if DB unavailable)
+    _write_job_meta_to_db(job_id, account_number, meta)
+
     logger.info(f"Account package complete: {account_dir}")
     return account_dir
+
+
+def _write_job_meta_to_db(job_id: Optional[str], account_number: str, meta: dict) -> None:
+    """Insert a JobMeta row into the SQLite DB. No-op if job_id is None or DB fails."""
+    if not job_id:
+        return
+    try:
+        from database import get_session, JobMeta
+        from datetime import datetime as _dt
+        with get_session() as session:
+            row = JobMeta(
+                account_number=account_number,
+                job_id=job_id,
+                bank=meta.get("bank", ""),
+                total_in=float(meta.get("total_in", 0.0)),
+                total_out=float(meta.get("total_out", 0.0)),
+                total_circulation=float(meta.get("total_circulation", 0.0)),
+                num_transactions=int(meta.get("num_transactions", 0)),
+                date_range=meta.get("date_range", ""),
+                num_unknown=int(meta.get("num_unknown", 0)),
+                num_partial_accounts=int(meta.get("num_partial_accounts", 0)),
+                report_filename=meta.get("report_filename", ""),
+                created_at=_dt.utcnow(),
+            )
+            session.add(row)
+            session.commit()
+        logger.info(f"  JobMeta written to DB for job_id={job_id}")
+    except Exception as e:
+        logger.warning(f"  Could not write JobMeta to DB (non-fatal): {e}")
 
 
 def _build_meta(transactions: pd.DataFrame, account_number: str, bank: str) -> dict:

@@ -17,10 +17,17 @@ a = Analysis(
     pathex=["."],
     binaries=[],
     datas=[
-        ("templates",          "templates"),
-        ("static",             "static"),
-        ("config",             "config"),
-        ("installer/bsie.png", "installer"),
+        ("templates",           "templates"),
+        ("static",              "static"),       # includes static/dist/ React build
+        ("config",              "config"),
+        ("installer/bsie.png",  "installer"),
+        # New modules that need to be findable at runtime
+        ("database.py",         "."),
+        ("paths.py",            "."),
+        ("migrate_to_db.py",    "."),
+        ("tasks.py",            "."),
+        ("celery_app.py",       "."),
+        ("worker_entry.py",     "."),
     ],
     hiddenimports=[
         "uvicorn.logging",
@@ -50,11 +57,43 @@ a = Analysis(
         "PIL.Image",
         "tkinter",
         "tkinter.messagebox",
+        # SQLModel / SQLAlchemy
+        "sqlmodel",
+        "sqlalchemy",
+        "sqlalchemy.dialects.sqlite",
+        "sqlalchemy.orm",
+        # Celery (imported lazily in server mode, but needs to be present)
+        "celery",
+        "kombu",
+        "billiard",
+        # pandas engines
+        "openpyxl",
+        "xlrd",
+        # rapidfuzz
+        "rapidfuzz",
+        "rapidfuzz.distance",
+        # dateutil
+        "dateutil",
+        "dateutil.parser",
+        # aiofiles
+        "aiofiles",
+        # multipart
+        "multipart",
+        "python_multipart",
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        "redis",
+        "celery.backends.redis",
+        "kombu.transport.redis",
+        "flower",
+        "pytest",
+        "unittest",
+        "IPython",
+        "jupyter",
+    ],
     cipher=block_cipher,
     noarchive=False,
 )

@@ -8,7 +8,7 @@ python-dateutil>=2.8.2
 fastapi>=0.104.0
 uvicorn>=0.24.0
 python-multipart>=0.0.6
-jinja2>=3.1.0
+jinja2>=3.1.6  # 3.1.5 broke Starlette TemplateResponse (unhashable dict in LRUCache)
 aiofiles>=23.0.0
 
 # Fuzzy matching for column detection

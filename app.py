@@ -58,16 +58,33 @@ if not IS_BUNDLED:
     from tasks import run_pipeline_task
 
 
+def _celery_workers_available() -> bool:
+    """Return True only if a Celery broker is reachable AND at least one worker is online."""
+    try:
+        inspect = run_pipeline_task.app.control.inspect(timeout=1)
+        active = inspect.active_queues()
+        return bool(active)
+    except Exception:
+        return False
+
+
 def _dispatch_pipeline(job_id: str, upload_path_str: str, bank_key: str,
                         account: str, name: str, confirmed_mapping: dict) -> None:
-    """Dispatch pipeline — Celery when available, else thread."""
+    """Dispatch pipeline — Celery when broker is up, else thread."""
     import threading
     from tasks import run_pipeline_sync
 
-    # Use Celery if available and not bundled
-    if not IS_BUNDLED and hasattr(run_pipeline_task, 'delay'):
+    use_celery = (
+        not IS_BUNDLED
+        and hasattr(run_pipeline_task, 'delay')
+        and _celery_workers_available()
+    )
+
+    if use_celery:
+        logger.info("Dispatching pipeline via Celery")
         run_pipeline_task.delay(job_id, upload_path_str, bank_key, account, name, confirmed_mapping)
     else:
+        logger.info("Dispatching pipeline via thread (no Celery broker)")
         t = threading.Thread(
             target=run_pipeline_sync,
             args=(job_id, upload_path_str, bank_key, account, name, confirmed_mapping),

@@ -28,12 +28,14 @@ export function Step5Results() {
   const totalPages = Math.ceil(total / 100) || 1
 
   const dlBase  = `/api/download/${account}`
+  const reportFile = meta.report_filename || 'report.xlsx'
   const downloads = [
-    { label: 'Report (.xlsx)',        file: 'processed/report.xlsx' },
+    { label: 'Report (.xlsx)',        file: `processed/${reportFile}` },
     { label: 'Transactions (.csv)',   file: 'processed/transactions.csv' },
     { label: 'Entities (.csv)',       file: 'processed/entities.csv' },
     { label: 'Entities (.xlsx)',      file: 'processed/entities.xlsx' },
     { label: 'Links (.csv)',          file: 'processed/links.csv' },
+    { label: 'i2 Chart (.anx)',       file: 'processed/i2_chart.anx' },
     { label: 'Original (.xlsx)',      file: 'raw/original.xlsx' },
     { label: 'Metadata (.json)',      file: 'meta.json' },
   ]

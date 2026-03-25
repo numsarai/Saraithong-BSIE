@@ -90,7 +90,9 @@ fi
 echo ""
 echo -e "  ${BOLD}${GREEN}All servers running!${NC}"
 echo ""
-echo -e "  ${BOLD}App:${NC}      http://localhost:${FRONTEND_PID:+$FRONTEND_PORT}${FRONTEND_PID:-$BACKEND_PORT}"
+APP_PORT=${FRONTEND_PID:+$FRONTEND_PORT}
+APP_PORT=${APP_PORT:-$BACKEND_PORT}
+echo -e "  ${BOLD}App:${NC}      http://localhost:$APP_PORT"
 echo -e "  ${BOLD}API:${NC}      http://localhost:$BACKEND_PORT/api"
 echo -e "  ${BOLD}Health:${NC}   http://localhost:$BACKEND_PORT/health"
 echo -e "  ${BOLD}Logs:${NC}     $BACKEND_LOG"
@@ -112,9 +114,9 @@ trap cleanup INT TERM
 
 # Open browser
 if command -v open &>/dev/null; then
-    open "http://localhost:${FRONTEND_PID:+$FRONTEND_PORT}${FRONTEND_PID:-$BACKEND_PORT}"
+    open "http://localhost:$APP_PORT"
 elif command -v xdg-open &>/dev/null; then
-    xdg-open "http://localhost:${FRONTEND_PID:+$FRONTEND_PORT}${FRONTEND_PID:-$BACKEND_PORT}"
+    xdg-open "http://localhost:$APP_PORT"
 fi
 
 # Wait for either process to exit

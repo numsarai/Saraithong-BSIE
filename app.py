@@ -496,7 +496,7 @@ async def api_bank_create(request: Request):
     }
     dest = CONFIG_DIR / f"{key}.json"
     dest.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
-    log.info("Bank config saved: %s", dest)
+    logger.info("Bank config saved: %s", dest)
     return JSONResponse({"status": "ok", "key": key, "name": cfg["bank_name"]})
 
 
@@ -543,7 +543,7 @@ async def api_bank_learn(request: Request):
     }
     dest = CONFIG_DIR / f"{key}.json"
     dest.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
-    log.info("Learned new bank config: %s (%s)", key, cfg["bank_name"])
+    logger.info("Learned new bank config: %s (%s)", key, cfg["bank_name"])
     return JSONResponse({"status": "learned", "key": key, "name": cfg["bank_name"]})
 
 

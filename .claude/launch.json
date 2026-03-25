@@ -2,10 +2,17 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "BSIE Web App",
-      "runtimeExecutable": "/bin/sleep",
-      "runtimeArgs": ["9999"],
-      "port": 5001
+      "name": "BSIE Backend",
+      "runtimeExecutable": "/Users/saraithong/Documents/bsie/.venv/bin/python3",
+      "runtimeArgs": ["/Users/saraithong/Documents/bsie/app.py"],
+      "port": 5001,
+      "autoPort": false
+    },
+    {
+      "name": "BSIE Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "/Users/saraithong/Documents/bsie/frontend"],
+      "port": 5173
     }
   ]
 }

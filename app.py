@@ -44,7 +44,7 @@ sys.path.insert(0, str(_BASE))
 IS_BUNDLED = getattr(sys, "frozen", False)
 
 from paths import (
-    STATIC_DIR, TEMPLATES_DIR, CONFIG_DIR,
+    STATIC_DIR, TEMPLATES_DIR, CONFIG_DIR, BUILTIN_CONFIG_DIR,
     INPUT_DIR, OUTPUT_DIR,
 )
 
@@ -60,18 +60,20 @@ if not IS_BUNDLED:
 
 def _dispatch_pipeline(job_id: str, upload_path_str: str, bank_key: str,
                         account: str, name: str, confirmed_mapping: dict) -> None:
-    """Dispatch pipeline — thread in bundled mode, Celery in server mode."""
-    if IS_BUNDLED:
-        import threading
-        from tasks import run_pipeline_sync
+    """Dispatch pipeline — Celery when available, else thread."""
+    import threading
+    from tasks import run_pipeline_sync
+
+    # Use Celery if available and not bundled
+    if not IS_BUNDLED and hasattr(run_pipeline_task, 'delay'):
+        run_pipeline_task.delay(job_id, upload_path_str, bank_key, account, name, confirmed_mapping)
+    else:
         t = threading.Thread(
             target=run_pipeline_sync,
             args=(job_id, upload_path_str, bank_key, account, name, confirmed_mapping),
             daemon=True,
         )
         t.start()
-    else:
-        run_pipeline_task.delay(job_id, upload_path_str, bank_key, account, name, confirmed_mapping)
 
 from core.loader               import load_config
 from core.bank_detector        import detect_bank
@@ -97,6 +99,7 @@ async def lifespan(app: FastAPI):
     # Ensure all directories exist
     INPUT_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     # Initialise DB tables
     init_db()
     # Migrate any existing JSON data to DB (no-op if already done)
@@ -159,14 +162,18 @@ def health():
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _get_banks() -> List[Dict]:
-    banks = []
-    for f in sorted(CONFIG_DIR.glob("*.json")):
-        try:
-            cfg = json.loads(f.read_text(encoding="utf-8"))
-            banks.append({"key": f.stem, "name": cfg.get("bank_name", f.stem.upper())})
-        except Exception:
-            pass
-    return banks
+    banks: Dict[str, Dict] = {}
+    # Merge built-in configs first, then user overrides on top
+    for config_dir in [BUILTIN_CONFIG_DIR, CONFIG_DIR]:
+        if not config_dir.exists():
+            continue
+        for f in sorted(config_dir.glob("*.json")):
+            try:
+                cfg = json.loads(f.read_text(encoding="utf-8"))
+                banks[f.stem] = {"key": f.stem, "name": cfg.get("bank_name", f.stem.upper())}
+            except Exception:
+                logger.debug("Skipping malformed bank config: %s", f)
+    return sorted(banks.values(), key=lambda b: b["name"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -449,7 +456,10 @@ async def api_list_profiles():
 @app.get("/api/download/{account}/{file_path:path}")
 async def api_download(account: str, file_path: str):
     safe = "".join(c for c in account if c.isdigit())
-    full = OUTPUT_DIR / safe / file_path
+    base = (OUTPUT_DIR / safe).resolve()
+    full = (base / file_path).resolve()
+    if not str(full).startswith(str(base)):
+        raise HTTPException(400, "Invalid file path")
     if not full.exists() or not full.is_file():
         raise HTTPException(404, "File not found")
     return FileResponse(str(full), filename=full.name)
@@ -466,8 +476,10 @@ async def api_banks():
 
 @app.get("/api/banks/{key}")
 async def api_bank_get(key: str):
-    """Return full config for a specific bank."""
+    """Return full config for a specific bank (user override takes priority)."""
     f = CONFIG_DIR / f"{key}.json"
+    if not f.exists():
+        f = BUILTIN_CONFIG_DIR / f"{key}.json"
     if not f.exists():
         raise HTTPException(404, f"Bank '{key}' not found")
     cfg = json.loads(f.read_text(encoding="utf-8"))
@@ -554,8 +566,8 @@ async def api_bank_learn(request: Request):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 5001))
-    print("=" * 60)
-    print("  BSIE – Bank Statement Intelligence Engine v2.0")
-    print(f"  Web App  →  http://127.0.0.1:{port}")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("  BSIE – Bank Statement Intelligence Engine v2.0")
+    logger.info("  Web App  →  http://127.0.0.1:%d", port)
+    logger.info("=" * 60)
     uvicorn.run("app:app", host="127.0.0.1", port=port, reload=False, log_level="info")

@@ -26,6 +26,7 @@ Mapping:
   amount + date     →  Label
   transaction_id    →  Description (full detail)
 """
+from __future__ import annotations
 
 import logging
 import xml.etree.ElementTree as ET

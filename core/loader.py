@@ -4,6 +4,7 @@ loader.py
 Loads bank statement Excel files, supporting multiple sheets,
 flexible header detection, and empty-row removal.
 """
+from __future__ import annotations
 
 import json
 import logging

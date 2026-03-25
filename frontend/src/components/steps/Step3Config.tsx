@@ -25,8 +25,9 @@ export function Step3Config() {
     if (!name.trim()) { toast.error('Account holder name is required'); return }
     setLoading(true)
     try {
+      if (!tempFilePath) { toast.error('No file uploaded — go back to step 1'); return }
       const data = await startProcess({
-        temp_file_path: tempFilePath!,
+        temp_file_path: tempFilePath,
         bank_key: bankKey,
         account,
         name,

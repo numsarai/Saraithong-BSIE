@@ -34,7 +34,7 @@ export function Step2Map() {
   const [learning, setLearning]     = useState(false)
 
   useEffect(() => {
-    getBanks().then(setBanks).catch(() => {})
+    getBanks().then(setBanks).catch((e) => toast.error(`Could not load banks: ${e.message}`))
   }, [])
 
   const update = (field: string, value: string) =>

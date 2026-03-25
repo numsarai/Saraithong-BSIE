@@ -121,7 +121,6 @@ def init_db():
 
 def db_create_job(job_id: str, account: str = "") -> None:
     """Create a new Job row with status='queued'."""
-    from sqlmodel import select
     with get_session() as session:
         job = Job(
             job_id=job_id,
@@ -176,7 +175,8 @@ def db_append_log(job_id: str, line: str) -> None:
         job = session.exec(statement).first()
         if job:
             existing = job.log_text or ""
-            job.log_text = existing + line + "\n"
+            separator = "\n" if existing and not existing.endswith("\n") else ""
+            job.log_text = existing + separator + line + "\n"
             job.updated_at = datetime.utcnow()
             session.add(job)
             session.commit()

@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 
 export type Tab = 'transactions' | 'entities' | 'links'
+export type Page = 'main' | 'bank-manager'
 
 export interface AppState {
+  page: Page
   step: number
   jobId: string | null
   tempFilePath: string | null
@@ -33,10 +35,12 @@ export interface AppState {
   setTxnPage: (page: number) => void
   setTxnTotal: (total: number) => void
   setBanks: (banks: any[]) => void
+  setPage: (page: Page) => void
   reset: () => void
 }
 
 const initialState = {
+  page: 'main' as Page,
   step: 1,
   jobId: null,
   tempFilePath: null,
@@ -81,5 +85,6 @@ export const useStore = create<AppState>((set) => ({
   setTxnPage: (txnPage) => set({ txnPage }),
   setTxnTotal: (txnTotal) => set({ txnTotal }),
   setBanks: (banks) => set({ banks }),
+  setPage: (page) => set({ page }),
   reset: () => set(initialState),
 }))

@@ -12,14 +12,14 @@ const STEPS = [Step1Upload, Step2Map, Step3Config, Step4Processing, Step5Results
 
 export default function App() {
   const step = useStore(s => s.step)
-  const isBankManager = window.location.pathname === '/bank-manager'
+  const page = useStore(s => s.page)
   const StepComponent = STEPS[step - 1]
 
   return (
     <div className="flex min-h-screen bg-bg text-text">
       <Sidebar />
       <main className="flex-1 p-7 overflow-auto">
-        {isBankManager ? <BankManager /> : <StepComponent />}
+        {page === 'bank-manager' ? <BankManager /> : <StepComponent />}
       </main>
       <Toaster theme="dark" position="bottom-right" richColors />
     </div>

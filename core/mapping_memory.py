@@ -74,15 +74,15 @@ def find_matching_profile(
             logger.info(f"Exact profile match: {exact.profile_id} bank={exact.bank}")
             return exact.to_dict()
 
-        # Jaccard similarity against all profiles
-        all_profiles = session.exec(select(MappingProfile)).all()
+        # Jaccard similarity against all profiles — convert to dicts inside session
+        all_profiles = [p.to_dict() for p in session.exec(select(MappingProfile)).all()]
 
     col_set = {c.strip().lower() for c in columns}
-    best: Optional[MappingProfile] = None
+    best: Optional[Dict] = None
     best_score = 0.0
 
     for p in all_profiles:
-        stored = {c.strip().lower() for c in p.columns}
+        stored = {c.strip().lower() for c in p.get("columns", [])}
         if not stored:
             continue
         score = _jaccard(col_set, stored)
@@ -92,10 +92,10 @@ def find_matching_profile(
 
     if best_score >= threshold and best:
         logger.info(
-            f"Fuzzy profile match: {best.profile_id} "
-            f"bank={best.bank} score={best_score:.2f}"
+            f"Fuzzy profile match: {best['profile_id']} "
+            f"bank={best['bank']} score={best_score:.2f}"
         )
-        return best.to_dict()
+        return best
 
     logger.info(f"No matching profile found for {len(columns)} columns")
     return None

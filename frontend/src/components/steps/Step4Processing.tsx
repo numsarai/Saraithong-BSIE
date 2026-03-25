@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 export function Step4Processing() {
   const { jobId, setStep, setResults } = useStore()
   const logRef = useRef<HTMLDivElement>(null)
+  const handledRef = useRef(false)
 
   const { data } = useQuery({
     queryKey: ['job', jobId],
@@ -19,12 +20,14 @@ export function Step4Processing() {
   })
 
   useEffect(() => {
-    if (!data) return
+    if (!data || handledRef.current) return
     if (data.status === 'done') {
+      handledRef.current = true
       setResults(data.result)
       setStep(5)
       toast.success('Pipeline complete!')
     } else if (data.status === 'error') {
+      handledRef.current = true
       toast.error(`Pipeline failed: ${data.error || 'Unknown error'}`)
     }
   }, [data, data?.status, setResults, setStep])

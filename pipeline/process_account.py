@@ -279,12 +279,39 @@ def process_account(
     logger.info("[Step 10] Classifying transactions")
     class_df = classify_dataframe(norm_df)
 
+    # ── Step 10.5: AI Agent Override (if enabled) ─────────────────────────
+    import os
+    from core.llm_agent import run_llm_pipeline
+
+    class_df = _assign_transaction_ids(class_df)
+
+    if os.getenv("LLM_API_KEY"):
+        logger.info("[Step 10.5] AI Agent Batch Enrichment")
+        llm_results = run_llm_pipeline(class_df)
+        if llm_results:
+            logger.info(f"  -> Merging {len(llm_results)} AI Agent predictions into DataFrame")
+            def merge_llm(row):
+                txn_id = row.get("transaction_id")
+                if txn_id in llm_results:
+                    llm = llm_results[txn_id]
+                    if llm.get("counterparty_name"):
+                        row["counterparty_name"] = llm["counterparty_name"]
+                    if llm.get("transaction_type"):
+                        row["transaction_type"] = llm["transaction_type"]
+                    if "confidence" in llm:
+                        row["confidence"] = float(llm["confidence"])
+                    row["nlp_promptpay"] = llm.get("nlp_promptpay", False)
+                    row["nlp_accounts"] = llm.get("nlp_accounts", "")
+                return row
+            class_df = class_df.apply(merge_llm, axis=1)
+        else:
+            logger.warning("  -> AI Agent returned empty results, falling back to heuristic classification.")
+    else:
+        logger.info("  -> No LLM_API_KEY. Using heuristic rule-based classification only.")
+
     # ── Step 11: Build links ──────────────────────────────────────────────
     logger.info("[Step 11] Building links")
     linked_df = build_links(class_df)
-
-    # Assign IDs before override application
-    linked_df = _assign_transaction_ids(linked_df)
 
     # ── Step 12: Apply overrides ──────────────────────────────────────────
     logger.info("[Step 12] Applying manual overrides")

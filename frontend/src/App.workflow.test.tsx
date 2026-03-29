@@ -30,7 +30,9 @@ vi.mock('sonner', () => ({
   Toaster: () => null,
 }))
 
-const { uploadFile, confirmMapping } = await import('@/api')
+const { uploadFile, confirmMapping, getBanks } = await import('@/api')
+let consoleErrorSpy: ReturnType<typeof vi.spyOn> | null = null
+const originalConsoleError = console.error
 
 async function flushAsyncWork() {
   await Promise.resolve()
@@ -95,10 +97,19 @@ describe('App workflow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useStore.getState().reset()
+    vi.mocked(getBanks).mockImplementation(() => new Promise(() => {}))
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown, ...args: unknown[]) => {
+      if (typeof message === 'string' && message.includes('not wrapped in act')) {
+        return
+      }
+      originalConsoleError(message, ...args)
+    })
   })
 
   afterEach(() => {
     useStore.getState().reset()
+    consoleErrorSpy?.mockRestore()
+    consoleErrorSpy = null
   })
 
   it('forces analyst review in the full upload flow for ambiguous bank detection', async () => {
@@ -130,10 +141,11 @@ describe('App workflow', () => {
     await act(async () => {
       fireEvent.click(continueButton)
       await flushAsyncWork()
+      await screen.findByText(/configure pipeline/i)
     })
 
     await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
-    expect(await screen.findByText(/configure pipeline/i)).toBeInTheDocument()
+    expect(screen.getByText(/configure pipeline/i)).toBeInTheDocument()
   })
 
   it('allows fast progression for strong auto-detected uploads', async () => {
@@ -148,9 +160,10 @@ describe('App workflow', () => {
     await act(async () => {
       fireEvent.click(continueButton)
       await flushAsyncWork()
+      await screen.findByText(/configure pipeline/i)
     })
 
     await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
-    expect(await screen.findByText(/configure pipeline/i)).toBeInTheDocument()
+    expect(screen.getByText(/configure pipeline/i)).toBeInTheDocument()
   })
 })

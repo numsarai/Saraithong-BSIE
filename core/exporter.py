@@ -348,6 +348,7 @@ def export_package(
 
     # 7. Build and write meta.json
     meta = _build_meta(transactions, account_number, bank)
+    meta["original_filename"] = orig_path.name
     meta["report_filename"] = report_path.name
     meta["category_files"] = {
         "all_transactions": "transactions.csv",

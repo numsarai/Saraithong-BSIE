@@ -475,7 +475,7 @@ async def api_list_profiles():
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/download/{account}/{file_path:path}")
-async def api_download(account: str, file_path: str):
+async def api_download(account: str, file_path: str, download_name: str = ""):
     safe = "".join(c for c in account if c.isdigit())
     base = (OUTPUT_DIR / safe).resolve()
     full = (base / file_path).resolve()
@@ -483,7 +483,8 @@ async def api_download(account: str, file_path: str):
         raise HTTPException(400, "Invalid file path")
     if not full.exists() or not full.is_file():
         raise HTTPException(404, "File not found")
-    return FileResponse(str(full), filename=full.name)
+    preferred_name = Path(str(download_name or "")).name.strip() or full.name
+    return FileResponse(str(full), filename=preferred_name)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

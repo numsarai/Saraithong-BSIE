@@ -45,3 +45,21 @@ def test_override_endpoint_accepts_react_payload_keys():
         "analyst",
     )
     reapply.assert_called_once_with("TXN-000001")
+
+
+def test_download_endpoint_uses_requested_download_name(tmp_path):
+    account_dir = tmp_path / "1234567890"
+    processed_dir = account_dir / "processed"
+    processed_dir.mkdir(parents=True)
+    target = processed_dir / "transactions.csv"
+    target.write_text("id\n1\n", encoding="utf-8")
+
+    with patch.object(app, "OUTPUT_DIR", tmp_path):
+        response = client.get(
+            "/api/download/1234567890/processed/transactions.csv",
+            params={"download_name": "bsie_1234567890_transactions.csv"},
+        )
+
+    assert response.status_code == 200
+    assert "attachment;" in response.headers["content-disposition"]
+    assert "bsie_1234567890_transactions.csv" in response.headers["content-disposition"]

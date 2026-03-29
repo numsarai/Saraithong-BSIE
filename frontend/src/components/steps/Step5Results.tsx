@@ -29,21 +29,26 @@ export function Step5Results() {
 
   const dlBase  = `/api/download/${account}`
   const reportFile = meta.report_filename || 'report.xlsx'
+  const originalFilename = meta.original_filename || 'original.xlsx'
   const categoryFiles = meta.category_files || {}
+  const filePrefix = account ? `bsie_${account}` : 'bsie'
+  const downloadHref = (file: string, downloadName: string) =>
+    `${dlBase}/${encodeURIComponent(file).replace(/%2F/g, '/')}` +
+    `?download_name=${encodeURIComponent(downloadName)}`
   const downloads = [
-    { label: 'Report (.xlsx)',        file: `processed/${reportFile}` },
-    { label: 'Transactions (.csv)',   file: 'processed/transactions.csv' },
-    { label: 'Transfer In (.csv)',    file: `processed/${categoryFiles.transfer_in || 'transfer_in.csv'}` },
-    { label: 'Transfer Out (.csv)',   file: `processed/${categoryFiles.transfer_out || 'transfer_out.csv'}` },
-    { label: 'Deposits (.csv)',       file: `processed/${categoryFiles.deposit || 'deposit.csv'}` },
-    { label: 'Withdrawals (.csv)',    file: `processed/${categoryFiles.withdraw || 'withdraw.csv'}` },
-    { label: 'Entities (.csv)',       file: 'processed/entities.csv' },
-    { label: 'Entities (.xlsx)',      file: 'processed/entities.xlsx' },
-    { label: 'Links (.csv)',          file: 'processed/links.csv' },
-    { label: 'Links (.xlsx)',         file: 'processed/links.xlsx' },
-    { label: 'i2 Chart (.anx)',       file: 'processed/i2_chart.anx' },
-    { label: 'Original (.xlsx)',      file: 'raw/original.xlsx' },
-    { label: 'Metadata (.json)',      file: 'meta.json' },
+    { label: 'Report (.xlsx)',        file: `processed/${reportFile}`, downloadName: reportFile },
+    { label: 'Transactions (.csv)',   file: 'processed/transactions.csv', downloadName: `${filePrefix}_transactions.csv` },
+    { label: 'Transfer In (.csv)',    file: `processed/${categoryFiles.transfer_in || 'transfer_in.csv'}`, downloadName: `${filePrefix}_transfer_in.csv` },
+    { label: 'Transfer Out (.csv)',   file: `processed/${categoryFiles.transfer_out || 'transfer_out.csv'}`, downloadName: `${filePrefix}_transfer_out.csv` },
+    { label: 'Deposits (.csv)',       file: `processed/${categoryFiles.deposit || 'deposit.csv'}`, downloadName: `${filePrefix}_deposit.csv` },
+    { label: 'Withdrawals (.csv)',    file: `processed/${categoryFiles.withdraw || 'withdraw.csv'}`, downloadName: `${filePrefix}_withdraw.csv` },
+    { label: 'Entities (.csv)',       file: 'processed/entities.csv', downloadName: `${filePrefix}_entities.csv` },
+    { label: 'Entities (.xlsx)',      file: 'processed/entities.xlsx', downloadName: `${filePrefix}_entities.xlsx` },
+    { label: 'Links (.csv)',          file: 'processed/links.csv', downloadName: `${filePrefix}_links.csv` },
+    { label: 'Links (.xlsx)',         file: 'processed/links.xlsx', downloadName: `${filePrefix}_links.xlsx` },
+    { label: 'i2 Chart (.anx)',       file: 'processed/i2_chart.anx', downloadName: `${filePrefix}_i2_chart.anx` },
+    { label: 'Original (.xlsx)',      file: 'raw/original.xlsx', downloadName: originalFilename },
+    { label: 'Metadata (.json)',      file: 'meta.json', downloadName: `${filePrefix}_meta.json` },
   ]
 
   const statCards = [
@@ -101,8 +106,8 @@ export function Step5Results() {
         {downloads.map(d => (
           <a
             key={d.file}
-            href={`${dlBase}/${d.file}`}
-            download
+            href={downloadHref(d.file, d.downloadName)}
+            download={d.downloadName}
             className="flex items-center gap-2 px-3 py-2.5 bg-surface2 border border-border rounded-lg text-accent text-sm hover:border-accent transition-all"
           >
             <Download size={13} />{d.label}

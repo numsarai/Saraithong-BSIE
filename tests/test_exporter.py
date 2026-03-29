@@ -1,4 +1,5 @@
 """Regression tests for i2-oriented export packaging."""
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -234,3 +235,7 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
     assert "identity_value" in entities_df.columns
     assert "from_entity_id" in links_df.columns
     assert "to_entity_id" in links_df.columns
+
+    meta = json.loads((out_dir / "meta.json").read_text(encoding="utf-8"))
+    assert meta["report_filename"] == "Subject_SCB_report.xlsx"
+    assert meta["original_filename"] == "input.xlsx"

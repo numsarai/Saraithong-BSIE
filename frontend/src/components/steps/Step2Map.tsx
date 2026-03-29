@@ -486,7 +486,7 @@ export function Step2Map() {
             <tbody>
               {FIELDS.map(({ key, label, required }) => {
                 const val  = (confirmedMapping[key] as string) || ''
-                const conf = (confidenceScores[key] as number) || 0
+                const conf = Math.round(Number((confidenceScores[key] as number) || 0) * 100)
                 const mapped = !!val
                 return (
                   <tr key={key} className="border-b border-border/50 hover:bg-surface2/50 transition-colors">

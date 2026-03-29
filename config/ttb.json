@@ -5,6 +5,12 @@
   "format_type": "standard",
   "currency": "THB",
   "amount_mode": "debit_credit",
+  "detection": {
+    "keywords": ["ttb", "tmb", "thanachart", "ทีทีบี", "ธนชาต", "ทหารไทย"],
+    "strong_headers": ["Transaction Time", "Counterparty Account", "Counterparty Name"],
+    "weak_headers": ["Outstanding Balance", "Transaction Date", "Description"],
+    "negative_headers": ["บัญชีผู้โอน", "หมายเลขบัญชีต้นทาง", "เลขที่บัญชีผู้โอน"]
+  },
   "column_mapping": {
     "date":                ["Transaction Date", "วันที่", "Date", "date", "DATE", "วันที่ทำรายการ"],
     "time":                ["Transaction Time", "เวลา", "Time", "time", "TIME"],

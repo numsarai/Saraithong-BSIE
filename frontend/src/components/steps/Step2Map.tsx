@@ -4,8 +4,9 @@ import { confirmMapping, getBanks, learnBank } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
+import { evaluateReviewGate } from '@/lib/reviewGate'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Wand2, X, BookPlus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wand2, X, BookPlus, ArrowRight, ArrowLeftRight, Building2, Wallet, CircleDashed, FileSearch, BrainCircuit, DatabaseZap, ShieldAlert, ShieldCheck } from 'lucide-react'
 
 const FIELDS = [
   { key: 'date',                 label: 'Date',                required: true  },
@@ -24,6 +25,9 @@ export function Step2Map() {
   const {
     detectedBank, allColumns, suggestedMapping, confirmedMapping,
     setConfirmedMapping, sampleRows, bankKey, setBankKey, setStep, confidenceScores,
+    headerRow, sheetName, memoryMatch, bankMemoryMatch,
+    bankReviewed, mappingReviewed, setBankReviewed, setMappingReviewed,
+    isBlockedCase, canProceedToConfig,
   } = useStore()
   const [saving, setSaving]         = useState(false)
   const [banks, setBanks]           = useState<any[]>([])
@@ -37,22 +41,40 @@ export function Step2Map() {
     getBanks().then(setBanks).catch((e) => toast.error(`Could not load banks: ${e.message}`))
   }, [])
 
-  const update = (field: string, value: string) =>
-    setConfirmedMapping({ ...confirmedMapping, [field]: value || null })
+  const update = (field: string, value: string) => {
+    const nextMapping = { ...confirmedMapping, [field]: value || null }
+    const criticalField = field === 'date' || field === 'description' || field === 'amount' || field === 'debit' || field === 'credit'
+    if (criticalField && mappingReviewed) {
+      setMappingReviewed(false)
+    }
+    setConfirmedMapping(nextMapping)
+  }
 
-  const autoFill = () => setConfirmedMapping({ ...suggestedMapping })
+  const autoFill = () => {
+    if (mappingReviewed) {
+      setMappingReviewed(false)
+    }
+    setConfirmedMapping({ ...suggestedMapping })
+  }
   const clearAll = () => {
     const cleared: Record<string, null> = {}
     FIELDS.forEach(f => { cleared[f.key] = null })
+    if (mappingReviewed) {
+      setMappingReviewed(false)
+    }
     setConfirmedMapping(cleared)
   }
 
   const handleConfirm = async () => {
+    if (!canProceedToConfig) {
+      toast.error('Resolve the analyst review gate before continuing')
+      return
+    }
     if (!confirmedMapping['date'])        { toast.error('Date field is required'); return }
     if (!confirmedMapping['description']) { toast.error('Description field is required'); return }
     setSaving(true)
     try {
-      await confirmMapping(bankKey, confirmedMapping, allColumns)
+      await confirmMapping(bankKey, confirmedMapping, allColumns, headerRow, sheetName)
       setStep(3)
       toast.success('Mapping saved')
     } catch (e: any) {
@@ -90,7 +112,27 @@ export function Step2Map() {
   }
 
   const mappedCount = Object.values(confirmedMapping).filter(Boolean).length
-  const confidence  = Math.round((detectedBank?.score || 0) * 100)
+  const reviewGate = evaluateReviewGate({
+    detectedBank,
+    mapping: confirmedMapping,
+    bankReviewed,
+    mappingReviewed,
+  })
+  const confidence  = reviewGate.confidencePercent
+  const hasSignedAmount = !!confirmedMapping['amount']
+  const hasDebitCredit = !!confirmedMapping['debit'] || !!confirmedMapping['credit']
+  const hasCounterparty = !!confirmedMapping['counterparty_account'] || !!confirmedMapping['counterparty_name']
+  const amountModeLabel = hasSignedAmount ? 'Signed Amount Mode' : hasDebitCredit ? 'Debit / Credit Mode' : 'Amount Not Mapped'
+  const counterpartyLabel = hasCounterparty ? 'Counterparty mapped' : 'Counterparty not mapped yet'
+  const candidateKeys = Array.isArray(detectedBank?.top_candidates) ? detectedBank.top_candidates : []
+  const rankedCandidates = candidateKeys.map((key: string) => ({
+    key,
+    name: banks.find((bank: any) => bank.key === key)?.name || key.toUpperCase(),
+    score: Number(detectedBank?.scores?.[key] || 0),
+    selected: key === bankKey,
+  }))
+  const positiveEvidence = Array.isArray(detectedBank?.evidence?.positive) ? detectedBank.evidence.positive.slice(0, 6) : []
+  const negativeEvidence = Array.isArray(detectedBank?.evidence?.negative) ? detectedBank.evidence.negative.slice(0, 4) : []
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -135,6 +177,288 @@ export function Step2Map() {
           </Button>
         </Card>
       </div>
+
+      <Card>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <CardTitle className="!mb-1">Detection Review</CardTitle>
+            <p className="text-sm text-muted">
+              Analyst view of the sheet/header chosen, ranked bank candidates, and the evidence used for auto-detection.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5 justify-end">
+            <Badge variant="gray">Sheet: {sheetName || 'Unknown'}</Badge>
+            <Badge variant="gray">Header Row: {headerRow + 1}</Badge>
+            <Badge variant={detectedBank?.ambiguous ? 'red' : confidence >= 75 ? 'green' : 'blue'}>
+              {detectedBank?.ambiguous ? 'Analyst Review Needed' : 'Detection Stable'}
+            </Badge>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl border border-border bg-surface2/50 p-4">
+            <div className="flex items-center gap-2 mb-3 text-text2">
+              <FileSearch size={14} className="text-accent" />
+              <span className="text-sm font-semibold">Workbook Context</span>
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted">Detected Bank</span>
+                <span className="font-medium text-text">{detectedBank?.bank || 'UNKNOWN'}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted">Confidence</span>
+                <span className="font-medium text-text">{confidence}%</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted">Observed Layout</span>
+                <span className="font-medium text-text">{formatEvidenceItem(detectedBank?.evidence?.layout || 'unknown')}</span>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {bankMemoryMatch && (
+                <div className="rounded-lg border border-success/25 bg-success/[0.06] p-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-text2">
+                    <BrainCircuit size={13} className="text-success" />
+                    <span>Bank fingerprint matched</span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    {bankMemoryMatch.bank_key} via {formatEvidenceItem(bankMemoryMatch.match_type || 'memory')} ({Math.round(Number(bankMemoryMatch.match_score || 0) * 100)}%)
+                  </div>
+                </div>
+              )}
+              {memoryMatch && (
+                <div className="rounded-lg border border-accent/25 bg-accent/[0.06] p-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-text2">
+                    <DatabaseZap size={13} className="text-accent" />
+                    <span>Column mapping memory matched</span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    Profile {memoryMatch.profile_id} reused from {memoryMatch.bank} ({memoryMatch.usage_count} prior uses)
+                  </div>
+                </div>
+              )}
+              {!bankMemoryMatch && !memoryMatch && (
+                <div className="rounded-lg border border-border/70 bg-surface p-3 text-xs text-muted">
+                  No prior memory hit. Detection is based on workbook structure and bank signatures only.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface2/50 p-4">
+            <div className="flex items-center gap-2 mb-3 text-text2">
+              <ArrowLeftRight size={14} className="text-accent" />
+              <span className="text-sm font-semibold">Top Candidates</span>
+            </div>
+            <div className="space-y-2">
+              {rankedCandidates.map((candidate: { key: string; name: string; score: number; selected: boolean }) => (
+                <div key={candidate.key} className={`rounded-lg border px-3 py-2 ${candidate.selected ? 'border-accent/40 bg-accent/[0.06]' : 'border-border/70 bg-surface'}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-text">{candidate.name}</span>
+                      {candidate.selected && <Badge variant="blue">Selected</Badge>}
+                    </div>
+                    <span className="text-xs text-muted">score {candidate.score.toFixed(2)}</span>
+                  </div>
+                </div>
+              ))}
+              {rankedCandidates.length === 0 && (
+                <div className="rounded-lg border border-border/70 bg-surface p-3 text-xs text-muted">
+                  No ranked candidates returned.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface2/50 p-4">
+            <div className="flex items-center gap-2 mb-3 text-text2">
+              <BrainCircuit size={14} className="text-accent" />
+              <span className="text-sm font-semibold">Evidence</span>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <div className="text-[11px] uppercase text-muted font-semibold mb-2">Positive</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {positiveEvidence.map((item: string) => (
+                    <span key={item} className="rounded-full border border-success/20 bg-success/10 px-2 py-1 text-[11px] text-success">
+                      {formatEvidenceItem(item)}
+                    </span>
+                  ))}
+                  {positiveEvidence.length === 0 && <span className="text-xs text-muted">No positive evidence recorded.</span>}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase text-muted font-semibold mb-2">Negative / Warning</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {negativeEvidence.map((item: string) => (
+                    <span key={item} className="rounded-full border border-warning/20 bg-warning/10 px-2 py-1 text-[11px] text-warning">
+                      {formatEvidenceItem(item)}
+                    </span>
+                  ))}
+                  {negativeEvidence.length === 0 && <span className="text-xs text-muted">No negative evidence recorded.</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <CardTitle className="!mb-1">Analyst Decision</CardTitle>
+            <p className="text-sm text-muted">
+              Weak or ambiguous uploads must be explicitly cleared before the pipeline can continue.
+            </p>
+          </div>
+          <Badge variant={canProceedToConfig ? 'green' : isBlockedCase ? 'red' : 'blue'}>
+            {canProceedToConfig ? 'Gate Cleared' : isBlockedCase ? 'Blocked' : 'Ready'}
+          </Badge>
+        </div>
+
+        {isBlockedCase ? (
+          <div className="mb-4 rounded-xl border border-warning/30 bg-warning/10 p-4">
+            <div className="flex items-center gap-2 text-text2 mb-2">
+              <ShieldAlert size={16} className="text-warning" />
+              <span className="text-sm font-semibold">Analyst review required before Step 3</span>
+            </div>
+            <div className="space-y-1">
+              {reviewGate.blockingReasons.map((reason) => (
+                <div key={reason} className="text-xs text-muted leading-relaxed">{reason}</div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mb-4 rounded-xl border border-success/25 bg-success/[0.08] p-4">
+            <div className="flex items-center gap-2 text-text2 mb-1">
+              <ShieldCheck size={16} className="text-success" />
+              <span className="text-sm font-semibold">No blocking risk detected</span>
+            </div>
+            <div className="text-xs text-muted">
+              This case meets the current confidence and critical-mapping thresholds, so the review gate is already satisfied.
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-border bg-surface2/50 p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <div className="text-sm font-semibold text-text">Confirm Selected Bank</div>
+                <div className="text-xs text-muted">Required when bank detection is ambiguous or below 75% confidence.</div>
+              </div>
+              <Badge variant={bankReviewed ? 'green' : reviewGate.bankNeedsReview ? 'red' : 'gray'}>
+                {bankReviewed ? 'Confirmed' : reviewGate.bankNeedsReview ? 'Required' : 'Auto-cleared'}
+              </Badge>
+            </div>
+            <Button
+              size="sm"
+              variant={bankReviewed ? 'outline' : 'primary'}
+              disabled={!bankKey}
+              onClick={() => {
+                setBankReviewed(true)
+                toast.success('Bank selection confirmed')
+              }}
+            >
+              {bankReviewed ? 'Bank Confirmed' : 'Confirm Selected Bank'}
+            </Button>
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface2/50 p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <div className="text-sm font-semibold text-text">Confirm Mapping Readiness</div>
+                <div className="text-xs text-muted">Map Date, Description, and one amount path before confirming.</div>
+              </div>
+              <Badge variant={mappingReviewed ? 'green' : reviewGate.mappingNeedsReview ? 'red' : 'gray'}>
+                {mappingReviewed ? 'Confirmed' : reviewGate.mappingNeedsReview ? 'Required' : 'Auto-cleared'}
+              </Badge>
+            </div>
+            <Button
+              size="sm"
+              variant={mappingReviewed ? 'outline' : 'primary'}
+              disabled={!reviewGate.hasCriticalMapping}
+              onClick={() => {
+                setMappingReviewed(true)
+                toast.success('Critical mapping confirmed')
+              }}
+            >
+              {mappingReviewed ? 'Mapping Confirmed' : 'Confirm Mapping Readiness'}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <CardTitle className="!mb-1">Transaction Logic Preview</CardTitle>
+            <p className="text-sm text-muted">
+              This is how BSIE will draw money movement once your mapped columns become normalized transactions.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5 justify-end">
+            <Badge variant={hasSignedAmount || hasDebitCredit ? 'blue' : 'gray'}>{amountModeLabel}</Badge>
+            <Badge variant={hasCounterparty ? 'green' : 'gray'}>{counterpartyLabel}</Badge>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <FlowCard
+            title="Transfer In"
+            tone="green"
+            left={<FlowNode icon={<Building2 size={16} />} label={hasCounterparty ? 'Other Bank / Account' : 'Other Bank / Unknown'} accent="green" />}
+            middle={<ArrowRight size={16} className="text-success" />}
+            right={<FlowNode icon={<Building2 size={16} />} label="Subject Bank / Account" accent="blue" />}
+            detail={hasCounterparty
+              ? 'Counterparty account/name flows into the subject account.'
+              : 'Incoming money reaches the subject account, but the source side is still weak.'}
+            rule={hasSignedAmount ? 'Positive signed amount -> IN' : 'Credit column -> IN'}
+          />
+          <FlowCard
+            title="Transfer Out"
+            tone="red"
+            left={<FlowNode icon={<Building2 size={16} />} label="Subject Bank / Account" accent="blue" />}
+            middle={<ArrowRight size={16} className="text-danger" />}
+            right={<FlowNode icon={<Building2 size={16} />} label={hasCounterparty ? 'Other Bank / Account' : 'Other Bank / Unknown'} accent="red" />}
+            detail={hasCounterparty
+              ? 'Subject account sends money outward to the mapped counterparty side.'
+              : 'Outgoing money leaves the subject account, but destination identity is still weak.'}
+            rule={hasSignedAmount ? 'Negative signed amount -> OUT' : 'Debit column -> OUT'}
+          />
+          <FlowCard
+            title="Deposit"
+            tone="green"
+            left={<FlowNode icon={<Wallet size={16} />} label="Cash / Money Source" accent="green" />}
+            middle={<ArrowRight size={16} className="text-success" />}
+            right={<FlowNode icon={<Building2 size={16} />} label="Subject Bank / Account" accent="blue" />}
+            detail="If no real counterparty is present, an inbound money source is treated like deposit into the bank account."
+            rule={hasSignedAmount ? 'Positive amount with no counterparty -> Deposit' : 'Credit without transfer identity -> Deposit'}
+          />
+          <FlowCard
+            title="Withdraw"
+            tone="red"
+            left={<FlowNode icon={<Building2 size={16} />} label="Subject Bank / Account" accent="blue" />}
+            middle={<ArrowRight size={16} className="text-danger" />}
+            right={<FlowNode icon={<Wallet size={16} />} label="Cash / Money Out" accent="red" />}
+            detail="If money leaves the bank without a real counterparty, BSIE maps it as withdrawal or cash-out."
+            rule={hasSignedAmount ? 'Negative amount with no counterparty -> Withdraw' : 'Debit without transfer identity -> Withdraw'}
+          />
+        </div>
+
+        <div className="mt-4 rounded-xl border border-border bg-surface2/60 px-4 py-3">
+          <div className="flex items-center gap-2 mb-1 text-text2">
+            <ArrowLeftRight size={14} className="text-accent" />
+            <span className="text-sm font-semibold">Mapping Rule Summary</span>
+          </div>
+          <p className="text-xs text-muted leading-relaxed">
+            Transfer logic prefers <span className="text-text2">bank/account to bank/account</span> when a counterparty account or name is mapped.
+            Deposit and withdraw logic uses <span className="text-text2">money to bank</span> or <span className="text-text2">bank to money</span>
+            when the counterparty side is absent and the row behaves like cash or system movement.
+          </p>
+        </div>
+      </Card>
 
       {/* Mapping table */}
       <Card>
@@ -233,8 +557,8 @@ export function Step2Map() {
         <Button variant="ghost" onClick={() => setStep(1)}>
           <ChevronLeft size={14} />Back
         </Button>
-        <Button onClick={handleConfirm} disabled={saving}>
-          {saving ? 'Saving…' : <><ChevronRight size={14} />Confirm Mapping</>}
+        <Button onClick={handleConfirm} disabled={saving || !canProceedToConfig}>
+          {saving ? 'Saving…' : <><ChevronRight size={14} />Continue to Configure</>}
         </Button>
       </div>
 
@@ -317,6 +641,85 @@ export function Step2Map() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function formatEvidenceItem(value: string) {
+  return String(value || '')
+    .replace(/->/g, ' -> ')
+    .replace(/_/g, ' ')
+    .replace(/:/g, ': ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function FlowCard({
+  title,
+  tone,
+  left,
+  middle,
+  right,
+  detail,
+  rule,
+}: {
+  title: string
+  tone: 'green' | 'red'
+  left: React.ReactNode
+  middle: React.ReactNode
+  right: React.ReactNode
+  detail: string
+  rule: string
+}) {
+  const toneClasses = tone === 'green'
+    ? 'border-success/25 bg-success/[0.05]'
+    : 'border-danger/25 bg-danger/[0.05]'
+
+  return (
+    <div className={`rounded-xl border p-4 ${toneClasses}`}>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="text-sm font-semibold text-text">{title}</div>
+        <Badge variant={tone === 'green' ? 'green' : 'red'}>{tone === 'green' ? 'IN Logic' : 'OUT Logic'}</Badge>
+      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+        {left}
+        <div className="flex items-center justify-center">{middle}</div>
+        {right}
+      </div>
+      <div className="mt-3 pt-3 border-t border-border/60 space-y-1">
+        <div className="text-[11px] uppercase text-muted font-semibold">Rule</div>
+        <div className="text-xs text-text2">{rule}</div>
+        <div className="text-xs text-muted leading-relaxed">{detail}</div>
+      </div>
+    </div>
+  )
+}
+
+function FlowNode({
+  icon,
+  label,
+  accent,
+}: {
+  icon: React.ReactNode
+  label: string
+  accent: 'blue' | 'green' | 'red'
+}) {
+  const accentClasses = {
+    blue: 'border-accent/30 bg-accent/10 text-accent',
+    green: 'border-success/30 bg-success/10 text-success',
+    red: 'border-danger/30 bg-danger/10 text-danger',
+  }
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-surface px-3 py-3 min-h-[84px] flex flex-col justify-center">
+      <div className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-semibold ${accentClasses[accent]}`}>
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted">
+        <CircleDashed size={12} />
+        <span>mapping state preview</span>
+      </div>
     </div>
   )
 }

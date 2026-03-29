@@ -29,12 +29,18 @@ export function Step5Results() {
 
   const dlBase  = `/api/download/${account}`
   const reportFile = meta.report_filename || 'report.xlsx'
+  const categoryFiles = meta.category_files || {}
   const downloads = [
     { label: 'Report (.xlsx)',        file: `processed/${reportFile}` },
     { label: 'Transactions (.csv)',   file: 'processed/transactions.csv' },
+    { label: 'Transfer In (.csv)',    file: `processed/${categoryFiles.transfer_in || 'transfer_in.csv'}` },
+    { label: 'Transfer Out (.csv)',   file: `processed/${categoryFiles.transfer_out || 'transfer_out.csv'}` },
+    { label: 'Deposits (.csv)',       file: `processed/${categoryFiles.deposit || 'deposit.csv'}` },
+    { label: 'Withdrawals (.csv)',    file: `processed/${categoryFiles.withdraw || 'withdraw.csv'}` },
     { label: 'Entities (.csv)',       file: 'processed/entities.csv' },
     { label: 'Entities (.xlsx)',      file: 'processed/entities.xlsx' },
     { label: 'Links (.csv)',          file: 'processed/links.csv' },
+    { label: 'Links (.xlsx)',         file: 'processed/links.xlsx' },
     { label: 'i2 Chart (.anx)',       file: 'processed/i2_chart.anx' },
     { label: 'Original (.xlsx)',      file: 'raw/original.xlsx' },
     { label: 'Metadata (.json)',      file: 'meta.json' },
@@ -45,6 +51,10 @@ export function Step5Results() {
     { label: 'Total IN',       value: `฿${fmt(meta.total_in  || 0)}`,                  color: 'text-success' },
     { label: 'Total OUT',      value: `฿${fmt(meta.total_out || 0)}`,                  color: 'text-danger' },
     { label: 'Circulation',    value: `฿${fmt(meta.total_circulation || 0)}`,           color: 'text-accent' },
+    { label: 'Transfer In',    value: String(meta.category_counts?.transfer_in ?? '—'), color: '' },
+    { label: 'Transfer Out',   value: String(meta.category_counts?.transfer_out ?? '—'), color: '' },
+    { label: 'Deposits',       value: String(meta.category_counts?.deposit ?? '—'),      color: '' },
+    { label: 'Withdrawals',    value: String(meta.category_counts?.withdraw ?? '—'),     color: '' },
     { label: 'Date Range',     value: meta.date_range || '—',                           color: '' },
     { label: 'Unknown CPs',    value: String(meta.num_unknown ?? '—'),                  color: '' },
     { label: 'Partial Accts',  value: String(meta.num_partial_accounts ?? '—'),         color: '' },

@@ -50,6 +50,39 @@ class MappingProfile(SQLModel, table=True):
         }
 
 
+class BankFingerprint(SQLModel, table=True):
+    __tablename__ = "bank_fingerprint"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    fingerprint_id: str = Field(index=True, unique=True)
+    bank_key: str = Field(index=True)
+    columns_json: str  # JSON list
+    ordered_signature: str = Field(index=True)
+    set_signature: str = Field(index=True)
+    header_row: int = Field(default=0)
+    sheet_name: str = Field(default="")
+    usage_count: int = Field(default=0)
+    last_used: Optional[datetime] = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @property
+    def columns(self):
+        return json.loads(self.columns_json)
+
+    def to_dict(self):
+        return {
+            "fingerprint_id": self.fingerprint_id,
+            "bank_key": self.bank_key,
+            "columns": self.columns,
+            "ordered_signature": self.ordered_signature,
+            "set_signature": self.set_signature,
+            "header_row": self.header_row,
+            "sheet_name": self.sheet_name,
+            "usage_count": self.usage_count,
+            "last_used": self.last_used.isoformat() if self.last_used else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class Override(SQLModel, table=True):
     __tablename__ = "override"
     id: Optional[int] = Field(default=None, primary_key=True)

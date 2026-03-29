@@ -14,8 +14,88 @@ from typing import Optional, Union
 from paths import CONFIG_DIR
 
 import pandas as pd
+from core.column_detector import _norm, best_match_for_aliases, get_field_aliases
 
 logger = logging.getLogger(__name__)
+
+
+def find_best_sheet_and_header(
+    file_path: Union[str, Path],
+    preview_rows: int = 40,
+    scan_rows: int = 15,
+) -> dict:
+    """
+    Find the most likely transaction sheet and header row in a workbook.
+
+    Returns
+    -------
+    {
+      "sheet_name": str,
+      "header_row": int,
+      "preview_df": pd.DataFrame,
+      "score": float,
+    }
+    """
+    file_path = Path(file_path)
+    xf = pd.ExcelFile(file_path, engine="openpyxl")
+
+    date_kw = {_norm(alias) for alias in get_field_aliases("date")}
+    desc_kw = {_norm(alias) for alias in get_field_aliases("description")}
+    amount_kw = {
+        _norm(alias)
+        for field in ("amount", "debit", "credit", "balance", "counterparty_account", "counterparty_name")
+        for alias in get_field_aliases(field)
+    }
+
+    best_result = {
+        "sheet_name": xf.sheet_names[0],
+        "header_row": 0,
+        "preview_df": pd.read_excel(file_path, sheet_name=xf.sheet_names[0], header=None, nrows=preview_rows, engine="openpyxl", dtype=str).fillna(""),
+        "score": -1.0,
+    }
+
+    for sheet_name in xf.sheet_names:
+        try:
+            preview_df = pd.read_excel(
+                file_path,
+                sheet_name=sheet_name,
+                header=None,
+                nrows=preview_rows,
+                engine="openpyxl",
+                dtype=str,
+            ).fillna("")
+        except Exception as exc:
+            logger.debug("Could not preview sheet %s: %s", sheet_name, exc)
+            continue
+
+        sheet_best_row = 0
+        sheet_best_score = -1.0
+        for idx in range(min(scan_rows, len(preview_df))):
+            row_vals = [_norm(v) for v in preview_df.iloc[idx].values if _norm(v)]
+            if not row_vals:
+                continue
+            row_set = set(row_vals)
+            header_score = (
+                (len(row_set & date_kw) * 3.0)
+                + (len(row_set & desc_kw) * 2.0)
+                + (len(row_set & amount_kw) * 1.5)
+                + min(len(row_vals), 20) * 0.05
+            )
+            if header_score > sheet_best_score:
+                sheet_best_score = header_score
+                sheet_best_row = idx
+
+        density = float((preview_df.iloc[: min(preview_rows, len(preview_df))] != "").sum().sum())
+        total_score = round(sheet_best_score + min(density / 100.0, 2.0), 3)
+        if total_score > best_result["score"]:
+            best_result = {
+                "sheet_name": sheet_name,
+                "header_row": sheet_best_row,
+                "preview_df": preview_df,
+                "score": total_score,
+            }
+
+    return best_result
 
 
 def load_config(bank_key: str) -> dict:
@@ -163,9 +243,5 @@ def detect_column(
     -------
     str | None – matched column name in df, or None
     """
-    lower_to_original = {c.lower(): c for c in df.columns}
-    for alias in aliases:
-        key = alias.lower().strip()
-        if key in lower_to_original:
-            return lower_to_original[key]
-    return None
+    best_col, _ = best_match_for_aliases(list(df.columns), aliases, threshold=0.60)
+    return best_col

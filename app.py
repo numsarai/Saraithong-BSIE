@@ -92,10 +92,11 @@ def _dispatch_pipeline(job_id: str, upload_path_str: str, bank_key: str,
         )
         t.start()
 
-from core.loader               import load_config
+from core.loader               import load_config, find_best_sheet_and_header
 from core.bank_detector        import detect_bank
-from core.column_detector      import detect_columns
+from core.column_detector      import detect_columns, get_field_aliases, _norm
 from core.mapping_memory       import find_matching_profile, list_profiles
+from core.bank_memory          import find_matching_bank_fingerprint, save_bank_fingerprint
 from core.override_manager     import (
     add_override, remove_override, get_all_overrides, apply_overrides_to_df,
 )
@@ -158,6 +159,15 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@app.get("/favicon.svg")
+async def favicon():
+    """Serve the built frontend favicon from the path requested by browsers."""
+    for candidate in (_REACT_DIST / "favicon.svg", STATIC_DIR / "favicon.svg"):
+        if candidate.exists():
+            return FileResponse(str(candidate), media_type="image/svg+xml")
+    raise HTTPException(404, "favicon.svg not found")
+
+
 @app.get("/app", response_class=HTMLResponse)
 @app.get("/bank-manager", response_class=HTMLResponse)
 async def react_spa():
@@ -218,41 +228,23 @@ async def api_upload(file: UploadFile = File(...)):
     save_path.write_bytes(contents)
 
     try:
-        xf = pd.ExcelFile(str(save_path), engine="openpyxl")
-        raw_df = pd.read_excel(
-            str(save_path),
-            sheet_name=xf.sheet_names[0],
-            header=None, nrows=40, dtype=str,
-        ).fillna("")
-
-        # Auto-detect header row (score-based: check date + amount aliases in first 15 rows)
-        _DATE_KW = {"วันที่", "วันที่ทำรายการ", "date", "transaction date"}
-        _AMT_KW  = {"จำนวนเงิน", "amount", "debit", "credit", "เดบิต", "เครดิต",
-                     "ถอนเงิน", "ฝากเงิน", "เงินฝาก", "ถอน",
-                     "หมายเลขบัญชีต้นทาง", "หมายเลขบัญชีปลายทาง",
-                     "บัญชีผู้โอน", "บัญชีผู้รับโอน", "ชื่อผู้โอน", "ชื่อผู้รับโอน"}
-        header_row = 0
-        best_score = 0
-        for i in range(min(15, len(raw_df))):
-            row_vals = {str(v).lower().strip() for v in raw_df.iloc[i].values if pd.notna(v)}
-            score = len(row_vals & _DATE_KW) * 2 + len(row_vals & _AMT_KW)
-            if score > best_score:
-                best_score = score
-                header_row = i
-
+        sheet_pick = find_best_sheet_and_header(save_path)
+        header_row = int(sheet_pick["header_row"])
+        sheet_name = str(sheet_pick["sheet_name"])
         data_df = pd.read_excel(
             str(save_path),
-            sheet_name=xf.sheet_names[0],
+            sheet_name=sheet_name,
             header=header_row, dtype=str,
         ).dropna(how="all")
         data_df.columns = [str(c).strip() for c in data_df.columns]
 
         # Bank detection
-        bank_result  = detect_bank(data_df, extra_text=file.filename)
+        bank_result  = detect_bank(data_df, extra_text=f"{file.filename} {sheet_name}")
         # Column detection
         col_result   = detect_columns(data_df)
         # Memory lookup
         profile      = find_matching_profile(list(data_df.columns))
+        bank_memory  = find_matching_bank_fingerprint(list(data_df.columns))
 
         # Sample rows (first 5)
         sample_rows = data_df.head(5).fillna("").to_dict(orient="records")
@@ -278,9 +270,11 @@ async def api_upload(file: UploadFile = File(...)):
             "unmatched_columns": col_result["unmatched_columns"],
             "required_found":   col_result["required_found"],
             "memory_match":     memory_match,
+            "bank_memory_match": bank_memory,
             "sample_rows":      sample_rows,
             "banks":            _get_banks(),
             "header_row":       header_row,
+            "sheet_name":       sheet_name,
         })
 
     except Exception as e:
@@ -301,14 +295,23 @@ async def api_confirm_mapping(request: Request):
     bank     = body.get("bank", "UNKNOWN")
     mapping  = body.get("mapping", {})
     columns  = body.get("columns", [])
+    header_row = int(body.get("header_row", 0) or 0)
+    sheet_name = str(body.get("sheet_name", "") or "")
 
     if not mapping:
         raise HTTPException(400, "mapping is required")
 
     from core.mapping_memory import save_profile
     profile = save_profile(bank, columns, mapping)
+    fingerprint = None
+    if bank and str(bank).strip().lower() not in {"", "unknown", "generic"}:
+        fingerprint = save_bank_fingerprint(str(bank).strip(), columns, header_row=header_row, sheet_name=sheet_name)
 
-    return JSONResponse({"status": "ok", "profile_id": profile["profile_id"]})
+    return JSONResponse({
+        "status": "ok",
+        "profile_id": profile["profile_id"],
+        "fingerprint_id": fingerprint["fingerprint_id"] if fingerprint else None,
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -410,9 +413,10 @@ async def api_add_override(request: Request):
     """Add or update a manual relationship override."""
     body = await request.json()
     tid  = body.get("transaction_id", "").strip()
-    frm  = body.get("from_account", "").strip()
-    to   = body.get("to_account", "").strip()
-    reason = body.get("reason", "")
+    # Accept both API-native and frontend-react payload keys for compatibility.
+    frm  = (body.get("from_account") or body.get("override_from_account") or "").strip()
+    to   = (body.get("to_account") or body.get("override_to_account") or "").strip()
+    reason = body.get("reason") or body.get("override_reason") or ""
     by     = body.get("override_by", "analyst")
 
     if not tid or not frm or not to:

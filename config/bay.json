@@ -5,15 +5,24 @@
   "format_type": "standard",
   "currency": "THB",
   "amount_mode": "debit_credit",
+  "detection": {
+    "keywords": ["bay", "krungsri", "ayudhya", "กรุงศรี"],
+    "strong_headers": ["ประเภทการทำรายการ", "วิธีการทำรายการ", "ฝาก-ถอน", "ธนาคารผู้โอน", "ธนาคารผู้รับโอน"],
+    "weak_headers": ["เวลาทำรายการ", "จำนวนเงิน", "ช่องทาง", "ชื่อบัญชี.1", "เลขที่บัญชี.2", "เดบิต", "เครดิต", "เลขที่บัญชีคู่สัญญา", "ชื่อคู่สัญญา"],
+    "negative_headers": ["หมายเลขบัญชีต้นทาง", "ชื่อบัญชีต้นทาง", "บัญชีผู้โอน"]
+  },
   "column_mapping": {
     "date":                ["วันที่", "Date", "date", "DATE", "วันที่ทำรายการ", "Transaction Date"],
-    "time":                ["เวลา", "Time", "time", "TIME"],
-    "description":         ["รายละเอียด", "Description", "description", "รายการ", "Narration", "Remark"],
-    "debit":               ["เดบิต", "ถอนเงิน", "ถอน", "Debit", "debit", "DEBIT", "Withdrawal"],
-    "credit":              ["เครดิต", "ฝากเงิน", "ฝาก", "Credit", "credit", "CREDIT", "Deposit"],
-    "balance":             ["ยอดคงเหลือ", "Balance", "balance", "BALANCE", "จำนวนเงินคงเหลือ"],
-    "channel":             ["ช่องทาง", "Channel", "channel", "CHANNEL"],
-    "counterparty_account":["เลขที่บัญชีคู่สัญญา", "บัญชีคู่สัญญา", "Counterparty Account"],
-    "counterparty_name":   ["ชื่อคู่สัญญา", "Counterparty Name"]
+    "time":                ["เวลา", "Time", "time", "TIME", "เวลาทำรายการ"],
+    "description":         ["รายละเอียด", "Description", "description", "รายการ", "Narration", "Remark", "ประเภทการทำรายการ"],
+    "amount":              ["จำนวนเงิน", "Amount", "amount"],
+    "direction_marker":    ["ฝาก-ถอน", "Debit/Credit", "Dr/Cr"],
+    "channel":             ["ช่องทาง", "Channel", "channel", "CHANNEL", "วิธีการทำรายการ"],
+    "sender_bank":         ["ธนาคารผู้โอน"],
+    "sender_account":      ["เลขที่บัญชี.1", "เลขที่บัญชีผู้โอน"],
+    "sender_name":         ["ชื่อบัญชี", "ชื่อผู้โอน"],
+    "receiver_bank":       ["ธนาคารผู้รับโอน"],
+    "receiver_account":    ["เลขที่บัญชี.2", "เลขที่บัญชีผู้รับโอน"],
+    "receiver_name":       ["ชื่อบัญชี.1", "ชื่อผู้รับโอน"]
   }
 }

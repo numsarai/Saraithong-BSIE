@@ -29,3 +29,6 @@ redis>=5.0.0
 pyinstaller>=6.0.0
 openai>=1.0.0
 python-dotenv>=1.0.0
+
+# Test
+pytest>=8.0.0

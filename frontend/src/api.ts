@@ -6,11 +6,17 @@ export async function uploadFile(file: File) {
   return r.json()
 }
 
-export async function confirmMapping(bank: string, mapping: Record<string, string | null>, columns: string[]) {
+export async function confirmMapping(
+  bank: string,
+  mapping: Record<string, string | null>,
+  columns: string[],
+  header_row?: number,
+  sheet_name?: string,
+) {
   const r = await fetch('/api/mapping/confirm', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ bank, mapping, columns }),
+    body: JSON.stringify({ bank, mapping, columns, header_row, sheet_name }),
   })
   if (!r.ok) throw new Error(await r.text())
   return r.json()

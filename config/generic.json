@@ -5,6 +5,12 @@
   "format_type": "standard",
   "currency": "THB",
   "amount_mode": "signed",
+  "detection": {
+    "keywords": [],
+    "strong_headers": [],
+    "weak_headers": ["วันที่", "รายการ", "จำนวนเงิน", "ยอดคงเหลือ"],
+    "negative_headers": []
+  },
   "column_mapping": {
     "date":                ["วันที่", "วันที่ทำรายการ", "Date", "date", "DATE", "Transaction Date"],
     "time":                ["เวลา", "Time", "time", "TIME", "เวลาทำรายการ"],

@@ -11,6 +11,7 @@ from core.graph_export import (
     AGGREGATED_EDGE_COLUMNS,
     GRAPH_EDGE_COLUMNS,
     GRAPH_NODE_COLUMNS,
+    build_derived_account_edges,
     build_graph_exports,
 )
 
@@ -235,7 +236,8 @@ def test_build_graph_exports_produces_stable_schema_and_ids():
     assert list(first_nodes.columns) == GRAPH_NODE_COLUMNS
     assert list(first_edges.columns) == GRAPH_EDGE_COLUMNS
     assert list(first_agg.columns) == AGGREGATED_EDGE_COLUMNS
-    assert manifest["schema_version"] == "1.2"
+    assert manifest["schema_version"] == "1.3"
+    assert manifest["derived_account_edge_columns"]
 
     assert first_nodes["node_id"].tolist() == second_nodes["node_id"].tolist()
     assert first_edges["edge_id"].tolist() == second_edges["edge_id"].tolist()
@@ -279,6 +281,12 @@ def test_build_graph_exports_preserves_direction_and_aggregation_safety():
 
     assert set(edges_df["source"]).issubset(set(nodes_df["node_id"]))
     assert set(edges_df["target"]).issubset(set(nodes_df["node_id"]))
+
+    derived_df = build_derived_account_edges(aggregated_df)
+    assert set(derived_df["edge_type"]) == {"DERIVED_ACCOUNT_TO_ACCOUNT"}
+    assert set(derived_df["from_node_id"]) == {"ACCOUNT:2222222222", "ACCOUNT:1111111111"}
+    assert set(derived_df["to_node_id"]) == {"ACCOUNT:1111111111", "ACCOUNT:3333333333"}
+    assert derived_df["source_transaction_ids"].astype(str).str.len().min() > 0
 
 
 def test_build_graph_exports_includes_lineage_fields():

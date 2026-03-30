@@ -41,6 +41,7 @@ from core.entity       import build_entities
 from core.reconciliation import reconcile_balances
 from core.exporter     import export_package
 from core.ofx_io       import parse_ofx_file
+from services.classification_service import apply_ai_classification_enrichment
 from services.persistence_pipeline_service import persist_pipeline_run
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,8 @@ TRANSACTION_COLUMNS: List[str] = [
     "counterparty_account", "counterparty_name", "partial_account",
     "description", "channel",
     "direction", "transaction_type", "confidence",
+    "classification_source", "classification_reason", "classification_review_flag", "classification_model",
+    "heuristic_transaction_type", "heuristic_confidence", "ai_transaction_type", "ai_confidence", "ai_counterparty_name",
     "from_account", "to_account",
     "raw_account_value", "parsed_account_type",
     "is_overridden",
@@ -214,6 +217,8 @@ def process_account(
         logger.info("[Step 10] Classifying transactions")
         class_df = classify_dataframe(norm_df)
         class_df = _assign_transaction_ids(class_df)
+        logger.info("[Step 10.5] Applying optional AI classification guardrails")
+        class_df = apply_ai_classification_enrichment(class_df)
         logger.info("[Step 11] Building links")
         linked_df = build_links(class_df)
         logger.info("[Step 12] Applying manual overrides")
@@ -377,35 +382,9 @@ def process_account(
     logger.info("[Step 10] Classifying transactions")
     class_df = classify_dataframe(norm_df)
 
-    # ── Step 10.5: AI Agent Override (if enabled) ─────────────────────────
-    import os
-    from core.llm_agent import run_llm_pipeline
-
     class_df = _assign_transaction_ids(class_df)
-
-    if os.getenv("LLM_API_KEY"):
-        logger.info("[Step 10.5] AI Agent Batch Enrichment")
-        llm_results = run_llm_pipeline(class_df)
-        if llm_results:
-            logger.info(f"  -> Merging {len(llm_results)} AI Agent predictions into DataFrame")
-            def merge_llm(row):
-                txn_id = row.get("transaction_id")
-                if txn_id in llm_results:
-                    llm = llm_results[txn_id]
-                    if llm.get("counterparty_name"):
-                        row["counterparty_name"] = llm["counterparty_name"]
-                    if llm.get("transaction_type"):
-                        row["transaction_type"] = llm["transaction_type"]
-                    if "confidence" in llm:
-                        row["confidence"] = float(llm["confidence"])
-                    row["nlp_promptpay"] = llm.get("nlp_promptpay", False)
-                    row["nlp_accounts"] = llm.get("nlp_accounts", "")
-                return row
-            class_df = class_df.apply(merge_llm, axis=1)
-        else:
-            logger.warning("  -> AI Agent returned empty results, falling back to heuristic classification.")
-    else:
-        logger.info("  -> No LLM_API_KEY. Using heuristic rule-based classification only.")
+    logger.info("[Step 10.5] Applying optional AI classification guardrails")
+    class_df = apply_ai_classification_enrichment(class_df)
 
     # ── Step 11: Build links ──────────────────────────────────────────────
     logger.info("[Step 11] Building links")

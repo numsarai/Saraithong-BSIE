@@ -127,6 +127,76 @@ def test_bulk_analytics_endpoint_returns_saved_artifact(tmp_path):
     assert response.json()["overview"]["flagged_accounts"] == 1
 
 
+def test_graph_analysis_endpoint_returns_service_payload():
+    with patch.object(app, "get_graph_analysis", return_value={"overview": {"business_node_count": 4}, "top_nodes_by_degree": []}) as mock_graph:
+        response = client.get("/api/graph-analysis", params={"parser_run_id": "RUN-1"})
+
+    assert response.status_code == 200
+    assert response.json()["overview"]["business_node_count"] == 4
+    mock_graph.assert_called_once()
+
+
+def test_graph_nodes_endpoint_returns_items():
+    with patch.object(app, "list_graph_nodes", return_value=[{"node_id": "ACCOUNT:1111111111"}]) as mock_nodes:
+        response = client.get("/api/graph/nodes", params={"parser_run_id": "RUN-1"})
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["node_id"] == "ACCOUNT:1111111111"
+    assert response.json()["meta"]["returned_count"] == 1
+    mock_nodes.assert_called_once()
+
+
+def test_graph_findings_endpoint_returns_items():
+    with patch.object(app, "list_graph_findings", return_value=[{"finding_id": "FINDING:1", "severity": "high"}]) as mock_findings:
+        response = client.get("/api/graph/findings", params={"parser_run_id": "RUN-1", "severity": "high"})
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["finding_id"] == "FINDING:1"
+    assert response.json()["meta"]["severity"] == "high"
+    mock_findings.assert_called_once()
+
+
+def test_graph_neighborhood_endpoint_returns_payload():
+    payload = {
+        "center_node_id": "ACCOUNT:1111111111",
+        "nodes": [],
+        "edges": [],
+        "suspicious_node_ids": [],
+        "findings": [],
+        "findings_by_node": {},
+        "query_meta": {"effective_limit": 5000},
+        "graph_meta": {"visible_node_count": 0, "requested_max_nodes": 14},
+    }
+    with patch.object(app, "get_graph_neighborhood", return_value=payload) as mock_neighborhood:
+        response = client.get(
+            "/api/graph/neighborhood/ACCOUNT:1111111111",
+            params={"parser_run_id": "RUN-1", "max_nodes": 12, "max_edges": 20},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["center_node_id"] == "ACCOUNT:1111111111"
+    assert response.json()["graph_meta"]["requested_max_nodes"] == 14
+    mock_neighborhood.assert_called_once()
+
+
+def test_graph_neo4j_status_endpoint_returns_payload():
+    with patch.object(app, "get_neo4j_status", return_value={"enabled": False, "configured": False, "driver_available": False}) as mock_status:
+        response = client.get("/api/graph/neo4j-status")
+
+    assert response.status_code == 200
+    assert response.json()["enabled"] is False
+    mock_status.assert_called_once()
+
+
+def test_graph_neo4j_sync_endpoint_returns_payload():
+    with patch.object(app, "sync_graph_to_neo4j", return_value={"status": "ok", "node_count": 2}) as mock_sync:
+        response = client.post("/api/graph/neo4j-sync", json={"include_findings": True, "limit": 100, "filters": {"parser_run_id": "RUN-1"}})
+
+    assert response.status_code == 200
+    assert response.json()["node_count"] == 2
+    mock_sync.assert_called_once()
+
+
 def test_upload_accepts_ofx_and_returns_identity_guess(tmp_path):
     ofx_content = """OFXHEADER:100
 DATA:OFXSGML

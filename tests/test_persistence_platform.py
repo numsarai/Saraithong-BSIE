@@ -210,21 +210,48 @@ def test_graph_export_job_writes_graph_csvs_and_anx(tmp_path: Path):
         assert stored_job.status == "done"
         assert stored_job.summary_json["files"] == [
             "nodes.csv",
+            "nodes.json",
             "edges.csv",
+            "edges.json",
             "aggregated_edges.csv",
+            "aggregated_edges.json",
+            "derived_account_edges.csv",
+            "derived_account_edges.json",
             "graph_manifest.json",
+            "graph_analysis.json",
+            "graph_analysis.xlsx",
+            "suspicious_findings.csv",
+            "suspicious_findings.json",
             "i2_chart.anx",
         ]
 
         export_dir = Path(stored_job.output_path).parent
         nodes_path = export_dir / "nodes.csv"
+        nodes_json_path = export_dir / "nodes.json"
         edges_path = export_dir / "edges.csv"
+        edges_json_path = export_dir / "edges.json"
         aggregated_path = export_dir / "aggregated_edges.csv"
+        aggregated_json_path = export_dir / "aggregated_edges.json"
+        derived_path = export_dir / "derived_account_edges.csv"
+        derived_json_path = export_dir / "derived_account_edges.json"
+        analysis_json_path = export_dir / "graph_analysis.json"
+        analysis_xlsx_path = export_dir / "graph_analysis.xlsx"
+        suspicious_csv_path = export_dir / "suspicious_findings.csv"
+        suspicious_json_path = export_dir / "suspicious_findings.json"
         anx_path = export_dir / "i2_chart.anx"
 
         assert nodes_path.exists()
+        assert nodes_json_path.exists()
         assert edges_path.exists()
+        assert edges_json_path.exists()
         assert aggregated_path.exists()
+        assert aggregated_json_path.exists()
+        assert derived_path.exists()
+        assert derived_json_path.exists()
+        assert analysis_json_path.exists()
+        assert analysis_xlsx_path.exists()
+        assert suspicious_csv_path.exists()
+        assert suspicious_json_path.exists()
         assert anx_path.exists()
 
         nodes_df = pd.read_csv(nodes_path, dtype=str).fillna("")

@@ -223,6 +223,8 @@ processed/
   edges.csv               ← graph edges with lineage + review safety
   aggregated_edges.csv    ← aggregated flow edges for graph tooling
   graph_manifest.json     ← graph schema/version + counts
+  graph_analysis.json     ← BSIE graph analytics from normalized transactions
+  graph_analysis.xlsx     ← analyst-friendly workbook for graph analytics
   i2_chart.anx            ← simplified i2-friendly XML chart export
   meta.json               ← summary statistics
 ```
@@ -315,6 +317,7 @@ BSIE graph exports now use one shared deterministic schema across:
 - per-account package exports
 - database-backed graph export jobs
 - IBM i2-style ANX output
+- the internal BSIE Graph Analysis Module
 
 ### Graph node schema
 
@@ -351,6 +354,32 @@ Each node row includes:
 
 `aggregated_edges.csv` summarizes transaction-level flow edges without changing the underlying transaction edges.
 
+### Graph analysis module
+
+BSIE also computes a reusable internal graph-analysis layer from the same normalized transactions and shared graph schema.
+
+Outputs:
+
+- `graph_analysis.json`
+- `graph_analysis.xlsx`
+
+Analytics currently include:
+
+- graph/node/edge counts
+- node and edge type distributions
+- top nodes by degree
+- top nodes by flow value
+- connected components
+- review candidate nodes
+- lineage coverage counts
+- suspicious findings
+- focused neighborhood graph retrieval for the investigation UI
+- optional Neo4j sync for downstream graph persistence
+
+This keeps the pipeline consistent:
+
+`raw import -> parsing -> mapping -> normalization -> validation -> structured output -> graph modeling -> graph analytics -> graph export/API/UI`
+
 ### Safety rules
 
 - Transaction flow direction always follows `from_account -> to_account`.
@@ -366,6 +395,45 @@ Each node row includes:
 - includes analyst-friendly relationship edges such as `SENT_TO`, `RECEIVED_FROM`, `OWNS`, `MATCHED_TO`, and `POSSIBLE_SAME_AS`
 - excludes aggregate rows and bookkeeping-only lineage edges like `APPEARS_IN`
 - uses the same stable node IDs as the CSV graph export
+
+### Optional Neo4j integration
+
+BSIE can now sync the same shared graph bundle into Neo4j without changing parser or normalization behavior.
+
+Key env flags:
+
+- `BSIE_ENABLE_NEO4J_EXPORT=1`
+- `NEO4J_URI=bolt://localhost:7687`
+- `NEO4J_USER=neo4j`
+- `NEO4J_PASSWORD=...`
+- `NEO4J_DATABASE=neo4j`
+
+Behavior:
+
+- graph sync is optional and additive
+- graph nodes and edges are built from normalized BSIE transactions already persisted in the platform
+- suspicious findings can also be synced as `SuspiciousFinding` nodes with `FLAGS` relationships
+- if Neo4j is not configured, BSIE still runs normally
+
+### AI classification guardrails
+
+BSIE keeps heuristic classification as the baseline and only applies LLM-based enrichment when explicitly enabled.
+
+Key env flags:
+
+- `BSIE_ENABLE_LLM_CLASSIFICATION=1`
+- `LLM_API_KEY=...`
+- `LLM_MODEL_NAME=gpt-4o-mini`
+- `BSIE_LLM_MIN_CONFIDENCE=0.85`
+- `BSIE_LLM_MAX_TRANSACTIONS=250`
+
+Safety behavior:
+
+- heuristic classification remains the default
+- AI is disabled unless explicitly enabled
+- AI results below the configured confidence threshold do not override the heuristic result
+- AI-driven type divergence can mark the transaction for analyst review
+- exported transaction rows preserve provenance fields such as `classification_source`, `classification_reason`, `heuristic_transaction_type`, and `ai_transaction_type`
 
 ---
 

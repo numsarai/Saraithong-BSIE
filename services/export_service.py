@@ -9,6 +9,7 @@ from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session
 
 from core.export_anx import export_anx_from_graph
+from core.graph_analysis import build_graph_analysis, write_graph_analysis_exports
 from core.graph_export import write_graph_exports
 from paths import EXPORTS_DIR
 from persistence.base import utcnow
@@ -359,6 +360,14 @@ def run_export_job(session: Session, job: ExportJob) -> ExportJob:
             batch_identity=str(filters.get("parser_run_id", "") or filters.get("file_id", "") or ""),
             batch_label="",
         )
+        graph_analysis = build_graph_analysis(
+            transactions_df,
+            matches=matches_df,
+            batch_identity=str(filters.get("parser_run_id", "") or filters.get("file_id", "") or ""),
+            batch_label="",
+            graph_bundle=graph_bundle,
+        )
+        graph_analysis_paths = write_graph_analysis_exports(target_dir, graph_analysis)
         anx_path = target_dir / "i2_chart.anx"
         export_anx_from_graph(graph_bundle["nodes_df"], graph_bundle["edges_df"], anx_path)
         output_path = str(graph_bundle["manifest_path"])
@@ -366,11 +375,22 @@ def run_export_job(session: Session, job: ExportJob) -> ExportJob:
             "nodes": int(graph_bundle["manifest"]["node_count"]),
             "edges": int(graph_bundle["manifest"]["edge_count"]),
             "aggregated_edges": int(graph_bundle["manifest"]["aggregated_edge_count"]),
+            "derived_account_edges": int(graph_bundle["manifest"].get("derived_account_edge_count", 0)),
+            "review_candidates": int(graph_analysis.get("overview", {}).get("review_candidate_nodes", 0)),
             "files": [
                 graph_bundle["nodes_path"].name,
+                graph_bundle["nodes_json_path"].name,
                 graph_bundle["edges_path"].name,
+                graph_bundle["edges_json_path"].name,
                 graph_bundle["aggregated_edges_path"].name,
+                graph_bundle["aggregated_edges_json_path"].name,
+                graph_bundle["derived_account_edges_path"].name,
+                graph_bundle["derived_account_edges_json_path"].name,
                 graph_bundle["manifest_path"].name,
+                graph_analysis_paths["json_path"].name,
+                graph_analysis_paths["xlsx_path"].name,
+                graph_analysis_paths["suspicious_csv_path"].name,
+                graph_analysis_paths["suspicious_json_path"].name,
                 anx_path.name,
             ],
         }

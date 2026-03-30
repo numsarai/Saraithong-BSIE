@@ -21,6 +21,7 @@
 - generate transaction exports
 - generate duplicate and unresolved-match review exports
 - generate graph CSV and i2 ANX exports
+- generate BSIE graph analysis JSON/XLSX/API views from normalized transactions
 - validate graph direction and lineage safety
 
 ### 4. Platform Operations
@@ -48,6 +49,7 @@
 - match candidate generation
 - audit-safe review workflow
 - graph/i2 hardening
+- internal BSIE Graph Analysis Module
 - PostgreSQL runtime support
 - backup/reset/restore UI
 - scheduled backup settings persistence

@@ -25,6 +25,7 @@ import pandas as pd
 
 from utils.date_utils import format_date_range
 from core.export_anx import export_anx_from_graph
+from core.graph_analysis import build_graph_analysis, write_graph_analysis_exports
 from core.graph_export import write_graph_exports
 from core.ofx_io import export_ofx
 from core.reconciliation import reconcile_balances
@@ -42,6 +43,15 @@ TRANSACTION_EXPORT_COLUMNS = [
     "direction",
     "amount",
     "currency",
+    "classification_source",
+    "classification_reason",
+    "classification_review_flag",
+    "classification_model",
+    "heuristic_transaction_type",
+    "heuristic_confidence",
+    "ai_transaction_type",
+    "ai_confidence",
+    "ai_counterparty_name",
     "balance",
     "balance_source",
     "expected_balance",
@@ -444,7 +454,16 @@ def export_package(
         batch_identity=graph_batch_identity,
         batch_label=graph_batch_label,
     )
-    logger.info("  Exported: nodes.csv + edges.csv + aggregated_edges.csv + graph_manifest.json")
+    logger.info("  Exported: nodes/edges/aggregated/derived graph files in CSV + JSON + graph_manifest.json")
+
+    graph_analysis = build_graph_analysis(
+        transactions_export,
+        batch_identity=graph_batch_identity,
+        batch_label=graph_batch_label,
+        graph_bundle=graph_bundle,
+    )
+    graph_analysis_paths = write_graph_analysis_exports(processed_dir, graph_analysis)
+    logger.info("  Exported: graph_analysis.json + graph_analysis.xlsx + suspicious_findings.csv + suspicious_findings.json")
 
     # 4a. Export reconciliation CSV + Excel
     _write_csv_and_excel(reconciliation_display, processed_dir, "reconciliation")
@@ -479,6 +498,7 @@ def export_package(
     meta["report_filename"] = report_path.name
     meta["reconciliation"] = reconciliation_summary or {}
     meta["graph_manifest"] = graph_bundle["manifest"]
+    meta["graph_analysis"] = graph_analysis
     meta["category_files"] = {
         "all_transactions": "transactions.csv",
         "transfer_in": "transfer_in.csv",
@@ -488,9 +508,18 @@ def export_package(
         "entities": "entities.csv",
         "links": "links.csv",
         "nodes": "nodes.csv",
+        "nodes_json": "nodes.json",
         "edges": "edges.csv",
+        "edges_json": "edges.json",
         "aggregated_edges": "aggregated_edges.csv",
+        "aggregated_edges_json": "aggregated_edges.json",
+        "derived_account_edges": "derived_account_edges.csv",
+        "derived_account_edges_json": "derived_account_edges.json",
         "graph_manifest": "graph_manifest.json",
+        "graph_analysis": graph_analysis_paths["json_path"].name,
+        "graph_analysis_workbook": graph_analysis_paths["xlsx_path"].name,
+        "suspicious_findings": graph_analysis_paths["suspicious_csv_path"].name,
+        "suspicious_findings_json": graph_analysis_paths["suspicious_json_path"].name,
         "reconciliation": "reconciliation.csv",
         "ofx": "account.ofx",
         "anx": "i2_chart.anx",
@@ -503,6 +532,8 @@ def export_package(
         "graph_nodes": int(graph_bundle["manifest"].get("node_count", 0)),
         "graph_edges": int(graph_bundle["manifest"].get("edge_count", 0)),
         "graph_aggregated_edges": int(graph_bundle["manifest"].get("aggregated_edge_count", 0)),
+        "graph_derived_account_edges": int(graph_bundle["manifest"].get("derived_account_edge_count", 0)),
+        "graph_review_candidates": int(graph_analysis.get("overview", {}).get("review_candidate_nodes", 0)),
     }
     meta_path = account_dir / "meta.json"
     with meta_path.open("w", encoding="utf-8") as f:

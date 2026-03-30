@@ -101,3 +101,9 @@ class DatabaseBackupSettingsRequest(BaseModel):
     retention_enabled: bool = False
     retain_count: int = Field(default=20, ge=1)
     updated_by: str = "analyst"
+
+
+class GraphNeo4jSyncRequest(BaseModel):
+    include_findings: bool = True
+    limit: int = Field(default=2000, ge=1, le=5000)
+    filters: dict[str, Any] = Field(default_factory=dict)

@@ -164,7 +164,10 @@ def test_backup_preview_and_scheduler(tmp_path: Path):
     assert skipped is None
 
 
-def test_backup_settings_round_trip(tmp_path: Path):
+def test_backup_settings_round_trip(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("BSIE_ENABLE_AUTO_BACKUP", raising=False)
+    monkeypatch.delenv("BSIE_BACKUP_INTERVAL_HOURS", raising=False)
+    monkeypatch.delenv("BSIE_AUTO_BACKUP_FORMAT", raising=False)
     engine = _make_engine(tmp_path)
 
     defaults = get_backup_settings(bind_engine=engine)

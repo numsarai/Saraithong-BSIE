@@ -9,6 +9,8 @@ BSIE maintains two graph-oriented export surfaces:
 
 Both now derive from the same shared graph builder in [`core/graph_export.py`](../../core/graph_export.py).
 
+BSIE also includes an internal graph-analysis layer in [`core/graph_analysis.py`](../../core/graph_analysis.py) that consumes the same normalized transaction outputs and shared graph model.
+
 ## Shared Schema
 
 The shared graph layer produces:
@@ -91,6 +93,35 @@ The ANX exporter in [`core/export_anx.py`](../../core/export_anx.py) intentional
 - excludes bookkeeping-only lineage edges such as `APPEARS_IN`
 
 This keeps the chart readable while preserving the richer CSV graph layer for downstream tools and secondary processing.
+
+## Graph Analysis Module
+
+The BSIE Graph Analysis Module is an additive internal extension, not a separate system.
+
+It consumes:
+
+1. normalized BSIE transaction outputs
+2. optional persisted match suggestions / confirmations
+3. the shared graph builder output
+
+It produces:
+
+- `graph_analysis.json`
+- `graph_analysis.xlsx`
+- API payloads from `/api/graph-analysis`
+- Investigation Admin summaries in the `Graph Analysis` tab
+
+Current analytics are deterministic and lineage-safe:
+
+- graph overview counts
+- node and edge type distributions
+- top nodes by degree
+- top nodes by flow value
+- connected components across business nodes
+- review candidate nodes with reason codes
+- lineage coverage summary
+
+The analysis layer intentionally excludes bookkeeping-only `APPEARS_IN` edges from business connectivity metrics so graph structure remains useful to analysts.
 
 ## Extension Guidance
 

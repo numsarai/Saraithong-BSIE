@@ -90,6 +90,8 @@ export function Step5Results() {
     { label: 'Graph Edges (.csv)',    file: `processed/${categoryFiles.edges || 'edges.csv'}`, downloadName: `${filePrefix}_edges.csv` },
     { label: 'Graph Aggregate (.csv)', file: `processed/${categoryFiles.aggregated_edges || 'aggregated_edges.csv'}`, downloadName: `${filePrefix}_aggregated_edges.csv` },
     { label: 'Graph Manifest (.json)', file: `processed/${categoryFiles.graph_manifest || 'graph_manifest.json'}`, downloadName: `${filePrefix}_graph_manifest.json` },
+    { label: 'Graph Analysis (.json)', file: `processed/${categoryFiles.graph_analysis || 'graph_analysis.json'}`, downloadName: `${filePrefix}_graph_analysis.json` },
+    { label: 'Graph Analysis (.xlsx)', file: `processed/${categoryFiles.graph_analysis_workbook || 'graph_analysis.xlsx'}`, downloadName: `${filePrefix}_graph_analysis.xlsx` },
     { label: 'Reconciliation (.csv)', file: `processed/${categoryFiles.reconciliation || 'reconciliation.csv'}`, downloadName: `${filePrefix}_reconciliation.csv` },
     { label: 'Reconciliation (.xlsx)', file: 'processed/reconciliation.xlsx', downloadName: `${filePrefix}_reconciliation.xlsx` },
     { label: 'Account OFX (.ofx)',    file: `processed/${categoryFiles.ofx || 'account.ofx'}`, downloadName: `${filePrefix}.ofx` },

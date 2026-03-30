@@ -279,6 +279,88 @@ export async function getExportJobs() {
   return r.json()
 }
 
+export async function getGraphAnalysis(params: Record<string, string | number | undefined> = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
+  })
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  const r = await fetch(`/api/graph-analysis${suffix}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getGraphNodes(params: Record<string, string | number | boolean | undefined> = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
+  })
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  const r = await fetch(`/api/graph/nodes${suffix}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getGraphEdges(params: Record<string, string | number | boolean | undefined> = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
+  })
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  const r = await fetch(`/api/graph/edges${suffix}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getGraphDerivedEdges(params: Record<string, string | number | boolean | undefined> = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
+  })
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  const r = await fetch(`/api/graph/derived-edges${suffix}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getGraphFindings(params: Record<string, string | number | boolean | undefined> = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
+  })
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  const r = await fetch(`/api/graph/findings${suffix}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getGraphNeighborhood(nodeId: string, params: Record<string, string | number | boolean | undefined> = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
+  })
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  const r = await fetch(`/api/graph/neighborhood/${encodeURIComponent(nodeId)}${suffix}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getGraphNeo4jStatus() {
+  const r = await fetch('/api/graph/neo4j-status')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function syncGraphToNeo4j(payload: { include_findings?: boolean; limit?: number; filters?: Record<string, any> }) {
+  const r = await fetch('/api/graph/neo4j-sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function createExportJob(payload: { export_type: string; filters?: Record<string, any>; created_by?: string }) {
   const r = await fetch('/api/exports', {
     method: 'POST',

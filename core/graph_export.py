@@ -5,8 +5,13 @@ Deterministic graph export helpers for BSIE.
 
 Produces:
 - nodes.csv
+- nodes.json
 - edges.csv
+- edges.json
 - aggregated_edges.csv
+- aggregated_edges.json
+- derived_account_edges.csv
+- derived_account_edges.json
 - graph_manifest.json
 
 Design goals:
@@ -26,6 +31,7 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from core.graph_domain import DERIVED_ACCOUNT_EDGE_COLUMNS
 from utils.date_utils import format_date_range
 from utils.text_utils import normalize_text
 
@@ -141,12 +147,20 @@ SUPPORTED_EDGE_TYPES = [
     "OWNS",
     "SENT_TO",
     "RECEIVED_FROM",
+    "DERIVED_ACCOUNT_TO_ACCOUNT",
     "MATCHED_TO",
     "POSSIBLE_SAME_AS",
     "APPEARS_IN",
 ]
 
 GENERIC_UNKNOWN_LABEL = "Unknown Counterparty"
+
+GRAPH_EXPORT_JSON_FILENAMES = {
+    "nodes": "nodes.json",
+    "edges": "edges.json",
+    "aggregated_edges": "aggregated_edges.json",
+    "derived_account_edges": "derived_account_edges.json",
+}
 
 
 def _json_text(value: Any) -> str:
@@ -1236,10 +1250,11 @@ def build_graph_exports(
     aggregated_df = pd.DataFrame(aggregate_rows, columns=AGGREGATED_EDGE_COLUMNS).fillna("")
 
     manifest = {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "node_columns": GRAPH_NODE_COLUMNS,
         "edge_columns": GRAPH_EDGE_COLUMNS,
         "aggregated_edge_columns": AGGREGATED_EDGE_COLUMNS,
+        "derived_account_edge_columns": DERIVED_ACCOUNT_EDGE_COLUMNS,
         "supported_node_types": SUPPORTED_NODE_TYPES,
         "supported_edge_types": SUPPORTED_EDGE_TYPES,
         "node_count": len(nodes_df),
@@ -1252,6 +1267,106 @@ def build_graph_exports(
     return nodes_df, edges_df, aggregated_df, manifest
 
 
+def build_derived_account_edges(aggregated_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Derive explicit account-to-account flow edges from aggregated transaction-flow
+    edges. This keeps the source graph intact while also producing a compact,
+    analyst-friendly relationship layer for downstream graph tooling.
+    """
+    if aggregated_df.empty:
+        return pd.DataFrame(columns=DERIVED_ACCOUNT_EDGE_COLUMNS)
+
+    derived_rows: list[dict[str, Any]] = []
+    for _, row in aggregated_df.fillna("").iterrows():
+        from_node_id = _string_or_blank(row.get("from_node_id", ""))
+        to_node_id = _string_or_blank(row.get("to_node_id", ""))
+        if not (from_node_id.startswith("ACCOUNT:") and to_node_id.startswith("ACCOUNT:")):
+            continue
+
+        source_transaction_ids = _string_or_blank(row.get("source_transaction_ids", ""))
+        tx_count = int(_float_or_zero(row.get("transaction_count")))
+        label = f"Account to Account Flow ({tx_count} transactions)" if tx_count else "Account to Account Flow"
+        derived_rows.append(
+            {
+                "id": _hash_id("DERIVED_FLOW", from_node_id, to_node_id, row.get("currency", ""), row.get("source_transaction_ids", "")),
+                "edge_id": _hash_id("DERIVED_FLOW", from_node_id, to_node_id, row.get("currency", ""), row.get("source_transaction_ids", "")),
+                "source": from_node_id,
+                "from_node_id": from_node_id,
+                "target": to_node_id,
+                "to_node_id": to_node_id,
+                "label": label,
+                "type": "DERIVED_ACCOUNT_TO_ACCOUNT",
+                "edge_type": "DERIVED_ACCOUNT_TO_ACCOUNT",
+                "aggregation_level": "derived_account",
+                "directionality": "directed",
+                "transaction_count": tx_count,
+                "total_amount_signed": round(_float_or_zero(row.get("total_amount_signed")), 2),
+                "total_amount_abs": round(_float_or_zero(row.get("total_amount_abs")), 2),
+                "total_amount_display": _string_or_blank(row.get("total_amount_display", "")),
+                "currency": _string_or_blank(row.get("currency", "")),
+                "date_range": _string_or_blank(row.get("date_range", "")),
+                "confidence_score_avg": round(_float_or_zero(row.get("confidence_score_avg")), 4),
+                "confidence_score_min": round(_float_or_zero(row.get("confidence_score_min")), 4),
+                "confidence_score_max": round(_float_or_zero(row.get("confidence_score_max")), 4),
+                "review_status": _string_or_blank(row.get("review_status", "")),
+                "assertion_status": "derived_from_statement_flow",
+                "source_transaction_ids": source_transaction_ids,
+                "statement_batch_id": _string_or_blank(row.get("statement_batch_id", "")),
+                "parser_run_id": _string_or_blank(row.get("parser_run_id", "")),
+                "file_id": _string_or_blank(row.get("file_id", "")),
+                "source_row_numbers": _string_or_blank(row.get("source_row_numbers", "")),
+                "source_sheets": _string_or_blank(row.get("source_sheets", "")),
+                "source_files": _string_or_blank(row.get("source_files", "")),
+                "lineage_json": _json_text(
+                    {
+                        "derived_from_edge_id": _string_or_blank(row.get("edge_id", "")),
+                        "source_transaction_ids": source_transaction_ids.split("|") if source_transaction_ids else [],
+                        "statement_batch_ids": sorted(_split_pipe(row.get("statement_batch_id", ""))),
+                        "parser_run_ids": sorted(_split_pipe(row.get("parser_run_id", ""))),
+                        "file_ids": sorted(_split_pipe(row.get("file_id", ""))),
+                        "source_row_numbers": sorted(_split_pipe(row.get("source_row_numbers", ""))),
+                        "source_sheets": sorted(_split_pipe(row.get("source_sheets", ""))),
+                        "source_files": sorted(_split_pipe(row.get("source_files", ""))),
+                        "directionality": "directed",
+                    }
+                ),
+            }
+        )
+
+    return pd.DataFrame(derived_rows, columns=DERIVED_ACCOUNT_EDGE_COLUMNS).fillna("")
+
+
+def build_graph_bundle(
+    transactions: pd.DataFrame,
+    *,
+    matches: pd.DataFrame | None = None,
+    batch_identity: str = "",
+    batch_label: str = "",
+) -> dict[str, Any]:
+    """
+    Build the full Phase 1 graph foundation bundle from finalized BSIE normalized
+    transactions.
+    """
+    nodes_df, edges_df, aggregated_df, manifest = build_graph_exports(
+        transactions,
+        matches=matches,
+        batch_identity=batch_identity,
+        batch_label=batch_label,
+    )
+    derived_account_edges_df = build_derived_account_edges(aggregated_df)
+    manifest = {
+        **manifest,
+        "derived_account_edge_count": len(derived_account_edges_df),
+    }
+    return {
+        "nodes_df": nodes_df,
+        "edges_df": edges_df,
+        "aggregated_df": aggregated_df,
+        "derived_account_edges_df": derived_account_edges_df,
+        "manifest": manifest,
+    }
+
+
 def write_graph_exports(
     output_dir: Path,
     *,
@@ -1261,29 +1376,53 @@ def write_graph_exports(
     batch_label: str = "",
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    nodes_df, edges_df, aggregated_df, manifest = build_graph_exports(
+    graph_bundle = build_graph_bundle(
         transactions,
         matches=matches,
         batch_identity=batch_identity,
         batch_label=batch_label,
     )
+    nodes_df = graph_bundle["nodes_df"]
+    edges_df = graph_bundle["edges_df"]
+    aggregated_df = graph_bundle["aggregated_df"]
+    derived_account_edges_df = graph_bundle["derived_account_edges_df"]
+    manifest = graph_bundle["manifest"]
     nodes_path = output_dir / "nodes.csv"
     edges_path = output_dir / "edges.csv"
     aggregated_path = output_dir / "aggregated_edges.csv"
+    derived_account_edges_path = output_dir / "derived_account_edges.csv"
+    nodes_json_path = output_dir / GRAPH_EXPORT_JSON_FILENAMES["nodes"]
+    edges_json_path = output_dir / GRAPH_EXPORT_JSON_FILENAMES["edges"]
+    aggregated_json_path = output_dir / GRAPH_EXPORT_JSON_FILENAMES["aggregated_edges"]
+    derived_account_edges_json_path = output_dir / GRAPH_EXPORT_JSON_FILENAMES["derived_account_edges"]
     manifest_path = output_dir / "graph_manifest.json"
 
     nodes_df.to_csv(nodes_path, index=False, encoding="utf-8-sig")
     edges_df.to_csv(edges_path, index=False, encoding="utf-8-sig")
     aggregated_df.to_csv(aggregated_path, index=False, encoding="utf-8-sig")
+    derived_account_edges_df.to_csv(derived_account_edges_path, index=False, encoding="utf-8-sig")
+    nodes_json_path.write_text(nodes_df.to_json(orient="records", force_ascii=False, indent=2), encoding="utf-8")
+    edges_json_path.write_text(edges_df.to_json(orient="records", force_ascii=False, indent=2), encoding="utf-8")
+    aggregated_json_path.write_text(aggregated_df.to_json(orient="records", force_ascii=False, indent=2), encoding="utf-8")
+    derived_account_edges_json_path.write_text(
+        derived_account_edges_df.to_json(orient="records", force_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return {
         "nodes_path": nodes_path,
         "edges_path": edges_path,
         "aggregated_edges_path": aggregated_path,
+        "derived_account_edges_path": derived_account_edges_path,
+        "nodes_json_path": nodes_json_path,
+        "edges_json_path": edges_json_path,
+        "aggregated_edges_json_path": aggregated_json_path,
+        "derived_account_edges_json_path": derived_account_edges_json_path,
         "manifest_path": manifest_path,
         "manifest": manifest,
         "nodes_df": nodes_df,
         "edges_df": edges_df,
         "aggregated_df": aggregated_df,
+        "derived_account_edges_df": derived_account_edges_df,
     }

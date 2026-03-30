@@ -15,6 +15,8 @@ import {
   getExportJobs,
   getFileDetail,
   getFiles,
+  getGraphAnalysis,
+  getGraphNeo4jStatus,
   getMatches,
   getParserRunDetail,
   getParserRuns,
@@ -22,6 +24,7 @@ import {
   reprocessParserRun,
   resetDatabase,
   restoreDatabase,
+  syncGraphToNeo4j,
   updateDatabaseBackupSettings,
   reviewAccount,
   reviewDuplicate,
@@ -32,6 +35,7 @@ import {
 import { Card, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { GraphExplorer } from '@/components/GraphExplorer'
 import { toast } from 'sonner'
 import { fmt, fmtDate } from '@/lib/utils'
 
@@ -44,6 +48,7 @@ const TABS = [
   { id: 'duplicates', label: 'Duplicates' },
   { id: 'matches', label: 'Matches' },
   { id: 'audit', label: 'Audit' },
+  { id: 'graph', label: 'Graph Analysis' },
   { id: 'exports', label: 'Exports' },
 ] as const
 
@@ -234,6 +239,16 @@ export function InvestigationDesk() {
     queryFn: () => getExportJobs(),
     enabled: tab === 'exports',
   })
+  const graphAnalysisQuery = useQuery({
+    queryKey: ['investigation', 'graph-analysis', deferredTransactionFilters],
+    queryFn: () => getGraphAnalysis({ ...deferredTransactionFilters, limit: 5000 }),
+    enabled: tab === 'graph',
+  })
+  const graphNeo4jStatusQuery = useQuery({
+    queryKey: ['investigation', 'graph-neo4j-status'],
+    queryFn: () => getGraphNeo4jStatus(),
+    enabled: tab === 'graph',
+  })
 
   const currentRows = useMemo(() => {
     switch (tab) {
@@ -253,6 +268,8 @@ export function InvestigationDesk() {
         return auditQuery.data?.items || []
       case 'exports':
         return exportQuery.data?.items || []
+      case 'graph':
+        return []
       default:
         return []
     }
@@ -266,6 +283,7 @@ export function InvestigationDesk() {
     matchesQuery.data,
     auditQuery.data,
     exportQuery.data,
+    graphAnalysisQuery.data,
   ])
 
   const refreshAll = () => {
@@ -285,6 +303,25 @@ export function InvestigationDesk() {
       })
       toast.success(`${exportType} export created`)
       startTransition(() => setTab('exports'))
+      refreshAll()
+    } catch (error: any) {
+      toast.error(error.message)
+    }
+  }
+
+  const handleNeo4jSync = async () => {
+    try {
+      const payload = await syncGraphToNeo4j({
+        include_findings: true,
+        limit: 2000,
+        filters: {
+          ...(transactionFilters.parser_run_id ? { parser_run_id: transactionFilters.parser_run_id } : {}),
+          ...(transactionFilters.file_id ? { file_id: transactionFilters.file_id } : {}),
+          ...(transactionFilters.bank ? { bank: transactionFilters.bank } : {}),
+          ...(transactionFilters.q ? { q: transactionFilters.q } : {}),
+        },
+      })
+      toast.success(`Neo4j sync complete · ${payload.node_count} nodes · ${payload.edge_count + payload.derived_edge_count} edges`)
       refreshAll()
     } catch (error: any) {
       toast.error(error.message)
@@ -554,9 +591,9 @@ export function InvestigationDesk() {
         </Card>
       )}
 
-      {tab === 'search' && (
+      {(tab === 'search' || tab === 'graph') && (
         <Card className="space-y-3">
-          <CardTitle>Transaction Query Builder</CardTitle>
+          <CardTitle>{tab === 'graph' ? 'Graph Analysis Filters' : 'Transaction Query Builder'}</CardTitle>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <TextInput value={transactionFilters.q} onChange={(event) => setTransactionFilters((state) => ({ ...state, q: event.target.value }))} placeholder="Description / reference" />
             <TextInput value={transactionFilters.counterparty} onChange={(event) => setTransactionFilters((state) => ({ ...state, counterparty: event.target.value }))} placeholder="Counterparty name/account" />
@@ -609,7 +646,131 @@ export function InvestigationDesk() {
         </Card>
       )}
 
-      {tab !== 'database' && (
+      {tab === 'graph' && (
+        <div className="space-y-4">
+          <Card className="space-y-4">
+            <CardTitle>BSIE Graph Analysis Module</CardTitle>
+            <div className="text-sm text-text2">
+              Consumes persisted normalized transactions from BSIE, reuses the shared graph model, and exposes analyst-safe graph metrics without changing the original evidence layer.
+            </div>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
+              <StatCard label="Transactions" value={graphAnalysisQuery.data?.overview?.transaction_rows ?? 0} />
+              <StatCard label="Business Nodes" value={graphAnalysisQuery.data?.overview?.business_node_count ?? 0} />
+              <StatCard label="Business Edges" value={graphAnalysisQuery.data?.overview?.business_edge_count ?? 0} />
+              <StatCard label="Components" value={graphAnalysisQuery.data?.overview?.connected_components ?? 0} />
+              <StatCard label="Review Candidates" value={graphAnalysisQuery.data?.overview?.review_candidate_nodes ?? 0} tone="text-warning" />
+              <StatCard label="Suggested Match Edges" value={graphAnalysisQuery.data?.overview?.suggested_match_edges ?? 0} tone="text-accent" />
+              <StatCard label="Suspicious Findings" value={graphAnalysisQuery.data?.overview?.suspicious_finding_count ?? 0} tone="text-warning" />
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <FieldBlock label="Top Node By Degree" value={graphAnalysisQuery.data?.overview?.top_node_by_degree?.label || '—'} />
+              <FieldBlock label="Top Node By Flow" value={graphAnalysisQuery.data?.overview?.top_node_by_flow?.label || '—'} />
+            </div>
+            <div className="grid gap-3 lg:grid-cols-[repeat(4,minmax(0,1fr))]">
+              <StatCard label="Neo4j Enabled" value={graphNeo4jStatusQuery.data?.enabled ? 'Yes' : 'No'} tone={graphNeo4jStatusQuery.data?.enabled ? 'text-success' : 'text-muted'} />
+              <StatCard label="Neo4j Configured" value={graphNeo4jStatusQuery.data?.configured ? 'Yes' : 'No'} tone={graphNeo4jStatusQuery.data?.configured ? 'text-success' : 'text-warning'} />
+              <StatCard label="Neo4j Driver" value={graphNeo4jStatusQuery.data?.driver_version || 'missing'} tone={graphNeo4jStatusQuery.data?.driver_available ? 'text-success' : 'text-warning'} />
+              <StatCard label="Graph Query" value={graphAnalysisQuery.data?.query_meta?.cache_hit ? 'cached' : 'fresh'} />
+            </div>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+              <FieldBlock label="Neo4j URI" value={graphNeo4jStatusQuery.data?.uri_masked || '—'} mono />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleNeo4jSync}
+                  disabled={!graphNeo4jStatusQuery.data?.enabled || !graphNeo4jStatusQuery.data?.configured || !graphNeo4jStatusQuery.data?.driver_available}
+                >
+                  Sync To Neo4j
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Card className="space-y-3">
+              <CardTitle>Top Nodes By Degree</CardTitle>
+              <div className="space-y-2">
+                {(graphAnalysisQuery.data?.top_nodes_by_degree || []).slice(0, 8).map((row: any) => (
+                  <div key={row.node_id} className="rounded-lg border border-border bg-surface2 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-medium text-text">{row.label || row.node_id}</div>
+                        <div className="text-xs text-muted">{row.node_type} · {row.node_id}</div>
+                      </div>
+                      <Badge variant="blue">degree {row.degree}</Badge>
+                    </div>
+                    <div className="mt-2 text-xs text-text2">
+                      in {row.in_degree} · out {row.out_degree} · flow {fmt(row.total_flow_value || 0)}
+                    </div>
+                  </div>
+                ))}
+                {(!graphAnalysisQuery.data?.top_nodes_by_degree || graphAnalysisQuery.data.top_nodes_by_degree.length === 0) && (
+                  <div className="text-sm text-muted">No graph metrics yet.</div>
+                )}
+              </div>
+            </Card>
+
+            <Card className="space-y-3">
+              <CardTitle>Review Candidates</CardTitle>
+              <div className="space-y-2">
+                {(graphAnalysisQuery.data?.review_candidates || []).slice(0, 8).map((row: any) => (
+                  <div key={row.node_id} className="rounded-lg border border-border bg-surface2 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-medium text-text">{row.label || row.node_id}</div>
+                        <div className="text-xs text-muted">{row.node_type} · {row.node_id}</div>
+                      </div>
+                      <Badge variant="yellow">{row.reason_count} flags</Badge>
+                    </div>
+                    <div className="mt-2 text-xs text-text2">
+                      {String(row.reason_codes || '').replaceAll('|', ' · ')}
+                    </div>
+                  </div>
+                ))}
+                {(!graphAnalysisQuery.data?.review_candidates || graphAnalysisQuery.data.review_candidates.length === 0) && (
+                  <div className="text-sm text-muted">No review candidates in the current filter scope.</div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Card className="space-y-3">
+              <CardTitle>Connected Components</CardTitle>
+              <div className="space-y-2">
+                {(graphAnalysisQuery.data?.connected_components || []).slice(0, 8).map((row: any) => (
+                  <div key={row.component_id} className="rounded-lg border border-border bg-surface2 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-medium text-text">{row.component_id}</div>
+                      <Badge variant="gray">{row.size} nodes</Badge>
+                    </div>
+                    <div className="mt-2 text-xs text-text2 break-words">{row.node_labels || row.node_ids}</div>
+                  </div>
+                ))}
+                {(!graphAnalysisQuery.data?.connected_components || graphAnalysisQuery.data.connected_components.length === 0) && (
+                  <div className="text-sm text-muted">No connected components yet.</div>
+                )}
+              </div>
+            </Card>
+
+            <Card className="space-y-3">
+              <CardTitle>Lineage Coverage</CardTitle>
+              <div className="grid gap-3 md:grid-cols-2">
+                {Object.entries(graphAnalysisQuery.data?.lineage_summary || {}).map(([key, value]) => (
+                  <FieldBlock key={key} label={key.replaceAll('_', ' ')} value={value} />
+                ))}
+                {Object.keys(graphAnalysisQuery.data?.lineage_summary || {}).length === 0 && (
+                  <div className="text-sm text-muted">No lineage summary available yet.</div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <GraphExplorer filters={{ ...deferredTransactionFilters, limit: 5000 }} />
+        </div>
+      )}
+
+      {tab !== 'database' && tab !== 'graph' && (
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

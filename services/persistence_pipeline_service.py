@@ -414,9 +414,16 @@ def persist_pipeline_run(
                 "processed/entities.csv",
                 "processed/links.csv",
                 "processed/nodes.csv",
+                "processed/nodes.json",
                 "processed/edges.csv",
+                "processed/edges.json",
                 "processed/aggregated_edges.csv",
+                "processed/aggregated_edges.json",
+                "processed/derived_account_edges.csv",
+                "processed/derived_account_edges.json",
                 "processed/graph_manifest.json",
+                "processed/suspicious_findings.csv",
+                "processed/suspicious_findings.json",
                 "processed/i2_chart.anx",
             ]
         }

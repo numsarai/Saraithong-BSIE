@@ -212,9 +212,18 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
         "links.csv",
         "links.xlsx",
         "nodes.csv",
+        "nodes.json",
         "edges.csv",
+        "edges.json",
         "aggregated_edges.csv",
+        "aggregated_edges.json",
+        "derived_account_edges.csv",
+        "derived_account_edges.json",
         "graph_manifest.json",
+        "graph_analysis.json",
+        "graph_analysis.xlsx",
+        "suspicious_findings.csv",
+        "suspicious_findings.json",
         "reconciliation.csv",
         "reconciliation.xlsx",
         "i2_chart.anx",
@@ -241,6 +250,7 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
     nodes_df = pd.read_csv(processed_dir / "nodes.csv", dtype=str).fillna("")
     edges_df = pd.read_csv(processed_dir / "edges.csv", dtype=str).fillna("")
     aggregated_df = pd.read_csv(processed_dir / "aggregated_edges.csv", dtype=str).fillna("")
+    derived_df = pd.read_csv(processed_dir / "derived_account_edges.csv", dtype=str).fillna("")
     transactions_df = pd.read_csv(processed_dir / "transactions.csv", dtype=str).fillna("")
     transfer_out_df = pd.read_csv(processed_dir / "transfer_out.csv", dtype=str).fillna("")
 
@@ -252,6 +262,7 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
     assert "edge_type" in edges_df.columns
     assert "assertion_status" in edges_df.columns
     assert "transaction_count" in aggregated_df.columns
+    assert "edge_type" in derived_df.columns
     assert transactions_df.loc[0, "date"] == "01 03 2026"
     assert transactions_df.loc[0, "amount"] == "1,000"
     assert transfer_out_df.loc[0, "amount"] == "500"
@@ -262,9 +273,19 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
     assert meta["category_files"]["reconciliation"] == "reconciliation.csv"
     assert meta["category_files"]["ofx"] == "account.ofx"
     assert meta["category_files"]["nodes"] == "nodes.csv"
+    assert meta["category_files"]["nodes_json"] == "nodes.json"
     assert meta["category_files"]["edges"] == "edges.csv"
+    assert meta["category_files"]["edges_json"] == "edges.json"
     assert meta["category_files"]["aggregated_edges"] == "aggregated_edges.csv"
+    assert meta["category_files"]["aggregated_edges_json"] == "aggregated_edges.json"
+    assert meta["category_files"]["derived_account_edges"] == "derived_account_edges.csv"
+    assert meta["category_files"]["derived_account_edges_json"] == "derived_account_edges.json"
     assert meta["category_files"]["graph_manifest"] == "graph_manifest.json"
+    assert meta["category_files"]["graph_analysis"] == "graph_analysis.json"
+    assert meta["category_files"]["graph_analysis_workbook"] == "graph_analysis.xlsx"
+    assert meta["category_files"]["suspicious_findings"] == "suspicious_findings.csv"
+    assert meta["category_files"]["suspicious_findings_json"] == "suspicious_findings.json"
+    assert meta["graph_analysis"]["overview"]["transaction_rows"] == 4
     assert meta["original_filename"] == "input.xlsx"
 
 

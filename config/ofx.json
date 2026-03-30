@@ -1,0 +1,15 @@
+{
+  "bank_name": "OFX",
+  "sheet_index": 0,
+  "header_row": 0,
+  "format_type": "standard",
+  "currency": "THB",
+  "amount_mode": "signed",
+  "column_mapping": {},
+  "detection": {
+    "keywords": ["ofx"],
+    "strong_headers": ["DTPOSTED", "TRNAMT", "FITID", "TRNTYPE"],
+    "weak_headers": ["NAME", "MEMO", "ACCTID"],
+    "negative_headers": []
+  }
+}

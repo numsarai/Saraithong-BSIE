@@ -34,7 +34,10 @@ CONFIG_DIR = USER_DATA_DIR / "config" if getattr(sys, 'frozen', False) else BUIL
 
 # ── Runtime user data (writable, never inside the bundle) ─────────────────
 INPUT_DIR     = USER_DATA_DIR / "data" / "input"
+EVIDENCE_DIR  = USER_DATA_DIR / "data" / "evidence"
 OUTPUT_DIR    = USER_DATA_DIR / "data" / "output"
+EXPORTS_DIR   = USER_DATA_DIR / "data" / "exports"
+BACKUPS_DIR   = USER_DATA_DIR / "data" / "backups"
 OVERRIDES_DIR = USER_DATA_DIR / "overrides"
 PROFILES_DIR  = USER_DATA_DIR / "mapping_profiles"
 DB_PATH       = USER_DATA_DIR / "bsie.db"

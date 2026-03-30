@@ -54,7 +54,10 @@ class _JobHandler(logging.Handler):
 
 
 def run_pipeline_sync(job_id: str, upload_path_str: str, bank_key: str,
-                      account: str, name: str, confirmed_mapping: dict) -> None:
+                      account: str, name: str, confirmed_mapping: dict,
+                      file_id: str = "", parser_run_id: str = "",
+                      operator: str = "analyst", header_row: int = 0,
+                      sheet_name: str = "") -> None:
     """Core pipeline runner — called by both Celery task and direct thread."""
     import pandas as pd
     from pipeline.process_account import process_account
@@ -82,6 +85,9 @@ def run_pipeline_sync(job_id: str, upload_path_str: str, bank_key: str,
             subject_name=name,
             bank_key=bank_key,
             confirmed_mapping=confirmed_mapping,
+            file_id=file_id,
+            parser_run_id=parser_run_id,
+            operator=operator,
         )
 
         meta = {}
@@ -121,6 +127,13 @@ def run_pipeline_sync(job_id: str, upload_path_str: str, bank_key: str,
         log.info("Pipeline complete for job %s", job_id)
     except Exception as exc:
         log.exception("Pipeline failed for job %s: %s", job_id, exc)
+        if parser_run_id:
+            try:
+                from services.persistence_pipeline_service import mark_parser_run_failed
+
+                mark_parser_run_failed(parser_run_id, str(exc))
+            except Exception as mark_exc:
+                log.warning("Could not mark parser run failed: %s", mark_exc)
         db_update_job(job_id, status="error", error=str(exc))
     finally:
         _stop_timer.set()
@@ -130,8 +143,8 @@ def run_pipeline_sync(job_id: str, upload_path_str: str, bank_key: str,
 
 if _CELERY_AVAILABLE and celery_app:
     @celery_app.task(bind=True, name="bsie.run_pipeline", max_retries=0, acks_late=True)
-    def run_pipeline_task(self, job_id, upload_path_str, bank_key, account, name, confirmed_mapping):
-        run_pipeline_sync(job_id, upload_path_str, bank_key, account, name, confirmed_mapping)
+    def run_pipeline_task(self, job_id, upload_path_str, bank_key, account, name, confirmed_mapping, **kwargs):
+        run_pipeline_sync(job_id, upload_path_str, bank_key, account, name, confirmed_mapping, **kwargs)
 else:
     def run_pipeline_task(*args, **kwargs):
         run_pipeline_sync(*args, **kwargs)

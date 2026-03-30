@@ -5,7 +5,7 @@ description: Use this skill when the task is to process one or more bank stateme
 
 # bsie-pipeline
 
-Process bank statement Excel files into deterministic, traceable, normalized transaction output.
+Process bank statement files into deterministic, traceable, normalized transaction output and persist the result safely when BSIE runtime services are available.
 
 This skill is designed for financial investigation work. Accuracy, auditability, and controlled failure are more important than speed.
 
@@ -17,6 +17,12 @@ This skill is designed for financial investigation work. Accuracy, auditability,
 - Never silently drop ambiguous rows. Classify them as rejected, unknown, or needs-review with a reason.
 - Keep raw input, normalized output, and validation issues separate.
 - If confidence is low at any stage, return a structured warning instead of guessing.
+- When running inside BSIE, prefer the persisted workflow:
+  - create file evidence
+  - create parser run
+  - persist raw rows
+  - persist normalized transactions
+  - preserve lineage and audit readiness
 
 ## Inputs
 
@@ -38,6 +44,7 @@ Accepted file types:
 
 - `.xlsx`
 - `.xls`
+- `.ofx` when OFX parsing is explicitly enabled in the surrounding workflow
 
 Reject or escalate:
 
@@ -58,6 +65,7 @@ Return one structured result object with these sections:
 - `warnings`: non-fatal issues
 - `errors`: fatal issues
 - `summary`: row counts and key normalization statistics
+- `persistence`: file id, parser run id, account id, and batch id when the record is stored in BSIE
 
 Minimum transaction schema:
 
@@ -93,6 +101,7 @@ Rules for output construction:
 - Keep `description_raw` exactly as observed except for safe string conversion.
 - Use `null` for unknown structured values, not guessed placeholders.
 - Include `normalization_notes` for any inferred or repaired field.
+- If persisted, include stable lineage identifiers rather than only temporary row positions.
 
 ## Workflow
 

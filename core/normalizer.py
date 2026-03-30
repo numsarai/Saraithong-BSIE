@@ -600,7 +600,12 @@ def normalize(
         # ── Traceability ─────────────────────────────────────────────────────
         rec["_raw_idx"]    = idx
         rec["source_file"] = source_file or ""
-        rec["row_number"]  = int(idx) + 2  # +2: 1-indexed + header row
+        source_row_number = row.get("_source_row_number")
+        rec["row_number"] = int(source_row_number) if source_row_number not in (None, "", "nan") else int(idx) + 2
+        rec["_source_row_number"] = rec["row_number"]
+        rec["source_sheet"] = str(row.get("_source_sheet_name", "") or "")
+        rec["raw_row_json"] = row.get("_raw_row_json", "")
+        rec["parser_run_id"] = str(row.get("_parser_run_id", "") or "")
 
         # ── Direction (set for dual_account if still missing) ────────────────
         if "direction" not in rec:
@@ -626,8 +631,12 @@ def normalize(
 
     if not has_balance:
         result["balance"] = result["amount"].astype(float).cumsum().round(2)
+        result["balance_source"] = "INFERRED"
         logger.info("  Balance auto-calculated (running cumulative sum)")
     else:
+        result["balance_source"] = result["balance"].apply(
+            lambda value: "STATEMENT" if pd.notna(value) and str(value).strip() else "MISSING"
+        )
         logger.info("  Balance from bank statement column")
 
     logger.info(f"Normalized {len(result)} valid transaction rows [{fmt_type}]")

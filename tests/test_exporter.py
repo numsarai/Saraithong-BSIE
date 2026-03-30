@@ -206,10 +206,17 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
         "transfer_out.csv",
         "deposit.csv",
         "withdraw.csv",
+        "account.ofx",
         "entities.csv",
         "entities.xlsx",
         "links.csv",
         "links.xlsx",
+        "nodes.csv",
+        "edges.csv",
+        "aggregated_edges.csv",
+        "graph_manifest.json",
+        "reconciliation.csv",
+        "reconciliation.xlsx",
         "i2_chart.anx",
         "Subject_SCB_report.xlsx",
     ]
@@ -226,16 +233,64 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
         "Withdrawals",
         "Entities",
         "Links",
+        "Reconciliation",
     ]
 
     entities_df = pd.read_csv(processed_dir / "entities.csv", dtype=str).fillna("")
     links_df = pd.read_csv(processed_dir / "links.csv", dtype=str).fillna("")
+    nodes_df = pd.read_csv(processed_dir / "nodes.csv", dtype=str).fillna("")
+    edges_df = pd.read_csv(processed_dir / "edges.csv", dtype=str).fillna("")
+    aggregated_df = pd.read_csv(processed_dir / "aggregated_edges.csv", dtype=str).fillna("")
+    transactions_df = pd.read_csv(processed_dir / "transactions.csv", dtype=str).fillna("")
+    transfer_out_df = pd.read_csv(processed_dir / "transfer_out.csv", dtype=str).fillna("")
 
     assert "entity_label" in entities_df.columns
     assert "identity_value" in entities_df.columns
     assert "from_entity_id" in links_df.columns
     assert "to_entity_id" in links_df.columns
+    assert "node_type" in nodes_df.columns
+    assert "edge_type" in edges_df.columns
+    assert "assertion_status" in edges_df.columns
+    assert "transaction_count" in aggregated_df.columns
+    assert transactions_df.loc[0, "date"] == "01 03 2026"
+    assert transactions_df.loc[0, "amount"] == "1,000"
+    assert transfer_out_df.loc[0, "amount"] == "500"
 
     meta = json.loads((out_dir / "meta.json").read_text(encoding="utf-8"))
     assert meta["report_filename"] == "Subject_SCB_report.xlsx"
+    assert meta["reconciliation"]["status"] in {"VERIFIED", "PARTIAL", "FAILED", "INFERRED"}
+    assert meta["category_files"]["reconciliation"] == "reconciliation.csv"
+    assert meta["category_files"]["ofx"] == "account.ofx"
+    assert meta["category_files"]["nodes"] == "nodes.csv"
+    assert meta["category_files"]["edges"] == "edges.csv"
+    assert meta["category_files"]["aggregated_edges"] == "aggregated_edges.csv"
+    assert meta["category_files"]["graph_manifest"] == "graph_manifest.json"
     assert meta["original_filename"] == "input.xlsx"
+
+
+def test_export_package_removes_stale_report_variants_on_rerun(tmp_path):
+    source_file = tmp_path / "input.xlsx"
+    source_file.write_bytes(b"test")
+
+    account_dir = tmp_path / "1111111111"
+    processed_dir = account_dir / "processed"
+    processed_dir.mkdir(parents=True)
+    stale_one = processed_dir / "นาย ทวีกิจ แก้วฤทธิ์_SCB_report.xlsx"
+    stale_two = processed_dir / "นายทวีกิจ แก้วฤทธิ์_SCB_report.xlsx"
+    stale_one.write_text("old", encoding="utf-8")
+    stale_two.write_text("old", encoding="utf-8")
+
+    with patch.object(exporter, "BASE_OUTPUT", tmp_path):
+        out_dir = exporter.export_package(
+            transactions=_sample_transactions(),
+            entities=_sample_entities(),
+            links=_sample_links(),
+            account_number="1111111111",
+            bank="SCB",
+            original_file=source_file,
+            subject_name="นาย ทวีกิจ แก้วฤทธิ์",
+        )
+
+    processed_dir = out_dir / "processed"
+    assert (processed_dir / "นาย ทวีกิจ แก้วฤทธิ์_SCB_report.xlsx").exists()
+    assert not (processed_dir / "นายทวีกิจ แก้วฤทธิ์_SCB_report.xlsx").exists()

@@ -90,10 +90,17 @@ def _migrate_overrides(session):
         return
 
     migrated = 0
+    skipped = 0
     for entry in data:
         try:
+            account_number = str(entry.get("account_number", "") or "").strip()
+            transaction_id = str(entry.get("transaction_id", "") or "").strip()
+            if not account_number or not transaction_id:
+                log.warning("Skipping legacy override without account scope: %s", entry)
+                skipped += 1
+                continue
             row = Override(
-                transaction_id=entry["transaction_id"],
+                transaction_id=f"{account_number}::{transaction_id}",
                 override_from_account=entry.get("override_from_account", ""),
                 override_to_account=entry.get("override_to_account", ""),
                 override_reason=entry.get("override_reason", entry.get("reason", "")),
@@ -104,8 +111,9 @@ def _migrate_overrides(session):
             migrated += 1
         except Exception as e:
             log.warning(f"Skipping override entry: {e}")
+            skipped += 1
 
-    log.info(f"Migrated {migrated} overrides to DB.")
+    log.info(f"Migrated {migrated} overrides to DB ({skipped} skipped).")
 
 
 def _parse_dt(value) -> datetime | None:

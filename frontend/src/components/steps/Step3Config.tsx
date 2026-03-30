@@ -9,7 +9,7 @@ import { ChevronLeft, Play } from 'lucide-react'
 export function Step3Config() {
   const {
     bankKey, account, name, setBankKey, setAccount, setName,
-    banks, setBanks, tempFilePath, confirmedMapping, setJobId, setStep,
+    banks, setBanks, tempFilePath, fileId, headerRow, sheetName, confirmedMapping, setJobId, setParserRunId, setStep,
   } = useStore()
   const [loading, setLoading] = useState(false)
 
@@ -28,12 +28,17 @@ export function Step3Config() {
       if (!tempFilePath) { toast.error('No file uploaded — go back to step 1'); return }
       const data = await startProcess({
         temp_file_path: tempFilePath,
+        file_id: fileId,
         bank_key: bankKey,
         account,
         name,
         confirmed_mapping: confirmedMapping,
+        operator: 'analyst',
+        header_row: headerRow,
+        sheet_name: sheetName,
       })
       setJobId(data.job_id)
+      setParserRunId(data.parser_run_id || null)
       setStep(4)
     } catch (e: any) {
       toast.error(`Failed to start: ${e.message}`)

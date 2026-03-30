@@ -20,6 +20,7 @@ Steps:
   14. Export Account Package (CSV + Excel + meta.json)
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union
@@ -37,7 +38,10 @@ from core.classifier   import classify_dataframe
 from core.link_builder import build_links, extract_links
 from core.override_manager import apply_overrides_to_df
 from core.entity       import build_entities
+from core.reconciliation import reconcile_balances
 from core.exporter     import export_package
+from core.ofx_io       import parse_ofx_file
+from services.persistence_pipeline_service import persist_pipeline_run
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +60,7 @@ TRANSACTION_COLUMNS: List[str] = [
     "override_from_account", "override_to_account",
     "override_reason", "override_by", "override_timestamp",
     "balance",
+    "balance_source", "expected_balance", "balance_difference", "balance_check_status",
     "nlp_type_hint", "nlp_confidence", "nlp_best_name",
 ]
 
@@ -162,6 +167,9 @@ def process_account(
     bank_key: str = "",
     confirmed_mapping: Optional[Dict[str, Optional[str]]] = None,
     save_mapping_profile: bool = True,
+    file_id: str = "",
+    parser_run_id: str = "",
+    operator: str = "analyst",
 ) -> Path:
     """
     Run the full 14-step BSIE pipeline for one bank account statement.
@@ -186,6 +194,69 @@ def process_account(
     logger.info(f"  File    : {input_file.name}")
     logger.info(f"  Account : {subject_account}")
     logger.info("=" * 60)
+
+    if input_file.suffix.lower() == ".ofx" or bank_key.lower() == "ofx":
+        logger.info("[Step 1] Loading OFX")
+        norm_df = parse_ofx_file(input_file)
+        if norm_df.empty:
+            raise ValueError(f"No transactions found in OFX file: {input_file.name}")
+        raw_df = norm_df.copy()
+        raw_df["_source_sheet_name"] = "OFX"
+        raw_df["_source_row_number"] = [idx + 1 for idx in range(len(raw_df))]
+        raw_df["_raw_row_json"] = raw_df.apply(lambda row: json.dumps({k: str(v) for k, v in row.to_dict().items()}, ensure_ascii=False), axis=1)
+        raw_df["_parser_run_id"] = parser_run_id or ""
+        norm_df["subject_account"] = subject_account
+        norm_df["subject_name"] = subject_name
+        norm_df["bank"] = "OFX"
+        logger.info("[Step 2-8] OFX input already normalized to standard schema")
+        logger.info("[Step 9] NLP enrichment")
+        norm_df = _run_nlp(norm_df)
+        logger.info("[Step 10] Classifying transactions")
+        class_df = classify_dataframe(norm_df)
+        class_df = _assign_transaction_ids(class_df)
+        logger.info("[Step 11] Building links")
+        linked_df = build_links(class_df)
+        logger.info("[Step 12] Applying manual overrides")
+        final_df = apply_overrides_to_df(linked_df)
+        logger.info("[Step 13] Building entity list")
+        final_df = _enforce_schema(final_df)
+        reconciliation = reconcile_balances(final_df)
+        final_df = reconciliation.transactions
+        entities_df = build_entities(final_df)
+        links_df = extract_links(final_df)
+        logger.info("[Step 14] Exporting Account Package")
+        output_dir = export_package(
+            transactions=final_df,
+            entities=entities_df,
+            links=links_df,
+            account_number=subject_account,
+            bank="OFX",
+            original_file=input_file,
+            subject_name=subject_name,
+            reconciliation_df=reconciliation.reconciliation,
+            reconciliation_summary=reconciliation.summary,
+        )
+        if file_id and parser_run_id:
+            persist_pipeline_run(
+                file_id=file_id,
+                parser_run_id=parser_run_id,
+                source_file=input_file,
+                raw_df=raw_df,
+                transactions_df=final_df,
+                entities_df=entities_df,
+                bank_key="ofx",
+                bank_name="OFX",
+                subject_account=subject_account,
+                subject_name=subject_name,
+                confirmed_mapping=confirmed_mapping or {},
+                header_row=0,
+                sheet_name="OFX",
+                output_dir=output_dir,
+                operator=operator,
+            )
+        logger.info(f"Pipeline COMPLETE -> {output_dir}")
+        logger.info("=" * 60)
+        return output_dir
 
     # ── Step 1: Load Excel ────────────────────────────────────────────────
     logger.info("[Step 1] Loading Excel")
@@ -220,7 +291,26 @@ def process_account(
         logger.warning("  Bank detection failed — falling back to generic standard config")
 
     bank_config = load_config(_bank_cfg_key)
+    bank_config = {**bank_config}
+    if "sheet_index" not in bank_config or bank_config.get("sheet_index") is None:
+        bank_config["sheet_index"] = 0
+    bank_config["header_row"] = _header_row
+    try:
+        preview_book = pd.ExcelFile(input_file, engine="openpyxl")
+        if _sheet_name in preview_book.sheet_names:
+            bank_config["sheet_index"] = preview_book.sheet_names.index(_sheet_name)
+    except Exception:
+        pass
     raw_df = load_excel(input_file, bank_config)
+    raw_df = raw_df.copy()
+    raw_df["_source_sheet_name"] = _sheet_name
+    raw_df["_source_row_number"] = [int(_header_row) + idx + 2 for idx in range(len(raw_df))]
+    raw_df["_raw_row_json"] = raw_df.apply(
+        lambda row: json.dumps({str(k): ("" if pd.isna(v) else str(v)) for k, v in row.to_dict().items() if not str(k).startswith("_")},
+                               ensure_ascii=False),
+        axis=1,
+    )
+    raw_df["_parser_run_id"] = parser_run_id or ""
 
     # ── Step 3: Detect columns ────────────────────────────────────────────
     logger.info("[Step 3] Detecting columns")
@@ -274,7 +364,7 @@ def process_account(
 
     # ── Step 6: Normalize data ────────────────────────────────────────────
     logger.info("[Step 6] Normalizing data")
-    norm_df = normalize(raw_df, _effective_config, subject_account, subject_name)
+    norm_df = normalize(raw_df, _effective_config, subject_account, subject_name, source_file=input_file.name)
 
     # ── Steps 7+8 are inside normalize (account parsing + description extraction)
     logger.info("[Step 7-8] Account parsing + description extraction (done in normalize)")
@@ -323,11 +413,13 @@ def process_account(
 
     # ── Step 12: Apply overrides ──────────────────────────────────────────
     logger.info("[Step 12] Applying manual overrides")
-    final_df = apply_overrides_to_df(linked_df)
+    final_df = apply_overrides_to_df(linked_df, account_number=subject_account)
 
     # ── Step 13: Build entities ───────────────────────────────────────────
     logger.info("[Step 13] Building entity list")
     final_df   = _enforce_schema(final_df)
+    reconciliation = reconcile_balances(final_df)
+    final_df = reconciliation.transactions
     entities_df = build_entities(final_df)
     links_df    = extract_links(final_df)
 
@@ -337,10 +429,11 @@ def process_account(
     # Save confirmed mapping as a profile for future reuse
     if save_mapping_profile and confirmed_mapping:
         bank_name = bank_config.get("bank_name", _bank_cfg_key.upper())
-        save_profile(bank_name, list(raw_df.columns), confirmed_mapping)
+        learned_columns = [col for col in raw_df.columns if not str(col).startswith("_")]
+        save_profile(bank_name, learned_columns, confirmed_mapping)
         if _bank_cfg_key and _bank_cfg_key.lower() not in {"", "generic"}:
             try:
-                save_bank_fingerprint(_bank_cfg_key, list(raw_df.columns))
+                save_bank_fingerprint(_bank_cfg_key, learned_columns)
             except Exception as exc:
                 logger.warning("Could not save bank fingerprint (non-fatal): %s", exc)
 
@@ -352,7 +445,28 @@ def process_account(
         bank=bank_config.get("bank_name", _bank_cfg_key.upper()),
         original_file=input_file,
         subject_name=subject_name,
+        reconciliation_df=reconciliation.reconciliation,
+        reconciliation_summary=reconciliation.summary,
     )
+
+    if file_id and parser_run_id:
+        persist_pipeline_run(
+            file_id=file_id,
+            parser_run_id=parser_run_id,
+            source_file=input_file,
+            raw_df=raw_df,
+            transactions_df=final_df,
+            entities_df=entities_df,
+            bank_key=_bank_cfg_key,
+            bank_name=bank_config.get("bank_name", _bank_cfg_key.upper()),
+            subject_account=subject_account,
+            subject_name=subject_name,
+            confirmed_mapping=confirmed_mapping or {},
+            header_row=_header_row,
+            sheet_name=_sheet_name,
+            output_dir=output_dir,
+            operator=operator,
+        )
 
     logger.info(f"Pipeline COMPLETE -> {output_dir}")
     logger.info("=" * 60)

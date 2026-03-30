@@ -13,8 +13,8 @@ export function Step1Upload() {
     const file = accepted[0]
     if (!file) return
     const ext = file.name.split('.').pop()?.toLowerCase()
-    if (!['xlsx', 'xls'].includes(ext || '')) {
-      toast.error('Only .xlsx or .xls files are accepted')
+    if (!['xlsx', 'xls', 'ofx'].includes(ext || '')) {
+      toast.error('Only .xlsx, .xls, or .ofx files are accepted')
       return
     }
     setUploading(true)
@@ -35,6 +35,9 @@ export function Step1Upload() {
     accept: {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'application/vnd.ms-excel': ['.xls'],
+      'application/x-ofx': ['.ofx'],
+      'application/ofx': ['.ofx'],
+      'text/plain': ['.ofx'],
     },
     multiple: false,
     disabled: uploading,
@@ -43,7 +46,7 @@ export function Step1Upload() {
   return (
     <div className="max-w-xl">
       <h2 className="text-lg font-bold mb-1 text-text">Upload Bank Statement</h2>
-      <p className="text-muted text-sm mb-6">Supports Excel files from all major Thai banks — SCB, KBANK, BBL, KTB, BAY, TTB, GSB, BAAC.</p>
+      <p className="text-muted text-sm mb-6">Supports Thai bank Excel statements and standard bank-account OFX files.</p>
 
       <div
         {...getRootProps()}
@@ -62,11 +65,11 @@ export function Step1Upload() {
         ) : (
           <div className="flex flex-col items-center gap-3">
             <FileSpreadsheet size={44} className="text-muted" />
-            <p className="text-text2 font-medium">Drop your Excel file here</p>
+            <p className="text-text2 font-medium">Drop your statement file here</p>
             <p className="text-muted text-sm">
               or <span className="text-accent underline cursor-pointer">browse</span> to select
             </p>
-            <p className="text-muted text-xs mt-1">.xlsx / .xls · All Thai banks supported</p>
+            <p className="text-muted text-xs mt-1">.xlsx / .xls / .ofx · Investigation-ready import</p>
           </div>
         )}
       </div>

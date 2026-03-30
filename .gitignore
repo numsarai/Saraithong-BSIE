@@ -33,6 +33,7 @@ Thumbs.db
 .idea/
 
 # Local settings
+.env
 .claude/settings.local.json
 
 # PyInstaller

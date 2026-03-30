@@ -24,7 +24,10 @@ from typing import Optional, Union, Tuple
 import pandas as pd
 
 from utils.date_utils import format_date_range
-from core.export_anx import export_anx
+from core.export_anx import export_anx_from_graph
+from core.graph_export import write_graph_exports
+from core.ofx_io import export_ofx
+from core.reconciliation import reconcile_balances
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,10 @@ TRANSACTION_EXPORT_COLUMNS = [
     "amount",
     "currency",
     "balance",
+    "balance_source",
+    "expected_balance",
+    "balance_difference",
+    "balance_check_status",
     "subject_account",
     "subject_name",
     "counterparty_account",
@@ -113,6 +120,23 @@ def _safe_filename(name: str) -> str:
     return s or "unknown"
 
 
+def _cleanup_stale_report_files(processed_dir: Path, bank: str, keep_filename: str) -> None:
+    """Remove older report workbooks for the same bank so reruns keep one canonical file."""
+    keep_path = processed_dir / keep_filename
+    bank_suffix = f"_{_safe_filename(bank)}_report.xlsx"
+    for candidate in processed_dir.iterdir():
+        if not candidate.is_file() or candidate.suffix.lower() != ".xlsx":
+            continue
+        if candidate == keep_path:
+            continue
+        if candidate.name == "report.xlsx" or candidate.name.endswith(bank_suffix):
+            try:
+                candidate.unlink()
+                logger.info("  Removed stale report file: %s", candidate.name)
+            except Exception as exc:
+                logger.warning("  Could not remove stale report file %s: %s", candidate.name, exc)
+
+
 def _ensure_dirs(account_number: str) -> Tuple[Path, Path, Path]:
     """
     Create output directory structure for an account.
@@ -144,6 +168,63 @@ def _reorder_columns(df: pd.DataFrame, preferred_columns: list[str]) -> pd.DataF
     available = [c for c in preferred_columns if c in df.columns]
     extras = [c for c in df.columns if c not in available]
     return df[available + extras].copy()
+
+
+def _format_export_date(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    for splitter in ("T", " "):
+        if splitter in text:
+            text = text.split(splitter, 1)[0]
+            break
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        year, month, day = text.split("-")
+        return f"{day} {month} {year}"
+    if re.fullmatch(r"\d{1,2}/\d{1,2}/\d{4}", text):
+        day, month, year = text.split("/")
+        return f"{day.zfill(2)} {month.zfill(2)} {year}"
+    return text
+
+
+def _format_export_amount(value: object, *, absolute: bool = False) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        amount = float(text.replace(",", ""))
+    except ValueError:
+        return text
+    if absolute:
+        amount = abs(amount)
+    if float(amount).is_integer():
+        return f"{int(amount):,}"
+    return f"{amount:,.2f}"
+
+
+def _format_transaction_frame_for_export(df: pd.DataFrame, *, absolute_amount: bool = True) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+    formatted = df.copy()
+    if "date" in formatted.columns:
+        formatted["date"] = formatted["date"].map(_format_export_date)
+    for money_col in ("amount", "balance", "expected_balance", "balance_difference"):
+        if money_col in formatted.columns:
+            formatted[money_col] = formatted[money_col].map(
+                lambda value, col=money_col: _format_export_amount(value, absolute=absolute_amount if col == "amount" else False)
+            )
+    return formatted
+
+
+def _format_links_frame_for_export(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+    formatted = df.copy()
+    if "date" in formatted.columns:
+        formatted["date"] = formatted["date"].map(_format_export_date)
+    if "amount" in formatted.columns:
+        formatted["amount"] = formatted["amount"].map(lambda value: _format_export_amount(value, absolute=True))
+    return formatted
 
 
 def _prepare_transaction_exports(transactions: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
@@ -231,6 +312,7 @@ def _write_transactions_multisheet(
     transaction_categories: dict[str, pd.DataFrame],
     entities: pd.DataFrame,
     links: pd.DataFrame,
+    reconciliation: pd.DataFrame,
     processed_dir: Path,
     report_filename: str = "report.xlsx",
 ) -> Path:
@@ -248,6 +330,7 @@ def _write_transactions_multisheet(
         "Withdrawals": transaction_categories["withdraw"],
         "Entities":     entities,
         "Links":        links,
+        "Reconciliation": reconciliation,
     }
 
     with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
@@ -278,6 +361,8 @@ def export_package(
     original_file: Union[str, Path],
     subject_name: str = "",
     job_id: Optional[str] = None,
+    reconciliation_df: Optional[pd.DataFrame] = None,
+    reconciliation_summary: Optional[dict] = None,
 ) -> Path:
     """
     Export the full Account Package to disk.
@@ -300,7 +385,7 @@ def export_package(
 
     # 1. Copy original file
     orig_path = Path(original_file)
-    dest_orig = raw_dir / "original.xlsx"
+    dest_orig = raw_dir / f"original{orig_path.suffix.lower() or '.dat'}"
     try:
         shutil.copy2(orig_path, dest_orig)
         logger.info(f"Copied original: {dest_orig}")
@@ -311,23 +396,63 @@ def export_package(
     transactions_export, transaction_categories = _prepare_transaction_exports(transactions)
     entities_export = _prepare_entities_export(entities)
     links_export = _prepare_links_export(links, entities_export, transactions_export)
+    if reconciliation_df is None or reconciliation_summary is None:
+        reconciliation_result = reconcile_balances(transactions_export)
+        reconciliation_export = reconciliation_result.reconciliation
+        reconciliation_summary = reconciliation_result.summary
+        transactions_export = reconciliation_result.transactions
+        transaction_categories = {
+            export_key: transactions_export[transactions_export["transaction_type"] == rule["transaction_type"]].copy().reset_index(drop=True)
+            for export_key, rule in TRANSACTION_CATEGORY_RULES.items()
+        }
+    else:
+        reconciliation_export = reconciliation_df.copy()
 
-    transactions_export.to_csv(processed_dir / "transactions.csv", index=False, encoding="utf-8-sig")
+    transactions_display = _format_transaction_frame_for_export(transactions_export, absolute_amount=True)
+    transaction_categories_display = {
+        export_key: _format_transaction_frame_for_export(df, absolute_amount=True)
+        for export_key, df in transaction_categories.items()
+    }
+    links_display = _format_links_frame_for_export(links_export)
+    reconciliation_display = _format_transaction_frame_for_export(reconciliation_export, absolute_amount=False)
+
+    transactions_display.to_csv(processed_dir / "transactions.csv", index=False, encoding="utf-8-sig")
     logger.info("  Exported: transactions.csv")
 
-    for export_key, df in transaction_categories.items():
+    for export_key, df in transaction_categories_display.items():
         _write_csv_and_excel(df, processed_dir, export_key)
+
+    ofx_path = processed_dir / "account.ofx"
+    ofx_path.write_text(
+        export_ofx(transactions_export, account_number=account_number, bank=bank, subject_name=subject_name),
+        encoding="utf-8",
+    )
+    logger.info("  Exported: account.ofx")
 
     # 3. Export entities CSV + Excel
     _write_csv_and_excel(entities_export, processed_dir, "entities")
 
     # 4. Export links CSV
-    _write_csv_and_excel(links_export, processed_dir, "links")
+    _write_csv_and_excel(links_display, processed_dir, "links")
+
+    # 4a. Export graph CSVs + manifest using the shared deterministic schema
+    graph_batch_identity = f"LEGACY:{account_number}"
+    graph_batch_label = f"{bank or 'Statement'} {account_number}".strip()
+    graph_bundle = write_graph_exports(
+        processed_dir,
+        transactions=transactions_export,
+        batch_identity=graph_batch_identity,
+        batch_label=graph_batch_label,
+    )
+    logger.info("  Exported: nodes.csv + edges.csv + aggregated_edges.csv + graph_manifest.json")
+
+    # 4a. Export reconciliation CSV + Excel
+    _write_csv_and_excel(reconciliation_display, processed_dir, "reconciliation")
 
     # 4b. Export i2 Analyst's Notebook XML (.anx)
     anx_path = processed_dir / "i2_chart.anx"
     try:
-        export_anx(entities, transactions, anx_path)
+        export_anx_from_graph(graph_bundle["nodes_df"], graph_bundle["edges_df"], anx_path)
     except Exception as e:
         logger.warning(f"  ANX export failed (non-fatal): {e}")
 
@@ -337,11 +462,13 @@ def export_package(
         report_name = f"{_safe_filename(subject_name)}_{_safe_filename(bank)}_report.xlsx"
     else:
         report_name = "report.xlsx"
+    _cleanup_stale_report_files(processed_dir, bank, report_name)
     report_path = _write_transactions_multisheet(
-        transactions_export,
-        transaction_categories,
+        transactions_display,
+        transaction_categories_display,
         entities_export,
-        links_export,
+        links_display,
+        reconciliation_display,
         processed_dir,
         report_filename=report_name,
     )
@@ -350,6 +477,8 @@ def export_package(
     meta = _build_meta(transactions, account_number, bank)
     meta["original_filename"] = orig_path.name
     meta["report_filename"] = report_path.name
+    meta["reconciliation"] = reconciliation_summary or {}
+    meta["graph_manifest"] = graph_bundle["manifest"]
     meta["category_files"] = {
         "all_transactions": "transactions.csv",
         "transfer_in": "transfer_in.csv",
@@ -358,6 +487,12 @@ def export_package(
         "withdraw": "withdraw.csv",
         "entities": "entities.csv",
         "links": "links.csv",
+        "nodes": "nodes.csv",
+        "edges": "edges.csv",
+        "aggregated_edges": "aggregated_edges.csv",
+        "graph_manifest": "graph_manifest.json",
+        "reconciliation": "reconciliation.csv",
+        "ofx": "account.ofx",
         "anx": "i2_chart.anx",
     }
     meta["category_counts"] = {
@@ -365,6 +500,9 @@ def export_package(
         "transfer_out": len(transaction_categories["transfer_out"]),
         "deposit": len(transaction_categories["deposit"]),
         "withdraw": len(transaction_categories["withdraw"]),
+        "graph_nodes": int(graph_bundle["manifest"].get("node_count", 0)),
+        "graph_edges": int(graph_bundle["manifest"].get("edge_count", 0)),
+        "graph_aggregated_edges": int(graph_bundle["manifest"].get("aggregated_edge_count", 0)),
     }
     meta_path = account_dir / "meta.json"
     with meta_path.open("w", encoding="utf-8") as f:

@@ -15,6 +15,7 @@ vi.mock('@/api', () => ({
   startProcess: vi.fn(async () => ({ job_id: 'job-1' })),
   getJobStatus: vi.fn(async () => ({ status: 'queued', log: [] })),
   getResults: vi.fn(async () => ({ items: [], total: 0 })),
+  processFolder: vi.fn(async () => ({ total_files: 0, processed_files: 0, skipped_files: 0, error_files: 0, files: [], accounts: [] })),
   getBank: vi.fn(async () => ({ key: 'scb', bank_name: 'SCB' })),
   createBank: vi.fn(async () => ({ status: 'ok' })),
   deleteBank: vi.fn(async () => ({ status: 'ok' })),

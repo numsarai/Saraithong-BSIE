@@ -26,12 +26,28 @@ logger = logging.getLogger(__name__)
 
 # ── Public API ─────────────────────────────────────────────────────────────
 
+def _make_override_key(transaction_id: str, account_number: str = "") -> str:
+    transaction_id = str(transaction_id or "").strip()
+    account_number = str(account_number or "").strip()
+    if account_number:
+        return f"{account_number}::{transaction_id}"
+    return transaction_id
+
+
+def _split_override_key(key: str) -> tuple[str, str]:
+    text = str(key or "").strip()
+    if "::" in text:
+        account_number, transaction_id = text.split("::", 1)
+        return account_number.strip(), transaction_id.strip()
+    return "", text
+
 def add_override(
     transaction_id: str,
     from_account: str,
     to_account: str,
     reason: str = "",
     override_by: str = "analyst",
+    account_number: str = "",
 ) -> Dict:
     """
     Add or update a manual relationship override.
@@ -43,9 +59,10 @@ def add_override(
     from sqlmodel import select
 
     now = datetime.now(timezone.utc)
+    override_key = _make_override_key(transaction_id, account_number)
 
     with get_session() as session:
-        statement = select(Override).where(Override.transaction_id == transaction_id)
+        statement = select(Override).where(Override.transaction_id == override_key)
         existing = session.exec(statement).first()
 
         if existing:
@@ -58,11 +75,13 @@ def add_override(
             session.commit()
             session.refresh(existing)
             result = existing.to_dict()
-            logger.info(f"Updated override for {transaction_id}")
+            logger.info(f"Updated override for {override_key}")
+            result["account_number"] = account_number
+            result["transaction_id"] = transaction_id
             return result
 
         row = Override(
-            transaction_id=transaction_id,
+            transaction_id=override_key,
             override_from_account=from_account,
             override_to_account=to_account,
             override_reason=reason,
@@ -73,22 +92,25 @@ def add_override(
         session.commit()
         session.refresh(row)
         result = row.to_dict()
-        logger.info(f"Added override for {transaction_id}")
+        logger.info(f"Added override for {override_key}")
+        result["account_number"] = account_number
+        result["transaction_id"] = transaction_id
         return result
 
 
-def remove_override(transaction_id: str) -> bool:
+def remove_override(transaction_id: str, account_number: str = "") -> bool:
     """Remove an override by transaction_id. Returns True if removed."""
     from database import get_session, Override
     from sqlmodel import select
 
+    override_key = _make_override_key(transaction_id, account_number)
     with get_session() as session:
-        statement = select(Override).where(Override.transaction_id == transaction_id)
+        statement = select(Override).where(Override.transaction_id == override_key)
         existing = session.exec(statement).first()
         if existing:
             session.delete(existing)
             session.commit()
-            logger.info(f"Removed override for {transaction_id}")
+            logger.info(f"Removed override for {override_key}")
             return True
     return False
 
@@ -100,23 +122,34 @@ def get_all_overrides() -> List[Dict]:
 
     with get_session() as session:
         all_overrides = session.exec(select(Override)).all()
-        return [o.to_dict() for o in all_overrides]
+        rows: list[Dict] = []
+        for override in all_overrides:
+            payload = override.to_dict()
+            account_number, transaction_id = _split_override_key(payload["transaction_id"])
+            payload["account_number"] = account_number
+            payload["transaction_id"] = transaction_id
+            rows.append(payload)
+        return rows
 
 
-def get_override(transaction_id: str) -> Optional[Dict]:
+def get_override(transaction_id: str, account_number: str = "") -> Optional[Dict]:
     """Return override for a specific transaction_id or None."""
     from database import get_session, Override
     from sqlmodel import select
 
+    override_key = _make_override_key(transaction_id, account_number)
     with get_session() as session:
-        statement = select(Override).where(Override.transaction_id == transaction_id)
+        statement = select(Override).where(Override.transaction_id == override_key)
         row = session.exec(statement).first()
         if row:
-            return row.to_dict()
+            payload = row.to_dict()
+            payload["account_number"] = account_number
+            payload["transaction_id"] = transaction_id
+            return payload
     return None
 
 
-def apply_overrides_to_df(df: pd.DataFrame) -> pd.DataFrame:
+def apply_overrides_to_df(df: pd.DataFrame, account_number: str = "") -> pd.DataFrame:
     """
     Apply all stored overrides to a transaction DataFrame.
 
@@ -143,7 +176,15 @@ def apply_overrides_to_df(df: pd.DataFrame) -> pd.DataFrame:
                 df[col] = "" if col != "is_overridden" else False
         return df
 
-    override_map: Dict[str, Dict] = {o["transaction_id"]: o for o in overrides}
+    override_map: Dict[str, Dict] = {}
+    for override in overrides:
+        scoped_account = str(override.get("account_number") or "").strip()
+        if account_number:
+            if scoped_account != account_number:
+                continue
+        elif scoped_account:
+            continue
+        override_map[str(override["transaction_id"])] = override
     df = df.copy()
 
     # Initialise override columns

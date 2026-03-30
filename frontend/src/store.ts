@@ -2,12 +2,14 @@ import { create } from 'zustand'
 import { evaluateReviewGate } from '@/lib/reviewGate'
 
 export type Tab = 'transactions' | 'entities' | 'links'
-export type Page = 'main' | 'bank-manager'
+export type Page = 'main' | 'bank-manager' | 'bulk-intake' | 'investigation'
 
 export interface AppState {
   page: Page
   step: number
   jobId: string | null
+  fileId: string | null
+  parserRunId: string | null
   tempFilePath: string | null
   fileName: string | null
   detectedBank: any
@@ -32,6 +34,7 @@ export interface AppState {
   txnPage: number
   txnTotal: number
   banks: any[]
+  bulkSummary: any | null
   setStep: (step: number) => void
   setUploadResult: (data: any, filename: string) => void
   setConfirmedMapping: (mapping: Record<string, string | null>) => void
@@ -41,11 +44,13 @@ export interface AppState {
   setAccount: (account: string) => void
   setName: (name: string) => void
   setJobId: (id: string) => void
+  setParserRunId: (id: string | null) => void
   setResults: (results: any) => void
   setCurrentTab: (tab: Tab) => void
   setTxnPage: (page: number) => void
   setTxnTotal: (total: number) => void
   setBanks: (banks: any[]) => void
+  setBulkSummary: (summary: any | null) => void
   setPage: (page: Page) => void
   reset: () => void
 }
@@ -54,6 +59,8 @@ const initialState = {
   page: 'main' as Page,
   step: 1,
   jobId: null,
+  fileId: null,
+  parserRunId: null,
   tempFilePath: null,
   fileName: null,
   detectedBank: null,
@@ -78,6 +85,7 @@ const initialState = {
   txnPage: 1,
   txnTotal: 0,
   banks: [],
+  bulkSummary: null,
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -107,6 +115,7 @@ export const useStore = create<AppState>((set) => ({
 
     return {
       tempFilePath: data.temp_file_path,
+      fileId: data.file_id || null,
       fileName: filename,
       detectedBank,
       suggestedMapping: confirmedMapping,
@@ -123,6 +132,8 @@ export const useStore = create<AppState>((set) => ({
       isBlockedCase: gate.isBlockedCase,
       canProceedToConfig: gate.canProceedToConfig,
       bankKey: detectedBank?.key || '',
+      account: data.account_guess || '',
+      name: data.name_guess || '',
     }
   }),
   setConfirmedMapping: (mapping) => set((state) => {
@@ -177,11 +188,13 @@ export const useStore = create<AppState>((set) => ({
   setAccount: (account) => set({ account }),
   setName: (name) => set({ name }),
   setJobId: (jobId) => set({ jobId }),
+  setParserRunId: (parserRunId) => set({ parserRunId }),
   setResults: (results) => set({ results }),
   setCurrentTab: (currentTab) => set({ currentTab }),
   setTxnPage: (txnPage) => set({ txnPage }),
   setTxnTotal: (txnTotal) => set({ txnTotal }),
   setBanks: (banks) => set({ banks }),
+  setBulkSummary: (bulkSummary) => set({ bulkSummary }),
   setPage: (page) => set({ page }),
   reset: () => set(initialState),
 }))

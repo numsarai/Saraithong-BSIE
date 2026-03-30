@@ -1,30 +1,15 @@
 """
 export_anx.py
 -------------
-Export BSIE data to IBM i2 Analyst's Notebook XML format (.anx).
+Export BSIE graph data to IBM i2 Analyst's Notebook XML format (.anx).
 
-The output file can be imported into i2 directly via:
-  Data → Import from File → Import XML → select the .anx file
-  ✔ Check "Layout Imported Items"
+The ANX export intentionally uses a simplified, analyst-friendly subgraph:
+- includes investigation nodes such as accounts, entities, cash, and unknowns
+- includes relationship edges such as flow, ownership, and reviewed/suggested matches
+- excludes aggregate rows and bookkeeping-only lineage edges from the chart surface
 
-Format: non-rigorous transformed XML (i2 ANB 9+).
-  - Rigorous="false"  → i2 auto-merges entities with the same Identity
-  - IdReferenceLinking="false" → no xsd:ID/IDREF requirements
-
-Mapping:
-  BSIE entity_type  →  i2 IconStyle Type
-  ─────────────────────────────────────
-  ACCOUNT           →  BankAccount
-  PARTIAL_ACCOUNT   →  BankAccount
-  NAME              →  Person
-  UNKNOWN           →  Person
-
-  BSIE transaction  →  i2 Link
-  ─────────────────────────────────────
-  from_account      →  End1Id   (money source)
-  to_account        →  End2Id   (money destination)
-  amount + date     →  Label
-  transaction_id    →  Description (full detail)
+This keeps the ANX chart practical for downstream manual review while preserving
+the richer CSV graph exports for machine processing.
 """
 from __future__ import annotations
 
@@ -35,81 +20,162 @@ from typing import Union
 
 import pandas as pd
 
+from core.graph_export import build_graph_exports
+
 logger = logging.getLogger(__name__)
 
-# ── i2 icon type mapping ──────────────────────────────────────────────────
+
+ANX_EDGE_TYPES = {"OWNS", "SENT_TO", "RECEIVED_FROM", "MATCHED_TO", "POSSIBLE_SAME_AS"}
+
 _ICON_TYPE: dict[str, str] = {
-    "ACCOUNT":          "BankAccount",
-    "PARTIAL_ACCOUNT":  "BankAccount",
-    "NAME":             "Person",
-    "UNKNOWN":          "Person",
+    "Account": "BankAccount",
+    "PartialAccount": "BankAccount",
+    "Entity": "Person",
+    "Unknown": "Person",
+    "Cash": "Person",
+    "Bank": "Person",
 }
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────
+def _description_text(parts: list[tuple[str, object]]) -> str:
+    return " | ".join(f"{key}:{value}" for key, value in parts if str(value or "").strip())
 
-def _entity_identity(row: pd.Series) -> str:
+
+def _graph_nodes_for_anx(nodes: pd.DataFrame, edges: pd.DataFrame) -> pd.DataFrame:
+    if nodes.empty or edges.empty:
+        return pd.DataFrame(columns=nodes.columns)
+    used_node_ids = set(edges["from_node_id"].astype(str).tolist()) | set(edges["to_node_id"].astype(str).tolist())
+    return nodes[nodes["node_id"].astype(str).isin(used_node_ids)].copy()
+
+
+def _graph_edges_for_anx(edges: pd.DataFrame) -> pd.DataFrame:
+    if edges.empty:
+        return pd.DataFrame(columns=edges.columns)
+    mask = (
+        edges["edge_type"].astype(str).isin(ANX_EDGE_TYPES)
+        & (edges["aggregation_level"].astype(str) != "aggregate")
+        & ~(
+            (edges["from_node_id"].astype(str) == "UNKNOWN_COUNTERPARTY")
+            & (edges["to_node_id"].astype(str) == "UNKNOWN_COUNTERPARTY")
+        )
+    )
+    return edges[mask].copy()
+
+
+def export_anx_from_graph(
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    output_path: Union[str, Path],
+) -> Path:
     """
-    Unique key used by i2 for entity deduplication.
-    Use account_number when available, else name, else 'UNKNOWN'.
+    Generate an i2 Analyst's Notebook XML (.anx) file from graph-export CSV frames.
     """
-    acct = str(row.get("account_number", "") or "").strip()
-    if acct:
-        return acct
-    name = str(row.get("name", "") or "").strip()
-    return name or "UNKNOWN"
+    output_path = Path(output_path)
+    filtered_edges = _graph_edges_for_anx(edges).fillna("")
+    filtered_nodes = _graph_nodes_for_anx(nodes.fillna(""), filtered_edges)
 
+    chart = ET.Element("Chart", {"IdReferenceLinking": "false", "Rigorous": "false"})
+    collection = ET.SubElement(chart, "ChartItemCollection")
 
-def _entity_label(row: pd.Series) -> str:
-    """
-    Display label shown on the chart node.
-    Format: "Name (account)" if both known, else whichever is available.
-    """
-    name = str(row.get("name", "") or "").strip()
-    acct = str(row.get("account_number", "") or "").strip()
-    if name and acct:
-        return f"{name} ({acct})"
-    return name or acct or "UNKNOWN"
+    for _, row in filtered_nodes.sort_values(["node_type", "label", "node_id"]).iterrows():
+        node_id = str(row.get("node_id", "") or "").strip()
+        if not node_id:
+            continue
+        label = str(row.get("label", "") or node_id).strip()
+        node_type = str(row.get("node_type", "Entity") or "Entity")
+        icon_type = _ICON_TYPE.get(node_type, "Person")
 
+        item = ET.SubElement(collection, "ChartItem", {"Label": label})
+        end = ET.SubElement(item, "End")
+        entity_el = ET.SubElement(
+            end,
+            "Entity",
+            {
+                "EntityId": node_id,
+                "Identity": node_id,
+                "LabelIsIdentity": "false",
+            },
+        )
+        icon = ET.SubElement(entity_el, "Icon")
+        ET.SubElement(icon, "IconStyle", {"Type": icon_type})
 
-def _resolve_end_id(account: str) -> str:
-    """
-    Convert a from_account/to_account value to an i2 EntityId.
+        desc_text = _description_text(
+            [
+                ("NodeType", node_type),
+                ("Identity", row.get("identity_value")),
+                ("Account", row.get("account_number")),
+                ("Partial", row.get("partial_account")),
+                ("Entity", row.get("entity_name")),
+                ("Bank", row.get("bank_name")),
+                ("Review", row.get("review_status")),
+                ("Confidence", row.get("confidence_score")),
+                ("Files", row.get("file_ids")),
+                ("ParserRuns", row.get("parser_run_ids")),
+                ("Rows", row.get("source_row_numbers")),
+            ]
+        )
+        if desc_text:
+            desc = ET.SubElement(item, "Description")
+            desc.text = desc_text
 
-    link_builder.py stores partial accounts as "PARTIAL:1234".
-    The entity table stores them as "1234" (without prefix).
-    Strip the prefix so End1Id/End2Id match the Entity's EntityId.
-    """
-    account = str(account or "").strip()
-    if account.startswith("PARTIAL:"):
-        return account[len("PARTIAL:"):]
-    return account or "UNKNOWN"
+    for _, row in filtered_edges.sort_values(["edge_type", "from_node_id", "to_node_id", "edge_id"]).iterrows():
+        from_id = str(row.get("from_node_id", "") or "").strip()
+        to_id = str(row.get("to_node_id", "") or "").strip()
+        if not from_id or not to_id:
+            continue
 
+        label = str(row.get("label", "") or row.get("edge_type", "Link")).strip()
+        item = ET.SubElement(collection, "ChartItem", {"Label": label})
+        link_el = ET.SubElement(item, "Link", {"End1Id": from_id, "End2Id": to_id})
+        ET.SubElement(
+            link_el,
+            "LinkStyle",
+            {
+                "ArrowStyle": "ArrowOnHead",
+                "MlStyle": "MultiplicityMultiple",
+                "Type": "Link",
+            },
+        )
 
-def _link_label(row: pd.Series) -> str:
-    """Short link label: '฿5,000.00 | 2024-01-15'"""
-    amount = row.get("amount", "")
-    date   = str(row.get("date", "") or "")[:10]
-    try:
-        amount_str = f"\u0e3f{float(amount):,.2f}"   # ฿ Thai baht symbol
-    except (ValueError, TypeError):
-        amount_str = str(amount) if amount != "" else "?"
-    parts = [p for p in [amount_str, date] if p]
-    return " | ".join(parts) or "Transaction"
+        desc_text = _description_text(
+            [
+                ("EdgeType", row.get("edge_type")),
+                ("Date", row.get("date")),
+                ("Time", row.get("time")),
+                ("Amount", row.get("amount_display") or row.get("amount")),
+                ("Confidence", row.get("confidence_score")),
+                ("Review", row.get("review_status")),
+                ("Assertion", row.get("assertion_status")),
+                ("Transaction", row.get("transaction_id")),
+                ("Transactions", row.get("source_transaction_ids")),
+                ("Reference", row.get("reference_no")),
+                ("Description", row.get("description")),
+                ("Files", row.get("file_id")),
+                ("ParserRuns", row.get("parser_run_id")),
+                ("Batch", row.get("statement_batch_id")),
+                ("Row", row.get("source_row_number")),
+                ("Sheet", row.get("source_sheet")),
+                ("SourceFile", row.get("source_file")),
+            ]
+        )
+        if desc_text:
+            desc = ET.SubElement(item, "Description")
+            desc.text = desc_text
 
+    tree = ET.ElementTree(chart)
+    ET.indent(tree, space="  ")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("wb") as handle:
+        tree.write(handle, encoding="utf-8", xml_declaration=True)
 
-def _link_description(row: pd.Series) -> str:
-    """Full transaction detail stored in i2 Description field."""
-    fields = [
-        ("ID",   row.get("transaction_id", "")),
-        ("Type", row.get("transaction_type", "")),
-        ("Desc", row.get("description", "")),
-        ("Ch",   row.get("channel", "")),
-    ]
-    return " | ".join(f"{k}:{v}" for k, v in fields if str(v or "").strip())
+    logger.info(
+        "ANX export complete: %s (%s nodes, %s edges)",
+        output_path.name,
+        len(filtered_nodes),
+        len(filtered_edges),
+    )
+    return output_path
 
-
-# ── Main export function ──────────────────────────────────────────────────
 
 def export_anx(
     entities: pd.DataFrame,
@@ -117,92 +183,11 @@ def export_anx(
     output_path: Union[str, Path],
 ) -> Path:
     """
-    Generate an i2 Analyst's Notebook XML (.anx) file.
+    Backwards-compatible wrapper that builds graph exports from transactions first.
 
-    Parameters
-    ----------
-    entities     : entity DataFrame (from entity.build_entities())
-    transactions : full transaction DataFrame with from_account, to_account columns
-    output_path  : path to write the .anx file
-
-    Returns
-    -------
-    Path to the written .anx file
+    The `entities` parameter is kept for compatibility with older callers, but the
+    ANX content now comes from the shared graph-export layer so the XML matches
+    the CSV graph schema and its safety semantics.
     """
-    output_path = Path(output_path)
-
-    # ── Root element ──────────────────────────────────────────────────────
-    # Non-rigorous mode: i2 will merge duplicate EntityIds by Identity value.
-    # This is the same approach used in the i2 "Phone Calls" reference example.
-    chart = ET.Element("Chart", {
-        "IdReferenceLinking": "false",
-        "Rigorous":           "false",
-    })
-    collection = ET.SubElement(chart, "ChartItemCollection")
-
-    # ── 1. Entity ChartItems ──────────────────────────────────────────────
-    # One ChartItem per unique entity. i2 merges entities with same Identity.
-    for _, row in entities.iterrows():
-        identity  = _entity_identity(row)
-        label     = _entity_label(row)
-        etype     = str(row.get("entity_type", "UNKNOWN"))
-        icon_type = _ICON_TYPE.get(etype, "Person")
-
-        item = ET.SubElement(collection, "ChartItem", {"Label": label})
-        end  = ET.SubElement(item, "End")
-
-        # LabelIsIdentity="false" because label (name+account) may differ from
-        # identity (account number only). This is correct per i2 schema.
-        entity_el = ET.SubElement(end, "Entity", {
-            "EntityId":        identity,
-            "Identity":        identity,
-            "LabelIsIdentity": "false",
-        })
-        icon = ET.SubElement(entity_el, "Icon")
-        ET.SubElement(icon, "IconStyle", {"Type": icon_type})
-
-    # ── 2. Link ChartItems (one per transaction) ──────────────────────────
-    required_cols = {"from_account", "to_account"}
-    if not required_cols.issubset(set(transactions.columns)):
-        logger.warning(
-            "Transactions missing from_account/to_account — skipping ANX links. "
-            "Ensure build_links() ran before export."
-        )
-    else:
-        for _, row in transactions.iterrows():
-            from_id = _resolve_end_id(str(row.get("from_account", "") or ""))
-            to_id   = _resolve_end_id(str(row.get("to_account",   "") or ""))
-            label   = _link_label(row)
-
-            item    = ET.SubElement(collection, "ChartItem", {"Label": label})
-            link_el = ET.SubElement(item, "Link", {
-                "End1Id": from_id,   # money source
-                "End2Id": to_id,     # money destination
-            })
-            # ArrowOnHead: arrow points from End1 (source) to End2 (destination)
-            # MultiplicityMultiple: multiple links allowed between same pair
-            ET.SubElement(link_el, "LinkStyle", {
-                "ArrowStyle": "ArrowOnHead",
-                "MlStyle":    "MultiplicityMultiple",
-                "Type":       "Link",
-            })
-
-            # Store full transaction detail in Description for analyst review
-            desc_text = _link_description(row)
-            if desc_text:
-                desc = ET.SubElement(item, "Description")
-                desc.text = desc_text
-
-    # ── 3. Serialize to file ──────────────────────────────────────────────
-    tree = ET.ElementTree(chart)
-    ET.indent(tree, space="  ")   # requires Python 3.9+
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("wb") as fh:
-        tree.write(fh, encoding="utf-8", xml_declaration=True)
-
-    logger.info(
-        f"ANX export complete: {output_path.name} "
-        f"({len(entities)} entities, {len(transactions)} links)"
-    )
-    return output_path
+    nodes_df, edges_df, _, _ = build_graph_exports(transactions)
+    return export_anx_from_graph(nodes_df, edges_df, output_path)

@@ -1,6 +1,6 @@
 import { useStore } from '@/store'
 import { cn } from '@/lib/utils'
-import { Upload, Search, Settings, Cpu, BarChart2, Building2 } from 'lucide-react'
+import { Upload, Search, Settings, Cpu, BarChart2, Building2, FolderTree, Database } from 'lucide-react'
 
 const STEPS = [
   { n: 1, label: 'Upload File',   icon: Upload },
@@ -80,6 +80,26 @@ export function Sidebar() {
 
       {/* Divider + Bank Manager link */}
       <div className="mt-auto pt-4 border-t border-border">
+        <button
+          onClick={() => setPage('investigation')}
+          className={cn(
+            'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-[13px] text-muted hover:text-accent hover:bg-accent/[0.08] cursor-pointer',
+            page === 'investigation' && 'bg-accent/[0.13] text-accent font-semibold',
+          )}
+        >
+          <Database size={14} className="shrink-0" />
+          <span>Investigation</span>
+        </button>
+        <button
+          onClick={() => setPage('bulk-intake')}
+          className={cn(
+            'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-[13px] text-muted hover:text-accent hover:bg-accent/[0.08] cursor-pointer',
+            page === 'bulk-intake' && 'bg-accent/[0.13] text-accent font-semibold',
+          )}
+        >
+          <FolderTree size={14} className="shrink-0" />
+          <span>Bulk Intake</span>
+        </button>
         <button
           onClick={() => setPage('bank-manager')}
           className={cn(

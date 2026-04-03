@@ -6,8 +6,8 @@ import { useStore } from '@/store'
 
 vi.mock('@/api', () => ({
   getBanks: vi.fn(async () => ([
-    { key: 'scb', name: 'SCB' },
-    { key: 'ktb', name: 'KTB' },
+    { key: 'scb', name: 'SCB', logo_url: '/api/bank-logos/scb.svg' },
+    { key: 'ktb', name: 'KTB', logo_url: '/api/bank-logos/ktb.svg' },
   ])),
   lookupRememberedAccountName: vi.fn(async () => ({ matched: false, remembered_name: '' })),
   startProcess: vi.fn(async () => ({ job_id: 'job-1', parser_run_id: 'run-1' })),
@@ -53,6 +53,7 @@ describe('Step3Config remembered account name', () => {
 
     expect(await screen.findByDisplayValue('Persisted Name')).toBeInTheDocument()
     expect(screen.getByText(/remembered from previous imports/i)).toBeInTheDocument()
+    expect(screen.getByAltText('SCB logo')).toBeInTheDocument()
   })
 
   it('shows the remembered name without overwriting a manual name', async () => {

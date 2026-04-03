@@ -4,6 +4,7 @@ import { confirmMapping, getBanks, learnBank } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
+import { BankLogo } from '@/components/BankLogo'
 import { evaluateReviewGate } from '@/lib/reviewGate'
 import { toast } from 'sonner'
 import { ChevronLeft, ChevronRight, Wand2, X, BookPlus, ArrowRight, ArrowLeftRight, Building2, Wallet, CircleDashed, FileSearch, BrainCircuit, DatabaseZap, ShieldAlert, ShieldCheck } from 'lucide-react'
@@ -151,9 +152,13 @@ export function Step2Map() {
   const amountModeLabel = hasSignedAmount ? 'Signed Amount Mode' : hasDebitCredit ? 'Debit / Credit Mode' : 'Amount Not Mapped'
   const counterpartyLabel = hasCounterparty ? 'Counterparty mapped' : 'Counterparty not mapped yet'
   const candidateKeys = Array.isArray(detectedBank?.top_candidates) ? detectedBank.top_candidates : []
+  const selectedBank = banks.find((bank: any) => bank.key === bankKey) || null
+  const detectedBankKey = String(detectedBank?.key || bankKey || '').trim().toLowerCase()
+  const detectedBankEntry = banks.find((bank: any) => bank.key === detectedBankKey) || null
   const rankedCandidates = candidateKeys.map((key: string) => ({
     key,
     name: banks.find((bank: any) => bank.key === key)?.name || key.toUpperCase(),
+    logo_url: banks.find((bank: any) => bank.key === key)?.logo_url || `/api/bank-logos/${key}.svg`,
     score: Number(detectedBank?.scores?.[key] || 0),
     selected: key === bankKey,
   }))
@@ -171,6 +176,13 @@ export function Step2Map() {
       <div className="grid grid-cols-3 gap-3">
         <Card className="!p-4 col-span-1">
           <div className="text-[11px] uppercase text-muted mb-2 font-semibold">Bank</div>
+          <div className="mb-3 flex items-center gap-3 rounded-xl border border-border/70 bg-surface2/50 px-3 py-2">
+            <BankLogo bank={selectedBank || { key: bankKey, name: detectedBank?.bank || bankKey }} size="md" />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-text">{selectedBank?.name || detectedBank?.bank || bankKey || 'Unknown bank'}</div>
+              <div className="text-xs text-muted">Selected template for this run</div>
+            </div>
+          </div>
           <select
             value={bankKey}
             onChange={e => setBankKey(e.target.value)}
@@ -230,7 +242,10 @@ export function Step2Map() {
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted">Detected Bank</span>
-                <span className="font-medium text-text">{detectedBank?.bank || 'UNKNOWN'}</span>
+                <span className="flex items-center gap-2 font-medium text-text">
+                  <BankLogo bank={detectedBankEntry || { key: detectedBankKey, name: detectedBank?.bank || 'UNKNOWN' }} size="sm" />
+                  <span>{detectedBank?.bank || 'UNKNOWN'}</span>
+                </span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted">Confidence</span>
@@ -278,10 +293,11 @@ export function Step2Map() {
               <span className="text-sm font-semibold">Top Candidates</span>
             </div>
             <div className="space-y-2">
-              {rankedCandidates.map((candidate: { key: string; name: string; score: number; selected: boolean }) => (
+              {rankedCandidates.map((candidate: { key: string; name: string; logo_url: string; score: number; selected: boolean }) => (
                 <div key={candidate.key} className={`rounded-lg border px-3 py-2 ${candidate.selected ? 'border-accent/40 bg-accent/[0.06]' : 'border-border/70 bg-surface'}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
+                      <BankLogo bank={candidate} size="sm" />
                       <span className="text-sm font-medium text-text">{candidate.name}</span>
                       {candidate.selected && <Badge variant="blue">Selected</Badge>}
                     </div>

@@ -22,17 +22,20 @@ from pathlib import Path
 from typing import Optional, Union, Tuple
 
 import pandas as pd
+from openpyxl.drawing.image import Image as XLImage
+from openpyxl.styles import Alignment, Font, PatternFill
 
 from utils.date_utils import format_date_range
 from core.export_anx import export_anx_from_graph
 from core.graph_analysis import build_graph_analysis, write_graph_analysis_exports
 from core.graph_export import write_graph_exports
+from core.bank_logo_registry import build_bank_logo_catalog, find_bank_logo_record, render_bank_logo_png_bytes
 from core.ofx_io import export_ofx
 from core.reconciliation import reconcile_balances
 
 logger = logging.getLogger(__name__)
 
-from paths import OUTPUT_DIR as BASE_OUTPUT
+from paths import BUILTIN_CONFIG_DIR, CONFIG_DIR, OUTPUT_DIR as BASE_OUTPUT
 
 
 TRANSACTION_EXPORT_COLUMNS = [
@@ -323,8 +326,11 @@ def _write_transactions_multisheet(
     entities: pd.DataFrame,
     links: pd.DataFrame,
     reconciliation: pd.DataFrame,
+    bank_logo_catalog: list[dict],
     processed_dir: Path,
     report_filename: str = "report.xlsx",
+    highlight_bank_key: str = "",
+    report_context: dict | None = None,
 ) -> Path:
     """Write transactions Excel with i2-friendly category sheets + entities + links.
 
@@ -344,6 +350,54 @@ def _write_transactions_multisheet(
     }
 
     with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
+        cover_sheet = writer.book.create_sheet("Report_Cover", 0)
+        cover_sheet.sheet_view.showGridLines = False
+        context = report_context or {}
+        cover_sheet["B2"] = "BSIE Account Package"
+        cover_sheet["B2"].font = Font(size=20, bold=True, color="1E293B")
+        cover_sheet["B3"] = "Bank Statement Intelligence Engine"
+        cover_sheet["B3"].font = Font(size=11, color="475569")
+        source_bank_name = str(context.get("bank_name") or "")
+        source_subject_name = str(context.get("subject_name") or "") or "Unknown subject"
+        cover_items = [
+            ("Subject", source_subject_name),
+            ("Account", str(context.get("account_number") or "")),
+            ("Bank", source_bank_name),
+            ("Original File", str(context.get("original_filename") or "")),
+            ("Date Range", str(context.get("date_range") or "")),
+            ("Transactions", str(context.get("transaction_count") or 0)),
+        ]
+        for index, (label, value) in enumerate(cover_items, start=5):
+            cover_sheet[f"B{index}"] = label
+            cover_sheet[f"B{index}"].font = Font(size=10, bold=True, color="64748B")
+            cover_sheet[f"C{index}"] = value
+            cover_sheet[f"C{index}"].font = Font(size=11, color="0F172A")
+        cover_sheet["B13"] = "Report Notes"
+        cover_sheet["B13"].font = Font(size=11, bold=True, color="1E293B")
+        cover_sheet["B14"] = "The report retains investigation-ready exports while preserving the original source file separately in the raw evidence folder."
+        cover_sheet["B14"].alignment = Alignment(wrap_text=True, vertical="top")
+        cover_sheet["B15"] = "The final Bank_Logos sheet is a reference sheet for current bank templates and future Thai bank template preparation."
+        cover_sheet["B15"].alignment = Alignment(wrap_text=True, vertical="top")
+        cover_sheet.column_dimensions["A"].width = 4
+        cover_sheet.column_dimensions["B"].width = 18
+        cover_sheet.column_dimensions["C"].width = 48
+        cover_sheet.row_dimensions[2].height = 28
+        cover_sheet.row_dimensions[14].height = 34
+        cover_sheet.row_dimensions[15].height = 34
+
+        cover_key = highlight_bank_key or str(find_bank_logo_record(display_name=source_bank_name).get("key") or "")
+        cover_logo = XLImage(
+            render_bank_logo_png_bytes(
+                cover_key,
+                display_name=source_bank_name or source_subject_name,
+                has_template=True if cover_key else None,
+                size=(144, 144),
+            )
+        )
+        cover_logo.width = 92
+        cover_logo.height = 92
+        cover_sheet.add_image(cover_logo, "E2")
+
         for sheet_name, df in sheet_map.items():
             df_clean = df.reset_index(drop=True)
             df_clean.to_excel(writer, sheet_name=sheet_name, index=False)
@@ -358,7 +412,51 @@ def _write_transactions_multisheet(
                 col_letter = col_cells[0].column_letter
                 ws.column_dimensions[col_letter].width = min(max_len + 2, 40)
 
-    logger.info(f"  Multi-sheet report: {excel_path.name} ({len(sheet_map)} sheets)")
+        logo_sheet = writer.book.create_sheet("Bank_Logos")
+        header_fill = PatternFill(fill_type="solid", fgColor="1E293B")
+        header_font = Font(color="FFFFFF", bold=True)
+        highlight_fill = PatternFill(fill_type="solid", fgColor="DBEAFE")
+        logo_sheet.freeze_panes = "B2"
+        logo_sheet.append(["Logo", "Bank Name", "Key", "Template Status", "Category", "Notes"])
+        for cell in logo_sheet[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for row_index, bank in enumerate(bank_logo_catalog, start=2):
+            logo_sheet.row_dimensions[row_index].height = 56
+            logo_payload = render_bank_logo_png_bytes(
+                bank.get("key"),
+                display_name=str(bank.get("name") or ""),
+                has_template=bool(bank.get("has_template")),
+                size=(72, 72),
+            )
+            image = XLImage(logo_payload)
+            image.width = 40
+            image.height = 40
+            logo_sheet.add_image(image, f"A{row_index}")
+            logo_sheet.cell(row=row_index, column=2, value=str(bank.get("name") or ""))
+            logo_sheet.cell(row=row_index, column=3, value=str(bank.get("key") or ""))
+            logo_sheet.cell(row=row_index, column=4, value=str(bank.get("template_badge") or ""))
+            logo_sheet.cell(row=row_index, column=5, value=str(bank.get("bank_type") or ""))
+            note_parts = []
+            if str(bank.get("template_source") or "") == "custom":
+                note_parts.append("Custom template")
+            elif str(bank.get("template_source") or "") == "builtin":
+                note_parts.append("Built-in template")
+            if str(bank.get("template_status") or "") == "logo_ready":
+                note_parts.append("Prepared for future template work")
+            if highlight_bank_key and str(bank.get("key") or "") == highlight_bank_key:
+                note_parts.append("Report source bank")
+            logo_sheet.cell(row=row_index, column=6, value="; ".join(note_parts))
+            if highlight_bank_key and str(bank.get("key") or "") == highlight_bank_key:
+                for col in range(1, 7):
+                    logo_sheet.cell(row=row_index, column=col).fill = highlight_fill
+
+        for col_letter, width in {"A": 12, "B": 34, "C": 18, "D": 26, "E": 18, "F": 34}.items():
+            logo_sheet.column_dimensions[col_letter].width = width
+
+    logger.info(f"  Multi-sheet report: {excel_path.name} ({len(sheet_map) + 2} sheets)")
     return excel_path
 
 
@@ -369,6 +467,7 @@ def export_package(
     account_number: str,
     bank: str,
     original_file: Union[str, Path],
+    bank_key: str = "",
     subject_name: str = "",
     job_id: Optional[str] = None,
     reconciliation_df: Optional[pd.DataFrame] = None,
@@ -482,14 +581,42 @@ def export_package(
     else:
         report_name = "report.xlsx"
     _cleanup_stale_report_files(processed_dir, bank, report_name)
+    template_entries = []
+    for config_dir, template_source in ((BUILTIN_CONFIG_DIR, "builtin"), (CONFIG_DIR, "custom")):
+        if not config_dir.exists():
+            continue
+        for config_path in sorted(config_dir.glob("*.json")):
+            try:
+                cfg = json.loads(config_path.read_text(encoding="utf-8"))
+                template_entries.append({
+                    "key": config_path.stem,
+                    "name": cfg.get("bank_name", config_path.stem.upper()),
+                    "template_source": template_source,
+                })
+            except Exception:
+                logger.debug("Skipping malformed bank config in logo catalog: %s", config_path)
+    logo_catalog = build_bank_logo_catalog(template_entries)
+    highlight_bank = str(bank_key or "").strip().lower()
+    if not highlight_bank and bank:
+        highlight_bank = str(find_bank_logo_record(display_name=bank).get("key") or "").strip().lower()
     report_path = _write_transactions_multisheet(
         transactions_display,
         transaction_categories_display,
         entities_export,
         links_display,
         reconciliation_display,
+        logo_catalog,
         processed_dir,
         report_filename=report_name,
+        highlight_bank_key=highlight_bank,
+        report_context={
+            "subject_name": subject_name,
+            "account_number": account_number,
+            "bank_name": bank,
+            "original_filename": orig_path.name,
+            "date_range": format_date_range(transactions_export["date"].tolist()) if "date" in transactions_export.columns else "",
+            "transaction_count": len(transactions_export),
+        },
     )
 
     # 7. Build and write meta.json

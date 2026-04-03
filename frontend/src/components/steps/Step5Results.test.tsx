@@ -126,6 +126,7 @@ describe('Step5Results date formatting', () => {
     useStore.getState().reset()
     useStore.setState({
       account: '1234567890',
+      bankKey: 'scb',
       operatorName: 'Case Reviewer',
       currentTab: 'transactions',
       results: null,
@@ -135,6 +136,7 @@ describe('Step5Results date formatting', () => {
   it('renders table dates as DD MM YYYY and supports balance check mode switching', async () => {
     renderWithQueryClient()
 
+    expect(await screen.findByAltText('SCB logo')).toBeInTheDocument()
     expect(await screen.findByText('31 03 2026')).toBeInTheDocument()
     expect(screen.getByText('01 03 2026 to 10 03 2026')).toBeInTheDocument()
     expect(screen.getByText('คำแนะนำสำหรับผู้ใช้งาน')).toBeInTheDocument()

@@ -34,6 +34,62 @@ def test_favicon_route_serves_built_asset(tmp_path, monkeypatch):
     assert response.text
 
 
+def test_bank_logo_route_serves_svg_badge():
+    response = client.get("/api/bank-logos/scb.svg")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/svg+xml")
+    assert "Siam Commercial Bank" in response.text
+
+
+def test_banks_endpoint_includes_logo_metadata():
+    response = client.get("/api/banks")
+
+    assert response.status_code == 200
+    payload = response.json()
+    scb = next(item for item in payload if item["key"] == "scb")
+    assert scb["logo_url"] == "/api/bank-logos/scb.svg"
+    assert scb["has_template"] is True
+    assert scb["template_status"] == "template_ready"
+
+
+def test_bank_logo_catalog_includes_future_thai_banks():
+    response = client.get("/api/bank-logo-catalog")
+
+    assert response.status_code == 200
+    payload = response.json()
+    baac = next(item for item in payload if item["key"] == "baac")
+    assert baac["logo_url"] == "/api/bank-logos/baac.svg"
+    assert baac["has_template"] is False
+    assert baac["template_status"] == "logo_ready"
+
+
+def test_bank_create_allows_prepared_bank_key_without_builtin_template(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    builtin_dir = tmp_path / "builtin"
+    config_dir.mkdir()
+    builtin_dir.mkdir()
+    monkeypatch.setattr(app, "CONFIG_DIR", config_dir)
+    monkeypatch.setattr(app, "BUILTIN_CONFIG_DIR", builtin_dir)
+
+    response = client.post(
+        "/api/banks",
+        json={
+            "key": "baac",
+            "bank_name": "BAAC",
+            "sheet_index": 0,
+            "header_row": 1,
+            "format_type": "standard",
+            "amount_mode": "signed",
+            "column_mapping": {"date": ["วันที่"]},
+        },
+    )
+
+    assert response.status_code == 200
+    assert (config_dir / "baac.json").exists()
+    assert response.json()["logo"]["key"] == "baac"
+
+
 def test_override_endpoint_accepts_react_payload_keys():
     """React clients send override_* keys; the API should accept them."""
     with (

@@ -419,6 +419,12 @@ export async function getBanks() {
   return r.json()
 }
 
+export async function getBankLogoCatalog() {
+  const r = await fetch('/api/bank-logo-catalog')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function getBank(key: string) {
   const r = await fetch(`/api/banks/${key}`)
   if (!r.ok) throw new Error(await r.text())

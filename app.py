@@ -50,7 +50,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, inspect, select
@@ -112,6 +112,11 @@ def _dispatch_pipeline(
 
 from core.loader               import load_config, find_best_sheet_and_header
 from core.bank_detector        import detect_bank
+from core.bank_logo_registry   import (
+    build_bank_logo_catalog,
+    find_bank_logo_record,
+    render_bank_logo_svg,
+)
 from core.column_detector      import detect_columns, get_field_aliases, _norm
 from core.mapping_memory       import find_matching_profile, list_profiles
 from core.bank_memory          import find_matching_bank_fingerprint, save_bank_fingerprint
@@ -414,6 +419,13 @@ async def favicon():
     raise HTTPException(404, "favicon.svg not found")
 
 
+@app.get("/api/bank-logos/{key}.svg")
+async def bank_logo_svg(key: str):
+    """Serve deterministic bank logo badges from the central registry."""
+    svg = render_bank_logo_svg(key, size=96)
+    return Response(content=svg, media_type="image/svg+xml")
+
+
 @app.get("/app", response_class=HTMLResponse)
 @app.get("/bank-manager", response_class=HTMLResponse)
 async def react_spa():
@@ -434,19 +446,45 @@ def health():
 # Helper: list available bank configs
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _get_banks() -> List[Dict]:
+def _collect_bank_configs() -> Dict[str, Dict]:
     banks: Dict[str, Dict] = {}
-    # Merge built-in configs first, then user overrides on top
-    for config_dir in [BUILTIN_CONFIG_DIR, CONFIG_DIR]:
+    for config_dir, template_source in ((BUILTIN_CONFIG_DIR, "builtin"), (CONFIG_DIR, "custom")):
         if not config_dir.exists():
             continue
         for f in sorted(config_dir.glob("*.json")):
             try:
                 cfg = json.loads(f.read_text(encoding="utf-8"))
-                banks[f.stem] = {"key": f.stem, "name": cfg.get("bank_name", f.stem.upper())}
+                banks[f.stem] = {
+                    "key": f.stem,
+                    "name": cfg.get("bank_name", f.stem.upper()),
+                    "template_source": template_source,
+                    "is_builtin": template_source == "builtin",
+                }
             except Exception:
                 logger.debug("Skipping malformed bank config: %s", f)
-    return sorted(banks.values(), key=lambda b: b["name"])
+    return banks
+
+
+def _get_banks() -> List[Dict]:
+    banks = []
+    for meta in _collect_bank_configs().values():
+        bank = find_bank_logo_record(
+            str(meta.get("key") or ""),
+            display_name=str(meta.get("name") or ""),
+            has_template=True,
+            template_source=str(meta.get("template_source") or "config"),
+        )
+        bank["is_builtin"] = bool(meta.get("is_builtin"))
+        banks.append(bank)
+    return sorted(banks, key=lambda b: str(b.get("name") or ""))
+
+
+def _get_bank_logo_catalog() -> List[Dict]:
+    return build_bank_logo_catalog(_collect_bank_configs().values())
+
+
+def _builtin_bank_keys() -> set[str]:
+    return {str(key).strip().lower() for key, meta in _collect_bank_configs().items() if meta.get("is_builtin")}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1851,16 +1889,30 @@ async def api_banks():
     return JSONResponse(_get_banks())
 
 
+@app.get("/api/bank-logo-catalog")
+async def api_bank_logo_catalog():
+    return JSONResponse(_get_bank_logo_catalog())
+
+
 @app.get("/api/banks/{key}")
 async def api_bank_get(key: str):
     """Return full config for a specific bank (user override takes priority)."""
     f = CONFIG_DIR / f"{key}.json"
+    template_source = "custom"
     if not f.exists():
         f = BUILTIN_CONFIG_DIR / f"{key}.json"
+        template_source = "builtin"
     if not f.exists():
         raise HTTPException(404, f"Bank '{key}' not found")
     cfg = json.loads(f.read_text(encoding="utf-8"))
-    return JSONResponse({"key": key, **cfg})
+    brand = find_bank_logo_record(
+        key,
+        display_name=str(cfg.get("bank_name", key.upper()) or key.upper()),
+        has_template=True,
+        template_source=template_source,
+    )
+    brand["is_builtin"] = template_source == "builtin"
+    return JSONResponse({**brand, "key": key, **cfg})
 
 
 @app.post("/api/banks")
@@ -1871,7 +1923,7 @@ async def api_bank_create(request: Request):
     if not key:
         raise HTTPException(400, "Bank key is required")
     # Protect built-in banks from overwrite unless flagged
-    builtin = {"generic", "scb", "kbank", "ktb", "bbl", "bay", "ttb", "gsb", "baac"}
+    builtin = _builtin_bank_keys()
     if key in builtin and not body.get("overwrite_builtin"):
         raise HTTPException(400, f"'{key}' is a built-in bank. Set overwrite_builtin=true to overwrite.")
     cfg = {
@@ -1886,13 +1938,18 @@ async def api_bank_create(request: Request):
     dest = CONFIG_DIR / f"{key}.json"
     dest.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info("Bank config saved: %s", dest)
-    return JSONResponse({"status": "ok", "key": key, "name": cfg["bank_name"]})
+    return JSONResponse({
+        "status": "ok",
+        "key": key,
+        "name": cfg["bank_name"],
+        "logo": find_bank_logo_record(key, display_name=cfg["bank_name"], has_template=True, template_source="custom"),
+    })
 
 
 @app.delete("/api/banks/{key}")
 async def api_bank_delete(key: str):
     """Delete a bank config. Built-in banks are protected."""
-    builtin = {"generic", "scb", "kbank", "ktb", "bbl", "bay", "ttb", "gsb", "baac"}
+    builtin = _builtin_bank_keys()
     if key in builtin:
         raise HTTPException(400, f"Cannot delete built-in bank '{key}'")
     f = CONFIG_DIR / f"{key}.json"

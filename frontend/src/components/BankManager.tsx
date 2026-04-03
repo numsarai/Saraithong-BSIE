@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getBanks, getBank, createBank, deleteBank } from '@/api'
+import { getBanks, getBank, createBank, deleteBank, getBankLogoCatalog } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
+import { BankLogo } from '@/components/BankLogo'
 import { toast } from 'sonner'
 import { Plus, Trash2, X, ChevronLeft, Building2, Save } from 'lucide-react'
-
-const BUILTIN = new Set(['generic','scb','kbank','ktb','bbl','bay','ttb','gsb','baac'])
 
 const LOGICAL_FIELDS = [
   'date','time','description','amount','debit','credit',
@@ -32,6 +31,23 @@ type BankCfg = {
   format_type: string
   amount_mode: string
   column_mapping: Record<string, string[]>
+  logo_url?: string
+  template_source?: string
+  is_builtin?: boolean
+  has_template?: boolean
+  template_badge?: string
+  bank_type?: string
+}
+
+type BankBrand = {
+  key: string
+  name: string
+  logo_url?: string
+  template_source?: string
+  has_template?: boolean
+  template_badge?: string
+  bank_type?: string
+  is_builtin?: boolean
 }
 
 const EMPTY_CFG: BankCfg = {
@@ -41,6 +57,7 @@ const EMPTY_CFG: BankCfg = {
 
 export function BankManager() {
   const { data: banks = [], refetch } = useQuery({ queryKey: ['banks'], queryFn: getBanks })
+  const { data: bankCatalog = [], refetch: refetchCatalog } = useQuery({ queryKey: ['bank-logo-catalog'], queryFn: getBankLogoCatalog })
   const [selected, setSelected]   = useState<BankCfg | null>(null)
   const [editMode, setEditMode]   = useState(false)
   const [form, setForm]           = useState<BankCfg>(EMPTY_CFG)
@@ -60,11 +77,19 @@ export function BankManager() {
     if (!form.key.trim())       { toast.error('Key is required'); return }
     if (!form.bank_name.trim()) { toast.error('Name is required'); return }
     try {
-      await createBank(form)
+      const saved = await createBank(form)
       await refetch()
+      await refetchCatalog()
       toast.success(`Bank "${form.bank_name}" saved`)
       setEditMode(false)
-      setSelected({ ...form })
+      setSelected({
+        ...form,
+        ...(saved?.logo || {}),
+        bank_name: form.bank_name,
+        has_template: true,
+        template_source: 'custom',
+        is_builtin: false,
+      })
     } catch (e: any) { toast.error(e.message) }
   }
 
@@ -72,6 +97,7 @@ export function BankManager() {
     try {
       await deleteBank(key)
       await refetch()
+      await refetchCatalog()
       toast.success(`Deleted bank "${key}"`)
       setSelected(null)
       setDelConfirm(null)
@@ -104,6 +130,24 @@ export function BankManager() {
     setEditMode(true)
   }
 
+  const startPrepared = (bank: BankBrand) => {
+    setSelected(null)
+    setForm({
+      ...EMPTY_CFG,
+      key: bank.key,
+      bank_name: bank.name,
+      logo_url: bank.logo_url,
+      template_source: 'custom',
+      is_builtin: false,
+      has_template: false,
+      template_badge: bank.template_badge,
+      bank_type: bank.bank_type,
+    })
+    setEditMode(true)
+  }
+
+  const preparedBanks = bankCatalog.filter((bank: BankBrand) => !bank.has_template && bank.bank_type === 'thai_bank')
+
   return (
     <div className="flex gap-6 min-h-[80vh]">
       {/* Left panel — bank list */}
@@ -114,7 +158,7 @@ export function BankManager() {
           </h3>
           <Button size="sm" variant="primary" onClick={startNew}><Plus size={12} />New</Button>
         </div>
-        {banks.map((b: any) => (
+        {banks.map((b: BankBrand) => (
           <div
             key={b.key}
             onClick={() => openBank(b.key)}
@@ -125,13 +169,34 @@ export function BankManager() {
                 : 'bg-surface2 text-text2 border border-border hover:border-accent/40 hover:text-accent',
             ].join(' ')}
           >
+            <BankLogo bank={b} size="sm" />
             <span className="flex-1 truncate">{b.name}</span>
-            {BUILTIN.has(b.key)
+            {(b.is_builtin || b.template_source === 'builtin')
               ? <Badge variant="gray">built-in</Badge>
               : <Badge variant="blue">custom</Badge>
             }
           </div>
         ))}
+        {preparedBanks.length > 0 && (
+          <>
+            <div className="mt-5 pt-4 border-t border-border/70">
+              <div className="mb-2 text-[11px] uppercase tracking-wide text-muted font-semibold">Thai banks prepared</div>
+              <div className="space-y-2">
+                {preparedBanks.map((b: BankBrand) => (
+                  <div
+                    key={b.key}
+                    onClick={() => startPrepared(b)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all text-sm bg-surface2/60 text-text2 border border-border hover:border-accent/40 hover:text-accent"
+                  >
+                    <BankLogo bank={b} size="sm" />
+                    <span className="flex-1 truncate">{b.name}</span>
+                    <Badge variant="yellow">logo ready</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Right panel — detail/edit */}
@@ -161,7 +226,7 @@ export function BankManager() {
               />
             : <BankDetail
                 bank={selected}
-                isBuiltin={BUILTIN.has(selected.key)}
+                isBuiltin={!!selected.is_builtin || selected.template_source === 'builtin'}
                 onEdit={() => { setForm({ ...selected }); setEditMode(true) }}
                 onDelete={() => setDelConfirm(selected.key)}
               />
@@ -207,12 +272,16 @@ function BankDetail({ bank, isBuiltin, onEdit, onDelete }: {
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between">
-        <div>
+        <div className="flex items-start gap-3">
+          <BankLogo bank={{ key: bank.key, name: bank.bank_name, logo_url: bank.logo_url }} size="lg" />
+          <div>
           <div className="flex items-center gap-2 mb-1">
             <h2 className="text-xl font-bold text-text">{bank.bank_name}</h2>
             <Badge variant={isBuiltin ? 'gray' : 'blue'}>{isBuiltin ? 'Built-in' : 'Custom'}</Badge>
+            {bank.template_badge && <Badge variant="yellow">{bank.template_badge}</Badge>}
           </div>
           <p className="text-muted text-sm">Key: <span className="font-mono text-text2">{bank.key}</span></p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={onEdit}>Edit Config</Button>
@@ -280,8 +349,14 @@ function BankForm({ form, setForm, newAlias, setNewAlias, addAlias, removeAlias,
 }) {
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-text">{isNew ? 'Add New Bank' : `Edit: ${form.bank_name}`}</h2>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <BankLogo bank={{ key: form.key, name: form.bank_name || form.key, logo_url: form.logo_url }} size="lg" />
+          <div>
+            <h2 className="text-lg font-bold text-text">{isNew ? 'Add New Bank' : `Edit: ${form.bank_name}`}</h2>
+            {form.template_badge && <p className="text-xs text-muted">{form.template_badge}</p>}
+          </div>
+        </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onCancel}><ChevronLeft size={13} />Cancel</Button>
           <Button variant="success" size="sm" onClick={onSave}><Save size={13} />Save Bank</Button>

@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+from openpyxl import load_workbook
 import pandas as pd
 
 import core.exporter as exporter
@@ -235,6 +236,7 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
 
     workbook = pd.ExcelFile(processed_dir / "Subject_SCB_report.xlsx")
     assert workbook.sheet_names == [
+        "Report_Cover",
         "All_Transactions",
         "Transfer_In",
         "Transfer_Out",
@@ -243,7 +245,19 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
         "Entities",
         "Links",
         "Reconciliation",
+        "Bank_Logos",
     ]
+
+    wb = load_workbook(processed_dir / "Subject_SCB_report.xlsx")
+    cover_ws = wb["Report_Cover"]
+    assert cover_ws["B2"].value == "BSIE Account Package"
+    assert cover_ws["C5"].value == "Subject"
+    assert len(cover_ws._images) >= 1
+    logo_ws = wb["Bank_Logos"]
+    assert logo_ws["B2"].value
+    assert logo_ws["D2"].value
+    assert len(logo_ws._images) >= 1
+    assert any((logo_ws.cell(row=row, column=3).value or "") == "scb" for row in range(2, logo_ws.max_row + 1))
 
     entities_df = pd.read_csv(processed_dir / "entities.csv", dtype=str).fillna("")
     links_df = pd.read_csv(processed_dir / "links.csv", dtype=str).fillna("")

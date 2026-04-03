@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { deleteOverride, getOverrides, getResults, saveOverride } from '@/api'
 import { normalizeOperatorName, useStore } from '@/store'
+import { BankLogo } from '@/components/BankLogo'
 import { Card, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -32,7 +33,7 @@ function getQuickDiagnosisThai(reconciliation: any, checkMode: 'file_order' | 'c
 }
 
 export function Step5Results() {
-  const { results, account, currentTab, setCurrentTab, reset, operatorName } = useStore()
+  const { results, account, bankKey, currentTab, setCurrentTab, reset, operatorName } = useStore()
   const resolvedOperatorName = normalizeOperatorName(operatorName)
   const [page, setPage]       = useState(1)
   const [override, setOverride] = useState<OverrideState>(null)
@@ -195,9 +196,12 @@ export function Step5Results() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-3">
+          <BankLogo bank={{ key: bankKey || String(meta.bank || '').toLowerCase(), name: meta.bank || bankKey || 'Bank' }} size="lg" />
+          <div>
           <h2 className="text-lg font-bold text-text">Results</h2>
           <p className="text-muted text-sm">{account} · {meta.bank || ''} · {total} transactions</p>
+          </div>
         </div>
         <Button variant="ghost" size="sm" onClick={reset}>
           <RotateCcw size={13} />Process Another File

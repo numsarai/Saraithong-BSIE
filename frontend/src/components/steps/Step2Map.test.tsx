@@ -7,9 +7,9 @@ import { toast } from 'sonner'
 vi.mock('@/api', () => ({
   confirmMapping: vi.fn(async () => ({ status: 'ok' })),
   getBanks: vi.fn(async () => ([
-    { key: 'scb', name: 'SCB' },
-    { key: 'ktb', name: 'KTB' },
-    { key: 'ciaf', name: 'CIAF Export' },
+    { key: 'scb', name: 'SCB', logo_url: '/api/bank-logos/scb.svg' },
+    { key: 'ktb', name: 'KTB', logo_url: '/api/bank-logos/ktb.svg' },
+    { key: 'ciaf', name: 'CIAF Export', logo_url: '/api/bank-logos/ciaf.svg' },
   ])),
   learnBank: vi.fn(async () => ({ status: 'ok' })),
 }))
@@ -76,6 +76,8 @@ describe('Step2Map analyst gate', () => {
     const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
     expect(continueButton).toBeDisabled()
     expect(screen.getByText(/analyst review required before step 3/i)).toBeInTheDocument()
+    expect(screen.getAllByAltText('SCB logo').length).toBeGreaterThan(0)
+    expect(screen.getAllByAltText('KTB logo').length).toBeGreaterThan(0)
 
     fireEvent.click(screen.getByRole('button', { name: /confirm selected bank/i }))
 

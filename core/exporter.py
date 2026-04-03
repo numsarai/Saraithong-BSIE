@@ -25,6 +25,7 @@ import pandas as pd
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Font, PatternFill
 
+from core.account_parser import parse_account
 from utils.date_utils import format_date_range
 from core.export_anx import export_anx_from_graph
 from core.graph_analysis import build_graph_analysis, write_graph_analysis_exports
@@ -124,6 +125,116 @@ TRANSACTION_CATEGORY_RULES = {
     "withdraw": {"transaction_type": "WITHDRAW"},
 }
 
+SUMMARY_SHEET_SPECS = [
+    ("ขาโอนเข้า", "transfer_in"),
+    ("ขาโอนออก", "transfer_out"),
+    ("ขาฝาก", "deposit"),
+    ("ขาถอน", "withdraw"),
+]
+
+SUMMARY_SHEET_COLUMNS = [
+    "ชื่อบัญชีเจ้าของรายการเดินบัญชี",
+    "บัญชีเจ้าของรายการเดินบัญชี",
+    "วันเวลาที่ทำธุรกรรม",
+    "ยอดธุรกรรม",
+    "ชื่อบัญชีคู่ธุรกรรม",
+    "บัญชีคู่ธุรกรรม",
+]
+
+WORKBOOK_SHEET_NAMES = {
+    "cover": "ปกรายงาน",
+    "all_transactions": "ธุรกรรมทั้งหมด",
+    "transfer_in_detail": "รายการโอนเข้า",
+    "transfer_out_detail": "รายการโอนออก",
+    "deposit_detail": "รายการฝาก",
+    "withdraw_detail": "รายการถอน",
+    "entities": "ข้อมูลบุคคลและบัญชี",
+    "links": "ความเชื่อมโยง",
+    "reconciliation": "กระทบยอด",
+    "bank_logos": "โลโก้ธนาคาร",
+}
+
+TRANSACTION_HEADER_LABELS = {
+    "transaction_id": "รหัสธุรกรรม",
+    "date": "วันที่",
+    "time": "เวลา",
+    "transaction_type": "ประเภทธุรกรรม",
+    "direction": "ทิศทางเงิน",
+    "amount": "ยอดธุรกรรม",
+    "currency": "สกุลเงิน",
+    "classification_source": "แหล่งจัดประเภท",
+    "classification_reason": "เหตุผลการจัดประเภท",
+    "classification_review_flag": "ต้องทบทวนการจัดประเภท",
+    "classification_model": "โมเดลจัดประเภท",
+    "heuristic_transaction_type": "ประเภทธุรกรรมจากกฎ",
+    "heuristic_confidence": "ความเชื่อมั่นจากกฎ",
+    "ai_transaction_type": "ประเภทธุรกรรมจาก AI",
+    "ai_confidence": "ความเชื่อมั่นจาก AI",
+    "ai_counterparty_name": "ชื่อคู่ธุรกรรมจาก AI",
+    "balance": "ยอดคงเหลือ",
+    "balance_source": "แหล่งยอดคงเหลือ",
+    "expected_balance": "ยอดคงเหลือที่คาดหมาย",
+    "balance_difference": "ผลต่างยอดคงเหลือ",
+    "balance_check_status": "สถานะการกระทบยอด",
+    "subject_account": "บัญชีเจ้าของรายการเดินบัญชี",
+    "subject_name": "ชื่อบัญชีเจ้าของรายการเดินบัญชี",
+    "counterparty_account": "บัญชีคู่ธุรกรรม",
+    "partial_account": "เลขบัญชีบางส่วน",
+    "counterparty_name": "ชื่อบัญชีคู่ธุรกรรม",
+    "from_account": "บัญชีต้นทาง",
+    "to_account": "บัญชีปลายทาง",
+    "bank": "ธนาคาร",
+    "channel": "ช่องทาง",
+    "description": "รายละเอียดรายการ",
+    "confidence": "ความเชื่อมั่น",
+    "is_overridden": "มีการ override",
+    "override_from_account": "บัญชีต้นทางที่ override",
+    "override_to_account": "บัญชีปลายทางที่ override",
+    "override_reason": "เหตุผลการ override",
+    "override_by": "ผู้ override",
+    "override_timestamp": "เวลา override",
+    "raw_account_value": "ค่าเลขบัญชีดิบ",
+    "parsed_account_type": "ชนิดเลขบัญชีที่แยกได้",
+    "nlp_type_hint": "คำใบ้ประเภทจาก NLP",
+    "nlp_confidence": "ความเชื่อมั่นจาก NLP",
+    "nlp_best_name": "ชื่อที่ NLP แนะนำ",
+    "source_file": "ไฟล์ต้นทาง",
+    "row_number": "ลำดับแถวต้นทาง",
+}
+
+ENTITY_HEADER_LABELS = {
+    "entity_id": "รหัสเอนทิตี",
+    "entity_type": "ประเภทเอนทิตี",
+    "entity_label": "ป้ายชื่อเอนทิตี",
+    "identity_value": "ค่าอัตลักษณ์",
+    "account_number": "เลขบัญชี",
+    "name": "ชื่อ",
+    "first_seen": "พบครั้งแรก",
+    "last_seen": "พบครั้งล่าสุด",
+    "transaction_count": "จำนวนธุรกรรม",
+    "source_transaction_ids": "รหัสธุรกรรมต้นทาง",
+}
+
+LINK_HEADER_LABELS = {
+    "link_id": "รหัสความเชื่อมโยง",
+    "transaction_id": "รหัสธุรกรรม",
+    "date": "วันที่",
+    "transaction_type": "ประเภทธุรกรรม",
+    "direction": "ทิศทางเงิน",
+    "amount": "ยอดธุรกรรม",
+    "currency": "สกุลเงิน",
+    "from_account": "บัญชีต้นทาง",
+    "from_entity_id": "รหัสเอนทิตีต้นทาง",
+    "from_label": "ชื่อฝั่งต้นทาง",
+    "to_account": "บัญชีปลายทาง",
+    "to_entity_id": "รหัสเอนทิตีปลายทาง",
+    "to_label": "ชื่อฝั่งปลายทาง",
+    "counterparty_name": "ชื่อคู่ธุรกรรม",
+    "description": "รายละเอียดรายการ",
+}
+
+LOGO_SHEET_HEADERS = ["โลโก้", "ชื่อธนาคาร", "คีย์", "สถานะแม่แบบ", "หมวดหมู่", "หมายเหตุ"]
+
 
 def _safe_filename(name: str) -> str:
     """Sanitise a string for use in a file name (keep Thai, alphanumeric, space, dash)."""
@@ -213,6 +324,65 @@ def _format_export_amount(value: object, *, absolute: bool = False) -> str:
     if float(amount).is_integer():
         return f"{int(amount):,}"
     return f"{amount:,.2f}"
+
+
+def _stringify_report_account(value: object) -> str:
+    text = str(value or "").strip()
+    if not text or text.lower() == "nan":
+        return ""
+    parsed = parse_account(value)
+    if parsed.get("clean"):
+        return str(parsed["clean"])
+    digits_only = re.sub(r"\D", "", text)
+    return digits_only or text
+
+
+def _combine_report_datetime(date_value: object, time_value: object) -> str:
+    date_text = _format_export_date(date_value)
+    time_text = str(time_value or "").strip()
+    if date_text and time_text:
+        return f"{date_text} {time_text}"
+    return date_text or time_text
+
+
+def _resolve_report_counterparty_account(row: pd.Series) -> str:
+    counterparty_account = _stringify_report_account(row.get("counterparty_account", ""))
+    if counterparty_account:
+        return counterparty_account
+    return _stringify_report_account(row.get("partial_account", ""))
+
+
+def _prepare_summary_sheet(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=SUMMARY_SHEET_COLUMNS)
+
+    rows = []
+    for _, row in df.iterrows():
+        rows.append({
+            "ชื่อบัญชีเจ้าของรายการเดินบัญชี": str(row.get("subject_name", "") or "").strip(),
+            "บัญชีเจ้าของรายการเดินบัญชี": _stringify_report_account(row.get("subject_account", "")),
+            "วันเวลาที่ทำธุรกรรม": _combine_report_datetime(row.get("date", ""), row.get("time", "")),
+            "ยอดธุรกรรม": _format_export_amount(row.get("amount", ""), absolute=True),
+            "ชื่อบัญชีคู่ธุรกรรม": str(row.get("counterparty_name", "") or "").strip(),
+            "บัญชีคู่ธุรกรรม": _resolve_report_counterparty_account(row),
+        })
+
+    return pd.DataFrame(rows, columns=SUMMARY_SHEET_COLUMNS)
+
+
+def _build_summary_sheet_map(transaction_categories: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    return {
+        sheet_name: _prepare_summary_sheet(transaction_categories.get(category_key, pd.DataFrame()))
+        for sheet_name, category_key in SUMMARY_SHEET_SPECS
+    }
+
+
+def _localize_sheet_headers(df: pd.DataFrame, column_labels: dict[str, str]) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+    localized = df.copy()
+    localized.columns = [column_labels.get(str(column), str(column)) for column in localized.columns]
+    return localized
 
 
 def _format_transaction_frame_for_export(df: pd.DataFrame, *, absolute_amount: bool = True) -> pd.DataFrame:
@@ -323,6 +493,7 @@ def _prepare_links_export(links: pd.DataFrame, entities: pd.DataFrame, transacti
 def _write_transactions_multisheet(
     transactions: pd.DataFrame,
     transaction_categories: dict[str, pd.DataFrame],
+    transaction_summaries: dict[str, pd.DataFrame],
     entities: pd.DataFrame,
     links: pd.DataFrame,
     reconciliation: pd.DataFrame,
@@ -339,51 +510,55 @@ def _write_transactions_multisheet(
     excel_path = processed_dir / report_filename
 
     sheet_map = {
-        "All_Transactions": transactions,
-        "Transfer_In": transaction_categories["transfer_in"],
-        "Transfer_Out": transaction_categories["transfer_out"],
-        "Deposits": transaction_categories["deposit"],
-        "Withdrawals": transaction_categories["withdraw"],
-        "Entities":     entities,
-        "Links":        links,
-        "Reconciliation": reconciliation,
+        **transaction_summaries,
+        WORKBOOK_SHEET_NAMES["all_transactions"]: transactions,
+        WORKBOOK_SHEET_NAMES["transfer_in_detail"]: transaction_categories["transfer_in"],
+        WORKBOOK_SHEET_NAMES["transfer_out_detail"]: transaction_categories["transfer_out"],
+        WORKBOOK_SHEET_NAMES["deposit_detail"]: transaction_categories["deposit"],
+        WORKBOOK_SHEET_NAMES["withdraw_detail"]: transaction_categories["withdraw"],
+        WORKBOOK_SHEET_NAMES["entities"]: entities,
+        WORKBOOK_SHEET_NAMES["links"]: links,
+        WORKBOOK_SHEET_NAMES["reconciliation"]: reconciliation,
     }
 
     with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
-        cover_sheet = writer.book.create_sheet("Report_Cover", 0)
+        cover_sheet = writer.book.create_sheet(WORKBOOK_SHEET_NAMES["cover"], 0)
         cover_sheet.sheet_view.showGridLines = False
         context = report_context or {}
-        cover_sheet["B2"] = "BSIE Account Package"
+        cover_sheet["B2"] = "แฟ้มรายงาน BSIE"
         cover_sheet["B2"].font = Font(size=20, bold=True, color="1E293B")
         cover_sheet["B3"] = "Bank Statement Intelligence Engine"
         cover_sheet["B3"].font = Font(size=11, color="475569")
         source_bank_name = str(context.get("bank_name") or "")
         source_subject_name = str(context.get("subject_name") or "") or "Unknown subject"
         cover_items = [
-            ("Subject", source_subject_name),
-            ("Account", str(context.get("account_number") or "")),
-            ("Bank", source_bank_name),
-            ("Original File", str(context.get("original_filename") or "")),
-            ("Date Range", str(context.get("date_range") or "")),
-            ("Transactions", str(context.get("transaction_count") or 0)),
+            ("ชื่อบัญชีเจ้าของรายการเดินบัญชี", source_subject_name),
+            ("บัญชีเจ้าของรายการเดินบัญชี", str(context.get("account_number") or "")),
+            ("ธนาคาร", source_bank_name),
+            ("ไฟล์ต้นฉบับ", str(context.get("original_filename") or "")),
+            ("ช่วงวันที่", str(context.get("date_range") or "")),
+            ("จำนวนธุรกรรม", str(context.get("transaction_count") or 0)),
         ]
         for index, (label, value) in enumerate(cover_items, start=5):
             cover_sheet[f"B{index}"] = label
             cover_sheet[f"B{index}"].font = Font(size=10, bold=True, color="64748B")
             cover_sheet[f"C{index}"] = value
             cover_sheet[f"C{index}"].font = Font(size=11, color="0F172A")
-        cover_sheet["B13"] = "Report Notes"
+        cover_sheet["B13"] = "หมายเหตุรายงาน"
         cover_sheet["B13"].font = Font(size=11, bold=True, color="1E293B")
-        cover_sheet["B14"] = "The report retains investigation-ready exports while preserving the original source file separately in the raw evidence folder."
+        cover_sheet["B14"] = "รายงานนี้คงรูปแบบที่พร้อมใช้ในการวิเคราะห์ โดยยังเก็บไฟล์ต้นฉบับแยกไว้ในโฟลเดอร์พยานหลักฐานดิบ"
         cover_sheet["B14"].alignment = Alignment(wrap_text=True, vertical="top")
-        cover_sheet["B15"] = "The final Bank_Logos sheet is a reference sheet for current bank templates and future Thai bank template preparation."
+        cover_sheet["B15"] = "แผ่นงานลำดับที่ 2-5 เป็นสรุปขาโอนเข้า ขาโอนออก ขาฝาก และขาถอน โดยอ้างอิงข้อมูลที่ผ่านการจัดรูปแบบแล้วของเจ้าของบัญชีและคู่ธุรกรรม"
         cover_sheet["B15"].alignment = Alignment(wrap_text=True, vertical="top")
+        cover_sheet["B16"] = "แผ่นงานสุดท้าย 'โลโก้ธนาคาร' ใช้เป็นข้อมูลอ้างอิงสำหรับแม่แบบธนาคารปัจจุบันและธนาคารไทยที่เตรียมทำแม่แบบในอนาคต"
+        cover_sheet["B16"].alignment = Alignment(wrap_text=True, vertical="top")
         cover_sheet.column_dimensions["A"].width = 4
         cover_sheet.column_dimensions["B"].width = 18
         cover_sheet.column_dimensions["C"].width = 48
         cover_sheet.row_dimensions[2].height = 28
         cover_sheet.row_dimensions[14].height = 34
         cover_sheet.row_dimensions[15].height = 34
+        cover_sheet.row_dimensions[16].height = 34
 
         cover_key = highlight_bank_key or str(find_bank_logo_record(display_name=source_bank_name).get("key") or "")
         cover_logo = XLImage(
@@ -399,7 +574,21 @@ def _write_transactions_multisheet(
         cover_sheet.add_image(cover_logo, "E2")
 
         for sheet_name, df in sheet_map.items():
-            df_clean = df.reset_index(drop=True)
+            if sheet_name in {
+                WORKBOOK_SHEET_NAMES["all_transactions"],
+                WORKBOOK_SHEET_NAMES["transfer_in_detail"],
+                WORKBOOK_SHEET_NAMES["transfer_out_detail"],
+                WORKBOOK_SHEET_NAMES["deposit_detail"],
+                WORKBOOK_SHEET_NAMES["withdraw_detail"],
+                WORKBOOK_SHEET_NAMES["reconciliation"],
+            }:
+                df_clean = _localize_sheet_headers(df.reset_index(drop=True), TRANSACTION_HEADER_LABELS)
+            elif sheet_name == WORKBOOK_SHEET_NAMES["entities"]:
+                df_clean = _localize_sheet_headers(df.reset_index(drop=True), ENTITY_HEADER_LABELS)
+            elif sheet_name == WORKBOOK_SHEET_NAMES["links"]:
+                df_clean = _localize_sheet_headers(df.reset_index(drop=True), LINK_HEADER_LABELS)
+            else:
+                df_clean = df.reset_index(drop=True)
             df_clean.to_excel(writer, sheet_name=sheet_name, index=False)
 
             # Auto-fit column widths
@@ -412,12 +601,12 @@ def _write_transactions_multisheet(
                 col_letter = col_cells[0].column_letter
                 ws.column_dimensions[col_letter].width = min(max_len + 2, 40)
 
-        logo_sheet = writer.book.create_sheet("Bank_Logos")
+        logo_sheet = writer.book.create_sheet(WORKBOOK_SHEET_NAMES["bank_logos"])
         header_fill = PatternFill(fill_type="solid", fgColor="1E293B")
         header_font = Font(color="FFFFFF", bold=True)
         highlight_fill = PatternFill(fill_type="solid", fgColor="DBEAFE")
         logo_sheet.freeze_panes = "B2"
-        logo_sheet.append(["Logo", "Bank Name", "Key", "Template Status", "Category", "Notes"])
+        logo_sheet.append(LOGO_SHEET_HEADERS)
         for cell in logo_sheet[1]:
             cell.fill = header_fill
             cell.font = header_font
@@ -522,6 +711,7 @@ def export_package(
         export_key: _format_transaction_frame_for_export(df, absolute_amount=True)
         for export_key, df in transaction_categories.items()
     }
+    transaction_summary_sheets = _build_summary_sheet_map(transaction_categories)
     links_display = _format_links_frame_for_export(links_export)
     reconciliation_display = _format_transaction_frame_for_export(reconciliation_export, absolute_amount=False)
 
@@ -602,6 +792,7 @@ def export_package(
     report_path = _write_transactions_multisheet(
         transactions_display,
         transaction_categories_display,
+        transaction_summary_sheets,
         entities_export,
         links_display,
         reconciliation_display,

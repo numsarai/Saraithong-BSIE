@@ -110,8 +110,10 @@ def main() -> int:
         _wait_for_health(base_url, args.timeout)
         if _http_status(f"{base_url}/") != 200:
             raise AssertionError("Root route did not return HTTP 200")
-        if _http_status(f"{base_url}/favicon.svg") != 200:
-            raise AssertionError("favicon.svg did not return HTTP 200")
+        if _http_status(f"{base_url}/favicon.png") != 200:
+            raise AssertionError("favicon.png did not return HTTP 200")
+        if _http_status(f"{base_url}/favicon.ico") != 200:
+            raise AssertionError("favicon.ico did not return HTTP 200")
         catalog = _http_json(f"{base_url}/api/bank-logo-catalog")
         if isinstance(catalog, dict):
             items = catalog.get("items")

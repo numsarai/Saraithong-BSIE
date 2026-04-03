@@ -236,24 +236,75 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
 
     workbook = pd.ExcelFile(processed_dir / "Subject_SCB_report.xlsx")
     assert workbook.sheet_names == [
-        "Report_Cover",
-        "All_Transactions",
-        "Transfer_In",
-        "Transfer_Out",
-        "Deposits",
-        "Withdrawals",
-        "Entities",
-        "Links",
-        "Reconciliation",
-        "Bank_Logos",
+        "ปกรายงาน",
+        "ขาโอนเข้า",
+        "ขาโอนออก",
+        "ขาฝาก",
+        "ขาถอน",
+        "ธุรกรรมทั้งหมด",
+        "รายการโอนเข้า",
+        "รายการโอนออก",
+        "รายการฝาก",
+        "รายการถอน",
+        "ข้อมูลบุคคลและบัญชี",
+        "ความเชื่อมโยง",
+        "กระทบยอด",
+        "โลโก้ธนาคาร",
     ]
 
     wb = load_workbook(processed_dir / "Subject_SCB_report.xlsx")
-    cover_ws = wb["Report_Cover"]
-    assert cover_ws["B2"].value == "BSIE Account Package"
+    cover_ws = wb["ปกรายงาน"]
+    assert cover_ws["B2"].value == "แฟ้มรายงาน BSIE"
     assert cover_ws["C5"].value == "Subject"
     assert len(cover_ws._images) >= 1
-    logo_ws = wb["Bank_Logos"]
+
+    transfer_in_ws = wb["ขาโอนเข้า"]
+    assert [cell.value for cell in transfer_in_ws[1]] == [
+        "ชื่อบัญชีเจ้าของรายการเดินบัญชี",
+        "บัญชีเจ้าของรายการเดินบัญชี",
+        "วันเวลาที่ทำธุรกรรม",
+        "ยอดธุรกรรม",
+        "ชื่อบัญชีคู่ธุรกรรม",
+        "บัญชีคู่ธุรกรรม",
+    ]
+    assert transfer_in_ws["A2"].value == "Subject"
+    assert transfer_in_ws["B2"].value == "1111111111"
+    assert transfer_in_ws["C2"].value == "01 03 2026 09:00:00"
+    assert transfer_in_ws["D2"].value == "1,000"
+    assert transfer_in_ws["E2"].value == "Alice"
+    assert transfer_in_ws["F2"].value == "2222222222"
+
+    detail_transfer_in_ws = wb["รายการโอนเข้า"]
+    assert [cell.value for cell in detail_transfer_in_ws[1][:10]] == [
+        "รหัสธุรกรรม",
+        "วันที่",
+        "เวลา",
+        "ประเภทธุรกรรม",
+        "ทิศทางเงิน",
+        "ยอดธุรกรรม",
+        "สกุลเงิน",
+        "ยอดคงเหลือ",
+        "บัญชีเจ้าของรายการเดินบัญชี",
+        "ชื่อบัญชีเจ้าของรายการเดินบัญชี",
+    ]
+
+    entities_ws = wb["ข้อมูลบุคคลและบัญชี"]
+    assert [cell.value for cell in entities_ws[1][:5]] == [
+        "รหัสเอนทิตี",
+        "ประเภทเอนทิตี",
+        "ป้ายชื่อเอนทิตี",
+        "ค่าอัตลักษณ์",
+        "เลขบัญชี",
+    ]
+
+    withdraw_ws = wb["ขาถอน"]
+    assert withdraw_ws["A2"].value == "Subject"
+    assert withdraw_ws["D2"].value == "100"
+    assert withdraw_ws["E2"].value == "ATM Cash"
+    assert withdraw_ws["F2"].value in ("", None)
+
+    logo_ws = wb["โลโก้ธนาคาร"]
+    assert [cell.value for cell in logo_ws[1]] == ["โลโก้", "ชื่อธนาคาร", "คีย์", "สถานะแม่แบบ", "หมวดหมู่", "หมายเหตุ"]
     assert logo_ws["B2"].value
     assert logo_ws["D2"].value
     assert len(logo_ws._images) >= 1

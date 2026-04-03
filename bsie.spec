@@ -21,6 +21,7 @@ a = Analysis(
         ("static",              "static"),       # includes static/dist/ React build
         ("config",              "config"),
         ("installer/bsie.png",  "installer"),
+        ("installer/bsie.ico",  "installer"),
         # New modules that need to be findable at runtime
         ("database.py",         "."),
         ("paths.py",            "."),

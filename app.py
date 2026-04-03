@@ -380,7 +380,7 @@ async def lifespan(app: FastAPI):
 # ── FastAPI app ───────────────────────────────────────────────────────────
 app = FastAPI(
     title="BSIE – Bank Statement Intelligence Engine",
-    version="3.0.0",
+    version="3.0.1",
     root_path="",
     lifespan=lifespan,
 )
@@ -418,6 +418,24 @@ async def favicon():
         if candidate.exists():
             return FileResponse(str(candidate), media_type="image/svg+xml")
     raise HTTPException(404, "favicon.svg not found")
+
+
+@app.get("/favicon.png")
+async def favicon_png():
+    """Serve the program icon as PNG for browsers and in-app branding."""
+    for candidate in (_REACT_DIST / "favicon.png", STATIC_DIR / "favicon.png", STATIC_DIR / "bsie-app-icon.png"):
+        if candidate.exists():
+            return FileResponse(str(candidate), media_type="image/png")
+    raise HTTPException(404, "favicon.png not found")
+
+
+@app.get("/favicon.ico")
+async def favicon_ico():
+    """Serve the program icon in ICO format for compatibility-oriented clients."""
+    for candidate in (_REACT_DIST / "favicon.ico", STATIC_DIR / "favicon.ico", _BASE / "installer" / "bsie.ico"):
+        if candidate.exists():
+            return FileResponse(str(candidate), media_type="image/x-icon")
+    raise HTTPException(404, "favicon.ico not found")
 
 
 @app.get("/api/bank-logos/{key}.svg")

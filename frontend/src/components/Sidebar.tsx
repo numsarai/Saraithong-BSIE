@@ -1,5 +1,6 @@
 import { useStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { APP_ICON_URL, APP_NAME, APP_SUBTITLE, APP_VERSION } from '@/config/appMeta'
 import { Upload, Search, Settings, Cpu, BarChart2, Building2, FolderTree, Database } from 'lucide-react'
 
 const STEPS = [
@@ -34,18 +35,19 @@ export function Sidebar() {
     <aside className="w-[210px] shrink-0 bg-surface border-r border-border sticky top-0 h-screen py-6 px-3 flex flex-col gap-1">
       <div className="px-2 mb-5 cursor-pointer" onClick={goHome}>
         <div className="flex items-center gap-2">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#58a6ff" strokeWidth="2">
-            <rect x="2" y="7" width="20" height="14" rx="2"/>
-            <path d="M16 7V5a2 2 0 0 0-4 0v2"/>
-            <line x1="12" y1="12" x2="12" y2="16"/>
-            <line x1="10" y1="14" x2="14" y2="14"/>
-          </svg>
+          <img
+            src={APP_ICON_URL}
+            alt={`${APP_NAME} app icon`}
+            className="h-11 w-11 rounded-[12px] object-cover shadow-[0_10px_24px_rgba(2,8,23,0.28)] ring-1 ring-white/8"
+          />
           <div>
-            <div className="text-sm font-bold text-text leading-tight">BSIE</div>
-            <div className="text-[10px] text-muted leading-tight">Intelligence Engine</div>
+            <div className="text-sm font-bold text-text leading-tight">{APP_NAME}</div>
+            <div className="text-[10px] text-muted leading-tight">{APP_SUBTITLE}</div>
           </div>
         </div>
-        <span className="mt-2 inline-block text-[10px] bg-accent/15 text-accent px-2 py-0.5 rounded-full font-bold">v2.0</span>
+        <span className="mt-2 inline-block text-[10px] bg-accent/15 text-accent px-2 py-0.5 rounded-full font-bold">
+          v{APP_VERSION}
+        </span>
       </div>
 
       {STEPS.map(({ n, label, icon: Icon }) => {

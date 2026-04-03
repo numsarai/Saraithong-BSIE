@@ -34,6 +34,32 @@ def test_favicon_route_serves_built_asset(tmp_path, monkeypatch):
     assert response.text
 
 
+def test_favicon_png_route_serves_program_icon(tmp_path, monkeypatch):
+    react_dist = tmp_path / "dist"
+    react_dist.mkdir()
+    (react_dist / "favicon.png").write_bytes(b"\x89PNG\r\n\x1a\nprogram-icon")
+    monkeypatch.setattr(app, "_REACT_DIST", react_dist)
+
+    response = client.get("/favicon.png")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/png")
+    assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_favicon_ico_route_falls_back_to_installer_icon(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "_BASE", tmp_path)
+    installer_dir = tmp_path / "installer"
+    installer_dir.mkdir()
+    (installer_dir / "bsie.ico").write_bytes(b"\x00\x00\x01\x00fake-ico")
+
+    response = client.get("/favicon.ico")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/x-icon")
+    assert response.content.startswith(b"\x00\x00\x01\x00")
+
+
 def test_bank_logo_route_serves_svg_badge():
     response = client.get("/api/bank-logos/scb.svg")
 

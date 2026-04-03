@@ -116,6 +116,7 @@ describe('BulkIntake', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useStore.getState().reset()
+    useStore.setState({ operatorName: 'Case Reviewer' })
   })
 
   it('submits a folder path and renders the returned case summary', async () => {
@@ -130,6 +131,7 @@ describe('BulkIntake', () => {
     await waitFor(() => expect(processFolder).toHaveBeenCalledWith({
       folder_path: '/cases/demo',
       recursive: true,
+      operator: 'Case Reviewer',
     }))
 
     expect(await screen.findByText('20260330_030000')).toBeInTheDocument()

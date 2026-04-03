@@ -3,11 +3,13 @@ import { useDropzone } from 'react-dropzone'
 import { FileSpreadsheet } from 'lucide-react'
 import { toast } from 'sonner'
 import { uploadFile } from '@/api'
-import { useStore } from '@/store'
+import { normalizeOperatorName, useStore } from '@/store'
 
 export function Step1Upload() {
   const [uploading, setUploading] = useState(false)
-  const { setUploadResult, setStep } = useStore()
+  const setUploadResult = useStore(s => s.setUploadResult)
+  const setStep = useStore(s => s.setStep)
+  const operatorName = useStore(s => s.operatorName)
 
   const onDrop = useCallback(async (accepted: File[]) => {
     const file = accepted[0]
@@ -19,7 +21,7 @@ export function Step1Upload() {
     }
     setUploading(true)
     try {
-      const data = await uploadFile(file)
+      const data = await uploadFile(file, normalizeOperatorName(operatorName))
       setUploadResult(data, file.name)
       setStep(2)
       toast.success('File uploaded and analysed')
@@ -28,7 +30,7 @@ export function Step1Upload() {
     } finally {
       setUploading(false)
     }
-  }, [setUploadResult, setStep])
+  }, [operatorName, setUploadResult, setStep])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

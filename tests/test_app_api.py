@@ -1,4 +1,5 @@
 """Focused API regression tests for app.py."""
+from contextlib import contextmanager
 from io import BytesIO
 import json
 from unittest.mock import patch
@@ -8,6 +9,15 @@ import app
 
 
 client = TestClient(app.app)
+
+
+@contextmanager
+def _fake_db_session():
+    class DummySession:
+        def commit(self):
+            return None
+
+    yield DummySession()
 
 
 def test_favicon_route_serves_built_asset(tmp_path, monkeypatch):
@@ -61,6 +71,22 @@ def test_remove_override_endpoint_passes_account_scope():
     assert response.status_code == 200
     assert response.json()["status"] == "removed"
     remove_override.assert_called_once_with("TXN-000001", account_number="1234567890")
+
+
+def test_remove_override_endpoint_uses_operator_for_audit():
+    with (
+        patch.object(app, "remove_override", return_value=True),
+        patch.object(app, "get_db_session", _fake_db_session),
+        patch.object(app, "log_audit") as log_audit,
+    ):
+        response = client.delete(
+            "/api/override/TXN-000001",
+            params={"account_number": "1234567890", "operator": "Case Reviewer"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "removed"
+    assert log_audit.call_args.kwargs["changed_by"] == "Case Reviewer"
 
 
 def test_download_endpoint_uses_requested_download_name(tmp_path):
@@ -241,6 +267,45 @@ VERSION:102
     assert payload["sheet_name"] == "OFX"
 
 
+def test_upload_uses_uploaded_by_form_field(tmp_path):
+    stored_path = tmp_path / "original.ofx"
+    stored_path.write_text("stub", encoding="utf-8")
+
+    with (
+        patch.object(
+            app,
+            "persist_upload",
+            return_value={
+                "file_id": "FILE-1",
+                "stored_path": str(stored_path),
+                "duplicate_file_status": "unique",
+                "prior_ingestions": [],
+            },
+        ) as persist_upload,
+        patch.object(app, "parse_ofx_file", return_value=app.pd.DataFrame([{"AMOUNT": "100.00"}])),
+        patch.object(app, "infer_identity_from_ofx", return_value={"account": "1234567890", "name": "Case Name"}),
+    ):
+        response = client.post(
+            "/api/upload",
+            data={"uploaded_by": "Case Reviewer"},
+            files={"file": ("sample.ofx", BytesIO(b"OFXHEADER:100"), "application/x-ofx")},
+        )
+
+    assert response.status_code == 200
+    assert persist_upload.call_args.kwargs["uploaded_by"] == "Case Reviewer"
+
+
+def test_process_folder_endpoint_passes_operator():
+    with patch.object(app, "process_folder", return_value={"total_files": 0, "processed_files": 0, "skipped_files": 0, "error_files": 0, "files": []}) as process_folder:
+        response = client.post(
+            "/api/process-folder",
+            json={"folder_path": "/cases/demo", "recursive": True, "operator": "Case Reviewer"},
+        )
+
+    assert response.status_code == 200
+    process_folder.assert_called_once_with("/cases/demo", recursive=True, operator="Case Reviewer")
+
+
 def test_upload_repairs_stale_profile_mapping_for_debit_credit_layout(tmp_path):
     workbook = tmp_path / "sample.xlsx"
     import pandas as pd
@@ -335,6 +400,115 @@ def test_account_remembered_name_endpoint_returns_empty_payload_for_invalid_acco
         "matched": False,
     }
     lookup_name.assert_not_called()
+
+
+def test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_context():
+    payload = {
+        "bank": "ktb",
+        "mapping": {
+            "date": "วันที่",
+            "description": "รายละเอียดใหม่",
+        },
+        "columns": ["วันที่", "รายละเอียด", "รายละเอียดใหม่"],
+        "header_row": 1,
+        "sheet_name": "Sheet1",
+        "reviewer": "reviewer.one",
+        "detected_bank": {"key": "scb", "bank": "SCB"},
+        "suggested_mapping": {
+            "date": "วันที่",
+            "description": "รายละเอียด",
+        },
+    }
+
+    with (
+        patch("core.mapping_memory.save_profile", return_value={"profile_id": "PROFILE-1"}) as save_profile,
+        patch.object(app, "save_bank_fingerprint", return_value={"fingerprint_id": "FINGERPRINT-1"}) as save_bank_fingerprint,
+        patch.object(app, "record_learning_feedback") as record_learning_feedback,
+        patch.object(app, "get_db_session", side_effect=_fake_db_session),
+    ):
+        response = client.post("/api/mapping/confirm", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["bank_feedback"] == "corrected"
+    assert response.json()["mapping_feedback"] == "corrected"
+    assert response.json()["feedback_mode"] == "corrected"
+    assert "correction" in response.json()["message"].lower()
+    assert response.json()["learning_feedback_count"] == 2
+    save_profile.assert_called_once_with(
+        "ktb",
+        ["วันที่", "รายละเอียด", "รายละเอียดใหม่"],
+        {"date": "วันที่", "description": "รายละเอียดใหม่"},
+        usage_increment=2,
+    )
+    save_bank_fingerprint.assert_called_once_with(
+        "ktb",
+        ["วันที่", "รายละเอียด", "รายละเอียดใหม่"],
+        header_row=1,
+        sheet_name="Sheet1",
+        usage_increment=2,
+    )
+    assert record_learning_feedback.call_count == 2
+    mapping_call = record_learning_feedback.call_args_list[0].kwargs
+    bank_call = record_learning_feedback.call_args_list[1].kwargs
+    assert mapping_call["learning_domain"] == "mapping_memory"
+    assert mapping_call["feedback_status"] == "corrected"
+    assert mapping_call["changed_by"] == "reviewer.one"
+    assert bank_call["learning_domain"] == "bank_memory"
+    assert bank_call["feedback_status"] == "corrected"
+    assert bank_call["changed_by"] == "reviewer.one"
+
+
+def test_mapping_confirm_endpoint_keeps_confirmed_feedback_at_normal_weight():
+    payload = {
+        "bank": "scb",
+        "mapping": {
+            "date": "วันที่",
+            "description": "รายละเอียด",
+        },
+        "columns": ["วันที่", "รายละเอียด"],
+        "detected_bank": {"config_key": "scb", "bank": "SCB"},
+        "suggested_mapping": {
+            "date": "วันที่",
+            "description": "รายละเอียด",
+        },
+    }
+
+    with (
+        patch("core.mapping_memory.save_profile", return_value={"profile_id": "PROFILE-2"}) as save_profile,
+        patch.object(app, "save_bank_fingerprint", return_value={"fingerprint_id": "FINGERPRINT-2"}) as save_bank_fingerprint,
+        patch.object(app, "record_learning_feedback") as record_learning_feedback,
+        patch.object(app, "get_db_session", side_effect=_fake_db_session),
+    ):
+        response = client.post("/api/mapping/confirm", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["bank_feedback"] == "confirmed"
+    assert response.json()["mapping_feedback"] == "confirmed"
+    assert response.json()["feedback_mode"] == "confirmed"
+    assert response.json()["learning_feedback_count"] == 2
+    save_profile.assert_called_once_with(
+        "scb",
+        ["วันที่", "รายละเอียด"],
+        {"date": "วันที่", "description": "รายละเอียด"},
+        usage_increment=1,
+    )
+    save_bank_fingerprint.assert_called_once_with(
+        "scb",
+        ["วันที่", "รายละเอียด"],
+        header_row=0,
+        sheet_name="",
+        usage_increment=1,
+    )
+    assert record_learning_feedback.call_count == 2
+
+
+def test_learning_feedback_endpoint_uses_dedicated_query_helper():
+    with patch.object(app, "list_learning_feedback_logs", return_value=[{"id": "LF-1"}]) as list_learning_feedback_logs:
+        response = client.get("/api/learning-feedback", params={"object_id": "mapping_profile:PROFILE-1", "limit": 50, "offset": 10})
+
+    assert response.status_code == 200
+    assert response.json()["items"] == [{"id": "LF-1"}]
+    list_learning_feedback_logs.assert_called_once()
 
 
 def test_db_status_endpoint_reports_investigation_schema():

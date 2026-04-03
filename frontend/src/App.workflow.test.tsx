@@ -99,6 +99,7 @@ describe('App workflow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useStore.getState().reset()
+    useStore.setState({ operatorName: 'Case Reviewer' })
     vi.mocked(getBanks).mockImplementation(() => new Promise(() => {}))
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown, ...args: unknown[]) => {
       if (typeof message === 'string' && message.includes('not wrapped in act')) {
@@ -129,6 +130,7 @@ describe('App workflow', () => {
 
     const { container } = renderApp()
     await uploadSample(container, 'ambiguous.xlsx')
+    expect(uploadFile).toHaveBeenCalledWith(expect.any(File), 'Case Reviewer')
 
     const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
     expect(continueButton).toBeDisabled()
@@ -155,6 +157,7 @@ describe('App workflow', () => {
 
     const { container } = renderApp()
     await uploadSample(container, 'strong.xlsx')
+    expect(uploadFile).toHaveBeenCalledWith(expect.any(File), 'Case Reviewer')
 
     const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
     expect(continueButton).toBeEnabled()

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useStore } from '@/store'
+import { normalizeOperatorName, useStore } from '@/store'
 import { confirmMapping, getBanks, learnBank } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,7 +27,7 @@ export function Step2Map() {
     setConfirmedMapping, sampleRows, bankKey, setBankKey, setStep, confidenceScores,
     headerRow, sheetName, memoryMatch, bankMemoryMatch,
     bankReviewed, mappingReviewed, setBankReviewed, setMappingReviewed,
-    isBlockedCase, canProceedToConfig,
+    isBlockedCase, canProceedToConfig, operatorName,
   } = useStore()
   const [saving, setSaving]         = useState(false)
   const [banks, setBanks]           = useState<any[]>([])
@@ -74,9 +74,35 @@ export function Step2Map() {
     if (!confirmedMapping['description']) { toast.error('Description field is required'); return }
     setSaving(true)
     try {
-      await confirmMapping(bankKey, confirmedMapping, allColumns, headerRow, sheetName)
+      const response = await confirmMapping(
+        bankKey,
+        confirmedMapping,
+        allColumns,
+        headerRow,
+        sheetName,
+        {
+          reviewer: normalizeOperatorName(operatorName),
+          detected_bank: detectedBank,
+          suggested_mapping: suggestedMapping,
+        },
+      )
       setStep(3)
-      toast.success('Mapping saved')
+      const feedbackMode = String(
+        response?.feedback_mode
+        || response?.feedback_type
+        || response?.feedback_action
+        || response?.learning_signal
+        || '',
+      ).toLowerCase()
+      const feedbackMessage = String(response?.message || response?.detail || '').trim()
+      const successMessage = feedbackMessage || (
+        feedbackMode.includes('correct')
+          ? 'Saved as a correction'
+          : feedbackMode.includes('confirm')
+            ? 'Saved and reinforced'
+            : 'Mapping saved'
+      )
+      toast.success(successMessage)
     } catch (e: any) {
       toast.error(`Failed: ${e.message}`)
     } finally {

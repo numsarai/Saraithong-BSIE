@@ -9,10 +9,11 @@ from database import init_db
 from persistence.base import get_db_session
 from persistence.models import Account, AuditLog, ExportJob, FileRecord, ParserRun, StatementBatch, Transaction
 from pipeline.process_account import process_account
+from services.account_resolution_service import best_known_account_holder_name
 from services.export_service import create_export_job, run_export_job
 from services.file_ingestion_service import persist_upload
 from services.persistence_pipeline_service import create_parser_run
-from services.review_service import update_transaction_fields
+from services.review_service import update_account_fields, update_transaction_fields
 from services.search_service import search_transactions
 
 
@@ -240,6 +241,230 @@ def test_transaction_review_and_export_job_create_audit_and_artifacts(tmp_path: 
         assert stored_job.status == "done"
         assert stored_job.output_path
         assert Path(stored_job.output_path).exists()
+
+
+def test_transaction_review_learns_counterparty_identity_and_records_learning_feedback(tmp_path: Path):
+    init_db()
+    account = "1234500101"
+    ofx_path = tmp_path / "counterparty-review.ofx"
+    ofx_path.write_text(_sample_ofx(account, amount="210.00"), encoding="utf-8")
+
+    upload_meta = persist_upload(
+        content=ofx_path.read_bytes(),
+        original_filename=ofx_path.name,
+        uploaded_by="tester",
+    )
+    parser_run = create_parser_run(
+        file_id=upload_meta["file_id"],
+        bank_detected="ofx",
+        confirmed_mapping={},
+        operator="tester",
+    )
+
+    process_account(
+        input_file=ofx_path,
+        subject_account=account,
+        subject_name="Counterparty Tester",
+        bank_key="ofx",
+        confirmed_mapping={},
+        file_id=upload_meta["file_id"],
+        parser_run_id=parser_run["parser_run_id"],
+        operator="tester",
+    )
+
+    with get_db_session() as session:
+        transaction = session.query(Transaction).filter(Transaction.parser_run_id == parser_run["parser_run_id"]).first()
+        assert transaction is not None
+
+        update_transaction_fields(
+            session,
+            transaction_id=transaction.id,
+            changes={
+                "counterparty_account_normalized": "9988776655",
+                "counterparty_name_normalized": "alice example",
+            },
+            reviewer="tester",
+            reason="learn counterparty identity",
+        )
+        session.commit()
+
+        learned = (
+            session.query(Account)
+            .filter(Account.bank_code == "unknown", Account.normalized_account_number == "9988776655")
+            .one()
+        )
+        feedback_rows = (
+            session.query(AuditLog)
+            .filter(
+                AuditLog.object_type == "learning_feedback",
+                AuditLog.action_type == "transaction_review_counterparty",
+                AuditLog.object_id == f"transaction:{transaction.id}",
+            )
+            .all()
+        )
+        remembered = best_known_account_holder_name(
+            session,
+            bank_name=None,
+            raw_account_number="9988776655",
+        )
+
+        assert learned.account_holder_name == "alice example"
+        assert remembered == "alice example"
+        assert feedback_rows
+        assert feedback_rows[0].extra_context_json["learning_domain"] == "counterparty_identity"
+        assert feedback_rows[0].extra_context_json["feedback_status"] == "corrected"
+        assert feedback_rows[0].extra_context_json["bank_resolution_strategy"] == "unknown_fallback"
+
+
+def test_transaction_review_reuses_unique_known_bank_for_counterparty_identity(tmp_path: Path):
+    init_db()
+    account = "1234500104"
+    counterparty_account = f"{uuid4().int % 10**10:010d}"
+    ofx_path = tmp_path / "counterparty-known-bank.ofx"
+    ofx_path.write_text(_sample_ofx(account, amount="210.00"), encoding="utf-8")
+
+    upload_meta = persist_upload(
+        content=ofx_path.read_bytes(),
+        original_filename=ofx_path.name,
+        uploaded_by="tester",
+    )
+    parser_run = create_parser_run(
+        file_id=upload_meta["file_id"],
+        bank_detected="ofx",
+        confirmed_mapping={},
+        operator="tester",
+    )
+
+    process_account(
+        input_file=ofx_path,
+        subject_account=account,
+        subject_name="Counterparty Tester",
+        bank_key="ofx",
+        confirmed_mapping={},
+        file_id=upload_meta["file_id"],
+        parser_run_id=parser_run["parser_run_id"],
+        operator="tester",
+    )
+
+    with get_db_session() as session:
+        known_counterparty = Account(
+            bank_name="SCB",
+            bank_code="scb",
+            raw_account_number=counterparty_account,
+            normalized_account_number=counterparty_account,
+            display_account_number=counterparty_account,
+            account_holder_name=None,
+            account_type="COUNTERPARTY_ACCOUNT",
+            status="active",
+        )
+        session.add(known_counterparty)
+        session.commit()
+
+        transaction = session.query(Transaction).filter(Transaction.parser_run_id == parser_run["parser_run_id"]).first()
+        assert transaction is not None
+
+        update_transaction_fields(
+            session,
+            transaction_id=transaction.id,
+            changes={
+                "counterparty_account_normalized": counterparty_account,
+                "counterparty_name_normalized": "alice example",
+            },
+            reviewer="tester",
+            reason="learn counterparty identity",
+        )
+        session.commit()
+
+        learned = (
+            session.query(Account)
+            .filter(Account.bank_code == "scb", Account.normalized_account_number == counterparty_account)
+            .one()
+        )
+        unknown_rows = (
+            session.query(Account)
+            .filter(Account.bank_code == "unknown", Account.normalized_account_number == counterparty_account)
+            .all()
+        )
+        feedback_rows = (
+            session.query(AuditLog)
+            .filter(
+                AuditLog.object_type == "learning_feedback",
+                AuditLog.action_type == "transaction_review_counterparty",
+                AuditLog.object_id == f"transaction:{transaction.id}",
+            )
+            .all()
+        )
+
+        assert learned.account_holder_name == "alice example"
+        assert not unknown_rows
+        assert feedback_rows
+        assert feedback_rows[0].extra_context_json["bank_resolution_strategy"] == "reused_known_bank"
+
+
+def test_account_review_strengthens_registry_memory_and_records_learning_feedback(tmp_path: Path):
+    init_db()
+    account = "1234500102"
+    ofx_path = tmp_path / "account-review.ofx"
+    ofx_path.write_text(_sample_ofx(account, amount="220.00"), encoding="utf-8")
+
+    upload_meta = persist_upload(
+        content=ofx_path.read_bytes(),
+        original_filename=ofx_path.name,
+        uploaded_by="tester",
+    )
+    parser_run = create_parser_run(
+        file_id=upload_meta["file_id"],
+        bank_detected="ofx",
+        confirmed_mapping={},
+        operator="tester",
+    )
+
+    process_account(
+        input_file=ofx_path,
+        subject_account=account,
+        subject_name="Original Name",
+        bank_key="ofx",
+        confirmed_mapping={},
+        file_id=upload_meta["file_id"],
+        parser_run_id=parser_run["parser_run_id"],
+        operator="tester",
+    )
+
+    with get_db_session() as session:
+        account_row = (
+            session.query(Account)
+            .filter(Account.bank_code == "ofx", Account.normalized_account_number == account)
+            .one()
+        )
+
+        update_account_fields(
+            session,
+            account_id=account_row.id,
+            changes={"account_holder_name": "Renamed Analyst"},
+            reviewer="tester",
+            reason="identity correction",
+        )
+        session.commit()
+
+        remembered = best_known_account_holder_name(
+            session,
+            bank_name="OFX",
+            raw_account_number=account,
+        )
+        feedback_rows = (
+            session.query(AuditLog)
+            .filter(
+                AuditLog.object_type == "learning_feedback",
+                AuditLog.action_type == "account_review_identity",
+                AuditLog.object_id == f"account:{account_row.id}",
+            )
+            .all()
+        )
+
+        assert remembered == "Renamed Analyst"
+        assert feedback_rows
+        assert feedback_rows[0].extra_context_json["learning_domain"] == "account_identity"
+        assert feedback_rows[0].extra_context_json["feedback_status"] == "corrected"
 
 
 def test_graph_export_job_writes_graph_csvs_and_anx(tmp_path: Path):

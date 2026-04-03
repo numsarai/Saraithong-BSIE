@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { InvestigationDesk } from '@/components/InvestigationDesk'
@@ -18,6 +18,38 @@ vi.mock('@/api', () => ({
         action_type: 'update',
         changed_by: 'analyst',
         changed_at: '2026-03-30T23:30:00Z',
+      },
+    ],
+  })),
+  getLearningFeedbackLogs: vi.fn(async () => ({
+    items: [
+      {
+        id: 'LF-1',
+        object_type: 'learning_feedback',
+        object_id: 'mapping_profile:PROFILE-1',
+        action_type: 'mapping_confirmation',
+        changed_by: 'analyst',
+        changed_at: '2026-03-31T01:30:00Z',
+        extra_context_json: {
+          learning_domain: 'mapping_memory',
+          feedback_status: 'corrected',
+          source_object_type: 'mapping_profile',
+          source_object_id: 'PROFILE-1',
+        },
+      },
+      {
+        id: 'LF-2',
+        object_type: 'learning_feedback',
+        object_id: 'account:ACC-1',
+        action_type: 'account_review_identity',
+        changed_by: 'analyst',
+        changed_at: '2026-03-30T22:00:00Z',
+        extra_context_json: {
+          learning_domain: 'account_identity',
+          feedback_status: 'confirmed',
+          source_object_type: 'account',
+          source_object_id: 'ACC-1',
+        },
       },
     ],
   })),
@@ -166,6 +198,9 @@ vi.mock('@/api', () => ({
   searchTransactionRecords: vi.fn(async () => ({ items: [] })),
 }))
 
+const { createExportJob, getAuditLogs, getLearningFeedbackLogs } = await import('@/api')
+const { useStore } = await import('@/store')
+
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
@@ -190,19 +225,70 @@ function renderWithQueryClient() {
 describe('InvestigationDesk date formatting', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useStore.getState().reset()
+    useStore.setState({ operatorName: 'Case Reviewer' })
   })
 
   it('renders file, parser run, and audit dates as DD MM YYYY', async () => {
     renderWithQueryClient()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
-    expect(await screen.findByText('31 03 2026')).toBeInTheDocument()
+    expect((await screen.findAllByText('31 03 2026')).length).toBeGreaterThan(0)
 
     fireEvent.click(screen.getByRole('button', { name: 'Parser Runs' }))
-    expect(await screen.findByText('31 03 2026')).toBeInTheDocument()
+    expect((await screen.findAllByText('31 03 2026')).length).toBeGreaterThan(0)
 
     fireEvent.click(screen.getByRole('button', { name: 'Audit' }))
-    expect(await screen.findByText('31 03 2026')).toBeInTheDocument()
+    expect((await screen.findAllByText('31 03 2026')).length).toBeGreaterThan(0)
+  })
+
+  it('offers a learning feedback shortcut in the audit tab', async () => {
+    vi.mocked(getAuditLogs).mockImplementation(async (params?: Record<string, unknown>) => {
+      if (params?.object_type === 'learning_feedback') {
+        return {
+          items: [
+            {
+              id: 'LF-1',
+              object_type: 'learning_feedback',
+              object_id: 'mapping_profile:PROFILE-1',
+              action_type: 'mapping_confirmation',
+              changed_by: 'analyst',
+              changed_at: '2026-03-31T01:30:00Z',
+              extra_context_json: {
+                learning_domain: 'mapping_memory',
+                feedback_status: 'corrected',
+                source_object_type: 'mapping_profile',
+                source_object_id: 'PROFILE-1',
+              },
+            },
+          ],
+        }
+      }
+      return {
+        items: [
+          {
+            id: 'AUD-1',
+            object_type: 'transaction',
+            object_id: 'TXN-001',
+            action_type: 'update',
+            changed_by: 'analyst',
+            changed_at: '2026-03-30T23:30:00Z',
+          },
+        ],
+      }
+    })
+
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Audit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Learning Feedback' }))
+
+    await waitFor(() => expect(getAuditLogs).toHaveBeenLastCalledWith({ object_type: 'learning_feedback', object_id: '', limit: 100 }))
+    await waitFor(() => expect(getLearningFeedbackLogs).toHaveBeenCalledWith({ limit: 200 }))
+    expect(await screen.findByText('Learning Feedback Summary')).toBeInTheDocument()
+    expect(await screen.findByText('mapping_memory (1) · account_identity (1)')).toBeInTheDocument()
+    expect(await screen.findByText('source mapping_profile:PROFILE-1')).toBeInTheDocument()
+    expect((await screen.findAllByText('corrected')).length).toBeGreaterThan(0)
   })
 
   it('renders graph analysis tab from persisted normalized transaction analytics', async () => {
@@ -220,5 +306,17 @@ describe('InvestigationDesk date formatting', () => {
     expect(await screen.findByText(/Hidden node count:/i)).toBeInTheDocument()
     expect(await screen.findByText('Neo4j Enabled')).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: 'Sync To Neo4j' })).toBeInTheDocument()
+  })
+
+  it('uses the stored operator name for graph exports', async () => {
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Graph Export' }))
+
+    await waitFor(() => expect(createExportJob).toHaveBeenCalledWith({
+      export_type: 'graph',
+      filters: {},
+      created_by: 'Case Reviewer',
+    }))
   })
 })

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Step2Map } from '@/components/steps/Step2Map'
 import { useStore } from '@/store'
+import { toast } from 'sonner'
 
 vi.mock('@/api', () => ({
   confirmMapping: vi.fn(async () => ({ status: 'ok' })),
@@ -54,6 +55,7 @@ describe('Step2Map analyst gate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useStore.getState().reset()
+    useStore.setState({ operatorName: 'Case Reviewer' })
   })
 
   it('blocks ambiguous detections until the bank is explicitly confirmed', async () => {
@@ -172,5 +174,41 @@ describe('Step2Map analyst gate', () => {
     fireEvent.change(selects[5], { target: { value: '' } })
 
     await waitFor(() => expect(continueButton).toBeDisabled())
+  })
+
+  it('passes detected context when confirming and surfaces correction feedback', async () => {
+    vi.mocked(confirmMapping).mockResolvedValueOnce({
+      status: 'ok',
+      feedback_mode: 'corrected',
+      message: 'Saved and reinforced your correction',
+    })
+
+    seedUpload()
+    render(<Step2Map />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /continue to configure/i }))
+
+    await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
+    expect(confirmMapping).toHaveBeenCalledWith(
+      'scb',
+      {
+        date: 'วันที่',
+        description: 'รายละเอียด',
+        amount: 'จำนวนเงิน',
+      },
+      ['วันที่', 'รายละเอียด', 'จำนวนเงิน', 'ถอนเงิน', 'ฝากเงิน'],
+      1,
+      'Sheet1',
+      {
+        reviewer: 'Case Reviewer',
+        detected_bank: expect.objectContaining({ key: 'scb' }),
+        suggested_mapping: {
+          date: 'วันที่',
+            description: 'รายละเอียด',
+          amount: 'จำนวนเงิน',
+        },
+      },
+    )
+    expect(toast.success).toHaveBeenCalledWith('Saved and reinforced your correction')
   })
 })

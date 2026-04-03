@@ -29,7 +29,7 @@ from services.persistence_pipeline_service import create_parser_run
 logger = logging.getLogger(__name__)
 
 
-def process_folder(folder_path: str | Path, recursive: bool = False) -> dict[str, Any]:
+def process_folder(folder_path: str | Path, recursive: bool = False, operator: str = "bulk-intake") -> dict[str, Any]:
     folder = Path(folder_path)
     if not folder.exists() or not folder.is_dir():
         raise FileNotFoundError(f"Folder not found: {folder}")
@@ -41,7 +41,7 @@ def process_folder(folder_path: str | Path, recursive: bool = False) -> dict[str
 
     results: list[dict[str, Any]] = []
     for file_path in file_paths:
-        results.append(_process_single_file(file_path))
+        results.append(_process_single_file(file_path, operator=operator))
 
     summary = _build_summary(folder, run_id, results)
     summary_df = pd.DataFrame(results)
@@ -84,7 +84,7 @@ def _collect_input_files(folder: Path, recursive: bool) -> list[Path]:
     return sorted({path for path in files if path.is_file()})
 
 
-def _process_single_file(file_path: Path) -> dict[str, Any]:
+def _process_single_file(file_path: Path, operator: str = "bulk-intake") -> dict[str, Any]:
     record: dict[str, Any] = {
         "file_name": file_path.name,
         "file_path": str(file_path),
@@ -138,7 +138,11 @@ def _process_single_file(file_path: Path) -> dict[str, Any]:
             ).dropna(how="all")
             data_df.columns = [str(column).strip() for column in data_df.columns]
 
-            detection = detect_bank(data_df, extra_text=f"{file_path.stem} {record['sheet_name']}")
+            detection = detect_bank(
+                data_df,
+                extra_text=f"{file_path.stem} {record['sheet_name']}",
+                sheet_name=str(record["sheet_name"] or ""),
+            )
         record["bank_key"] = detection.get("config_key", "") or "generic"
         record["bank_name"] = detection.get("bank", "")
         record["bank_confidence"] = detection.get("confidence", 0.0)
@@ -146,20 +150,20 @@ def _process_single_file(file_path: Path) -> dict[str, Any]:
 
         if file_path.suffix.lower() != ".ofx":
             column_detection = detect_columns(data_df)
-            mapping_profile = find_matching_profile(list(data_df.columns))
+            mapping_profile = find_matching_profile(list(data_df.columns), bank=record["bank_key"])
             confirmed_mapping = mapping_profile["mapping"] if mapping_profile else column_detection["suggested_mapping"]
 
         upload_meta = persist_upload(
             content=file_path.read_bytes(),
             original_filename=file_path.name,
-            uploaded_by="bulk-intake",
+            uploaded_by=operator or "bulk-intake",
             mime_type=None,
         )
         parser_run = create_parser_run(
             file_id=upload_meta["file_id"],
             bank_detected=record["bank_key"],
             confirmed_mapping=confirmed_mapping,
-            operator="bulk-intake",
+            operator=operator or "bulk-intake",
         )
         record["file_id"] = upload_meta["file_id"]
         record["parser_run_id"] = parser_run["parser_run_id"]
@@ -173,7 +177,7 @@ def _process_single_file(file_path: Path) -> dict[str, Any]:
             confirmed_mapping=confirmed_mapping,
             file_id=record["file_id"],
             parser_run_id=record["parser_run_id"],
-            operator="bulk-intake",
+            operator=operator or "bulk-intake",
         )
         record["output_dir"] = str(output_dir)
         record["status"] = "processed"

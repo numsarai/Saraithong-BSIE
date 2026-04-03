@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useStore } from '@/store'
+import { normalizeOperatorName, useStore } from '@/store'
 import { getBanks, lookupRememberedAccountName, startProcess } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -9,7 +9,7 @@ import { ChevronLeft, Play } from 'lucide-react'
 export function Step3Config() {
   const {
     bankKey, account, name, setBankKey, setAccount, setName,
-    banks, setBanks, tempFilePath, fileId, headerRow, sheetName, confirmedMapping, setJobId, setParserRunId, setStep,
+    banks, setBanks, tempFilePath, fileId, headerRow, sheetName, confirmedMapping, setJobId, setParserRunId, setStep, operatorName,
   } = useStore()
   const [loading, setLoading] = useState(false)
   const [rememberedName, setRememberedName] = useState('')
@@ -69,7 +69,7 @@ export function Step3Config() {
         account,
         name,
         confirmed_mapping: confirmedMapping,
-        operator: 'analyst',
+        operator: normalizeOperatorName(operatorName),
         header_row: headerRow,
         sheet_name: sheetName,
       })

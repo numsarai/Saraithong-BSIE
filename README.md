@@ -14,6 +14,7 @@ BSIE is now a persistent, investigation-grade bank statement intelligence platfo
 - **Persistent Evidence Store** — Uploaded files, parser runs, raw rows, normalized transactions, accounts, duplicate groups, match candidates, review decisions, and audit logs are stored in the database
 - **Duplicate Detection** — Detects duplicate files by SHA-256, repeated statement batches by batch fingerprint, and repeated transactions by transaction fingerprint and deterministic similarity rules
 - **Account Registry** — Reuses subject and counterparty accounts across uploads using strict account normalization rules
+- **Deterministic Learning Loop** — Reuses bank fingerprints, mapping profiles, remembered account names, and review-derived learning signals without mutating raw evidence
 - **Match Suggestions** — Generates exact-account, reference, mirrored-transfer, probable-internal-transfer, and fuzzy-name candidates with reversible confidence scores
 - **Review + Audit Trail** — Manual reviews and corrections create review decisions and append-only audit log entries
 - **Pattern-Based NLP** — Extracts Thai/English names, phone numbers, PromptPay markers, embedded account numbers — no ML dependencies
@@ -93,6 +94,19 @@ The app starts at **http://127.0.0.1:8757**
 PYTHONPATH=$PWD pytest tests -q
 cd frontend && npm test && npm run build
 ```
+
+---
+
+## Documentation Map
+
+- Architecture: [`/Users/saraithong/Documents/bsie/ARCHITECTURE.md`](/Users/saraithong/Documents/bsie/ARCHITECTURE.md)
+- Agent roles and ownership rules: [`/Users/saraithong/Documents/bsie/AGENTS.md`](/Users/saraithong/Documents/bsie/AGENTS.md)
+- Domain constraints: [`/Users/saraithong/Documents/bsie/DOMAIN_RULES.md`](/Users/saraithong/Documents/bsie/DOMAIN_RULES.md)
+- Frontend structure: [`/Users/saraithong/Documents/bsie/frontend/README.md`](/Users/saraithong/Documents/bsie/frontend/README.md)
+- Multi-agent orchestration guide: [`/Users/saraithong/Documents/bsie/docs/architecture/agent-orchestration.md`](/Users/saraithong/Documents/bsie/docs/architecture/agent-orchestration.md)
+- Subagent checklists and prompt templates: [`/Users/saraithong/Documents/bsie/docs/architecture/subagent-checklists.md`](/Users/saraithong/Documents/bsie/docs/architecture/subagent-checklists.md)
+
+Subagent work in BSIE should follow the current chokepoints of the codebase, not generic backend/frontend splits. In practice, the safest default is one backend owner for [`/Users/saraithong/Documents/bsie/app.py`](/Users/saraithong/Documents/bsie/app.py), one pipeline/schema owner when contracts change, one frontend owner only if UI work is needed, and one tester/reviewer.
 
 ---
 
@@ -187,15 +201,32 @@ Case summary outputs are written to `/data/output/bulk_runs/{run_id}/`:
 | `GET` | `/api/parser-runs` | List parser runs |
 | `POST` | `/api/parser-runs/{id}/reprocess` | Reprocess a historical parser run |
 | `GET` | `/api/accounts` | Search account registry |
+| `GET` | `/api/accounts/remembered-name` | Look up remembered account holder name for a normalized account number |
 | `GET` | `/api/accounts/{id}` | Get account detail |
+| `GET` | `/api/accounts/{id}/review` | Get review payload and merge candidates for an account |
 | `GET` | `/api/transactions/search` | Search persisted transactions |
+| `GET` | `/api/transactions/{id}` | Get a persisted transaction detail record |
+| `GET` | `/api/graph-analysis` | Return graph analytics from normalized transactions |
+| `GET` | `/api/graph/nodes` | List graph nodes for analyst review |
+| `GET` | `/api/graph/edges` | List direct graph edges |
+| `GET` | `/api/graph/derived-edges` | List inferred or derived graph edges |
+| `GET` | `/api/graph/findings` | List suspicious graph findings |
+| `GET` | `/api/graph/neighborhood/{node_id}` | Inspect a node neighborhood with findings |
+| `GET` | `/api/graph/neo4j-status` | Inspect optional Neo4j sync status |
+| `POST` | `/api/graph/neo4j-sync` | Push graph projection into Neo4j |
 | `GET` | `/api/duplicates` | List duplicate groups |
 | `POST` | `/api/duplicates/{id}/review` | Confirm/reject duplicates |
 | `GET` | `/api/matches` | List transaction/account matches |
 | `POST` | `/api/matches/{id}/review` | Confirm/reject match candidates |
+| `POST` | `/api/transactions/{id}/review` | Apply transaction correction with audit trail |
+| `POST` | `/api/accounts/{id}/review` | Apply account correction with audit trail |
 | `GET` | `/api/audit-logs` | Search audit trail |
+| `GET` | `/api/learning-feedback` | Retrieve learning-feedback audit signals only |
 | `POST` | `/api/exports` | Create a reproducible export job |
 | `GET` | `/api/export-jobs` | List export jobs |
+| `GET` | `/api/case-tags` | List case tags |
+| `POST` | `/api/case-tags` | Create a case tag |
+| `POST` | `/api/case-tags/assign` | Assign a case tag to an object |
 | `POST` | `/api/override` | Add / update a relationship override |
 | `DELETE` | `/api/override/{id}` | Remove an override |
 | `GET` | `/api/overrides` | List all overrides |

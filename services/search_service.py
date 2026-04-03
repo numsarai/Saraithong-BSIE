@@ -320,6 +320,16 @@ def list_audit_logs(session: Session, object_type: str = "", object_id: str = ""
     ]
 
 
+def list_learning_feedback_logs(session: Session, object_id: str = "", limit: int = 200, offset: int = 0) -> list[dict]:
+    return list_audit_logs(
+        session,
+        object_type="learning_feedback",
+        object_id=object_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
 def list_export_jobs(session: Session, limit: int = 100, offset: int = 0) -> list[dict]:
     rows = session.scalars(_apply_limit_offset(select(ExportJob).order_by(ExportJob.created_at.desc()), limit, offset)).all()
     return [

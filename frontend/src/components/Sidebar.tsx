@@ -13,7 +13,9 @@ const STEPS = [
 export function Sidebar() {
   const step = useStore(s => s.step)
   const page = useStore(s => s.page)
+  const operatorName = useStore(s => s.operatorName)
   const setPage = useStore(s => s.setPage)
+  const setOperatorName = useStore(s => s.setOperatorName)
   const setStep = useStore(s => s.setStep)
 
   const goHome = () => {
@@ -80,6 +82,17 @@ export function Sidebar() {
 
       {/* Divider + Bank Manager link */}
       <div className="mt-auto pt-4 border-t border-border">
+        <label className="mb-3 block px-2">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">Operator / Reviewer</div>
+          <input
+            value={operatorName}
+            onChange={(event) => setOperatorName(event.target.value)}
+            placeholder="Case Analyst"
+            maxLength={80}
+            className="w-full rounded-lg border border-border bg-surface2 px-2.5 py-2 text-sm text-text outline-none transition-colors focus:border-accent"
+          />
+          <div className="mt-1 text-[10px] text-muted">Used for upload, review, export, and admin audit logs.</div>
+        </label>
         <button
           onClick={() => setPage('investigation')}
           className={cn(

@@ -3,10 +3,45 @@ import { evaluateReviewGate } from '@/lib/reviewGate'
 
 export type Tab = 'transactions' | 'entities' | 'links'
 export type Page = 'main' | 'bank-manager' | 'bulk-intake' | 'investigation'
+export const DEFAULT_OPERATOR_NAME = 'analyst'
+
+const OPERATOR_STORAGE_KEY = 'bsie.operator_name'
+
+function getBrowserStorage(): Storage | null {
+  if (typeof window === 'undefined') return null
+  const maybeStorage = window.localStorage
+  if (!maybeStorage || typeof maybeStorage.getItem !== 'function' || typeof maybeStorage.setItem !== 'function') {
+    return null
+  }
+  return maybeStorage
+}
+
+function readStoredOperatorName() {
+  const storage = getBrowserStorage()
+  if (!storage) return DEFAULT_OPERATOR_NAME
+  const stored = storage.getItem(OPERATOR_STORAGE_KEY)
+  return stored?.trim() || DEFAULT_OPERATOR_NAME
+}
+
+function persistOperatorName(value: string) {
+  const storage = getBrowserStorage()
+  if (!storage) return
+  const nextValue = value.trim()
+  if (nextValue) {
+    storage.setItem(OPERATOR_STORAGE_KEY, nextValue)
+    return
+  }
+  storage.removeItem(OPERATOR_STORAGE_KEY)
+}
+
+export function normalizeOperatorName(value: string | null | undefined) {
+  return String(value || '').trim() || DEFAULT_OPERATOR_NAME
+}
 
 export interface AppState {
   page: Page
   step: number
+  operatorName: string
   jobId: string | null
   fileId: string | null
   parserRunId: string | null
@@ -36,6 +71,7 @@ export interface AppState {
   banks: any[]
   bulkSummary: any | null
   setStep: (step: number) => void
+  setOperatorName: (operatorName: string) => void
   setUploadResult: (data: any, filename: string) => void
   setConfirmedMapping: (mapping: Record<string, string | null>) => void
   setBankReviewed: (reviewed: boolean) => void
@@ -55,24 +91,24 @@ export interface AppState {
   reset: () => void
 }
 
-const initialState = {
+const workflowInitialState = {
   page: 'main' as Page,
   step: 1,
-  jobId: null,
-  fileId: null,
-  parserRunId: null,
-  tempFilePath: null,
-  fileName: null,
-  detectedBank: null,
-  suggestedMapping: {},
-  confirmedMapping: {},
-  allColumns: [],
-  confidenceScores: {},
-  sampleRows: [],
+  jobId: null as string | null,
+  fileId: null as string | null,
+  parserRunId: null as string | null,
+  tempFilePath: null as string | null,
+  fileName: null as string | null,
+  detectedBank: null as any,
+  suggestedMapping: {} as Record<string, string | null>,
+  confirmedMapping: {} as Record<string, string | null>,
+  allColumns: [] as string[],
+  confidenceScores: {} as Record<string, number>,
+  sampleRows: [] as any[],
   headerRow: 0,
   sheetName: '',
-  memoryMatch: null,
-  bankMemoryMatch: null,
+  memoryMatch: null as any | null,
+  bankMemoryMatch: null as any | null,
   bankReviewed: false,
   mappingReviewed: false,
   isBlockedCase: false,
@@ -80,17 +116,23 @@ const initialState = {
   bankKey: '',
   account: '',
   name: '',
-  results: null,
+  results: null as any | null,
   currentTab: 'transactions' as Tab,
   txnPage: 1,
   txnTotal: 0,
-  banks: [],
-  bulkSummary: null,
+  banks: [] as any[],
+  bulkSummary: null as any | null,
 }
 
 export const useStore = create<AppState>((set) => ({
-  ...initialState,
+  ...workflowInitialState,
+  operatorName: readStoredOperatorName(),
   setStep: (step) => set({ step }),
+  setOperatorName: (operatorName) => set(() => {
+    const nextOperatorName = String(operatorName || '').slice(0, 80)
+    persistOperatorName(nextOperatorName)
+    return { operatorName: nextOperatorName }
+  }),
   setUploadResult: (data, filename) => set(() => {
     const detectedBank = data.detected_bank
     const confirmedMapping = data.suggested_mapping || {}
@@ -196,5 +238,8 @@ export const useStore = create<AppState>((set) => ({
   setBanks: (banks) => set({ banks }),
   setBulkSummary: (bulkSummary) => set({ bulkSummary }),
   setPage: (page) => set({ page }),
-  reset: () => set(initialState),
+  reset: () => set((state) => ({
+    ...workflowInitialState,
+    operatorName: state.operatorName,
+  })),
 }))

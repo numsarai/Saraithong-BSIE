@@ -316,6 +316,7 @@ def _score_config_candidate(key: str, cfg: dict, context: DetectionContext) -> T
 def detect_bank(
     df: pd.DataFrame,
     extra_text: str = "",
+    sheet_name: str = "",
 ) -> Dict:
     """
     Score every known bank config against the DataFrame structure and text.
@@ -353,7 +354,7 @@ def detect_bank(
     try:
         from core.bank_memory import find_matching_bank_fingerprint
 
-        fingerprint_match = find_matching_bank_fingerprint(context.actual_columns)
+        fingerprint_match = find_matching_bank_fingerprint(context.actual_columns, sheet_name=sheet_name)
     except Exception as exc:
         logger.debug("Bank fingerprint lookup skipped: %s", exc)
 
@@ -361,11 +362,13 @@ def detect_bank(
         bank_key = str(fingerprint_match.get("bank_key", "") or "").strip().lower()
         match_type = str(fingerprint_match.get("match_type", "") or "")
         match_score = float(fingerprint_match.get("match_score", 0.0) or 0.0)
+        rank_score = float(fingerprint_match.get("rank_score", match_score) or match_score)
         if bank_key in score_map:
             boost = 4.0 if match_type == "exact_order" else 3.2 if match_type == "exact_set" else 2.0 * match_score
+            boost += min(max(rank_score - match_score, 0.0), 1.0)
             score_map[bank_key] = round(score_map[bank_key] + boost, 3)
             evidence_map[bank_key]["positive"].append(
-                f"fingerprint:{match_type}:{match_score}->{bank_key}"
+                f"fingerprint:{match_type}:{match_score}:rank={rank_score}->{bank_key}"
             )
 
     ranked = sorted(score_map.items(), key=lambda item: item[1], reverse=True)

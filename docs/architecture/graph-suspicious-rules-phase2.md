@@ -25,6 +25,8 @@ The rule engine consumes:
 - business graph nodes
 - derived account-to-account edges
 - graph degree/flow summaries
+- optional persisted match suggestions and confirmations routed through the
+  graph bundle service layer
 
 ## Implemented Rules
 
@@ -74,6 +76,13 @@ Each finding includes:
 This allows analysts to move from a suspicious graph pattern back to the exact
 normalized records and source evidence.
 
+In the current runtime, these findings surface through:
+- [`/Users/saraithong/Documents/bsie/services/graph_analysis_service.py`](/Users/saraithong/Documents/bsie/services/graph_analysis_service.py)
+- `/api/graph-analysis`
+- `/api/graph/findings`
+- `/api/graph/neighborhood/{node_id}`
+- the `Graph Analysis` tab in Investigation Admin
+
 ## Sample Finding Shape
 
 ```json
@@ -108,3 +117,12 @@ When adding rules:
 2. preserve traceability
 3. keep inferred findings separate from confirmed conclusions
 4. add a focused unit test per rule
+
+## Current Safety Boundaries
+
+Suspicious findings are investigative signals only. They do not:
+
+- edit persisted transactions
+- change duplicate or match review state
+- create confirmed graph edges by themselves
+- bypass analyst review in Investigation Admin

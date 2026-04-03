@@ -11,8 +11,19 @@
 
 - Normalized account numbers must be digits only.
 - Valid normalized account numbers must be exactly 10 or 12 digits.
-- Preserve raw account number separately.
+- Preserve the raw account value separately from the normalized account value.
+- Treat leading-zero loss as a forensic issue, not a harmless cleanup detail.
+- Treat scientific notation from Excel as suspicious input that must be normalized carefully and remain traceable to the original raw cell value.
+- If Excel has already rendered an account number as `1.2345E+09`, preserve that raw representation somewhere traceable even if a normalized digits-only value is later derived.
 - If normalization is uncertain, mark for review instead of guessing.
+- Never silently pad, trim, or coerce a malformed account number into a valid-looking value without preserving the source form.
+
+## Intake Rules
+
+- Keep original uploaded files as evidence.
+- Keep the file hash and duplicate-upload history.
+- Preserve workbook context such as sheet name, header row, and raw row payload when available.
+- If a bank format is ambiguous, prefer explicit analyst confirmation over silent auto-selection.
 
 ## Transaction Rules
 

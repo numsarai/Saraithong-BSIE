@@ -23,12 +23,12 @@ def bank_code_from_name(bank_name: str | None) -> str:
     return text.replace(" ", "_")[:32] if text else "unknown"
 
 
-def best_known_account_holder_name(
+def best_known_account_identity(
     session: Session,
     *,
     bank_name: str | None,
     raw_account_number: object,
-) -> str | None:
+) -> dict | None:
     normalized = normalize_account_number(raw_account_number)
     if not normalized:
         return None
@@ -40,28 +40,65 @@ def best_known_account_holder_name(
             Account.normalized_account_number == normalized,
         )
     ).first()
-    if exact_match and str(exact_match.account_holder_name or "").strip():
-        return str(exact_match.account_holder_name).strip()
+    if exact_match:
+        return {
+            "bank_name": exact_match.bank_name,
+            "bank_code": exact_match.bank_code,
+            "account_holder_name": str(exact_match.account_holder_name or "").strip() or None,
+        }
 
-    named_matches = session.scalars(
+    matches = session.scalars(
         select(Account).where(
             Account.normalized_account_number == normalized,
-            Account.account_holder_name.is_not(None),
-            Account.account_holder_name != "",
         ).order_by(Account.last_seen_at.desc())
     ).all()
-    distinct_names = []
-    seen_names: set[str] = set()
-    for match in named_matches:
-        name = str(match.account_holder_name or "").strip()
-        if not name or name in seen_names:
-            continue
-        seen_names.add(name)
-        distinct_names.append(name)
-    if len(distinct_names) == 1:
-        return distinct_names[0]
 
-    return None
+    if not matches:
+        return None
+
+    distinct_known_banks: dict[str, str | None] = {}
+    distinct_names: list[str] = []
+    seen_names: set[str] = set()
+    for match in matches:
+        match_bank_code = str(match.bank_code or "").strip()
+        if match_bank_code and match_bank_code != "unknown" and match_bank_code not in distinct_known_banks:
+            distinct_known_banks[match_bank_code] = match.bank_name
+        name = str(match.account_holder_name or "").strip()
+        if name and name not in seen_names:
+            seen_names.add(name)
+            distinct_names.append(name)
+
+    if len(distinct_known_banks) > 1:
+        return None
+
+    inferred_bank_code = next(iter(distinct_known_banks.keys()), "unknown")
+    inferred_bank_name = distinct_known_banks.get(inferred_bank_code)
+    inferred_name = distinct_names[0] if len(distinct_names) == 1 else None
+
+    if inferred_bank_code == "unknown" and not inferred_name:
+        return None
+
+    return {
+        "bank_name": inferred_bank_name,
+        "bank_code": inferred_bank_code,
+        "account_holder_name": inferred_name,
+    }
+
+
+def best_known_account_holder_name(
+    session: Session,
+    *,
+    bank_name: str | None,
+    raw_account_number: object,
+) -> str | None:
+    identity = best_known_account_identity(
+        session,
+        bank_name=bank_name,
+        raw_account_number=raw_account_number,
+    )
+    if not identity:
+        return None
+    return identity.get("account_holder_name")
 
 
 def resolve_account(
@@ -78,15 +115,20 @@ def resolve_account(
     if not normalized:
         return None
 
-    bank_code = bank_code_from_name(bank_name)
-    resolved_name = str(account_holder_name or "").strip() or best_known_account_holder_name(
+    inferred_identity = best_known_account_identity(
         session,
         bank_name=bank_name,
         raw_account_number=raw_account_number,
     )
+    effective_bank_name = bank_name
+    effective_bank_code = bank_code_from_name(bank_name)
+    if effective_bank_code == "unknown" and inferred_identity and inferred_identity.get("bank_code") not in {None, "", "unknown"}:
+        effective_bank_name = inferred_identity.get("bank_name") or effective_bank_name
+        effective_bank_code = str(inferred_identity["bank_code"])
+    resolved_name = str(account_holder_name or "").strip() or (inferred_identity or {}).get("account_holder_name")
     existing = session.scalars(
         select(Account).where(
-            Account.bank_code == bank_code,
+            Account.bank_code == effective_bank_code,
             Account.normalized_account_number == normalized,
         )
     ).first()
@@ -107,8 +149,8 @@ def resolve_account(
         return existing
 
     row = Account(
-        bank_name=bank_name or "UNKNOWN",
-        bank_code=bank_code,
+        bank_name=effective_bank_name or "UNKNOWN",
+        bank_code=effective_bank_code,
         raw_account_number=str(raw_account_number or ""),
         normalized_account_number=normalized,
         display_account_number=display,

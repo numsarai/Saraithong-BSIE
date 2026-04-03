@@ -11,13 +11,24 @@ Both now derive from the same shared graph builder in [`core/graph_export.py`](.
 
 BSIE also includes an internal graph-analysis layer in [`core/graph_analysis.py`](../../core/graph_analysis.py) that consumes the same normalized transaction outputs and shared graph model.
 
+In the live runtime, persisted transactions and matches are loaded through
+[`services/export_service.py`](../../services/export_service.py) and
+[`services/graph_analysis_service.py`](../../services/graph_analysis_service.py),
+so graph exports, graph APIs, and Investigation Admin all reuse the same
+deterministic graph bundle path.
+
 ## Shared Schema
 
 The shared graph layer produces:
 
 - `nodes.csv`
+- `nodes.json`
 - `edges.csv`
+- `edges.json`
 - `aggregated_edges.csv`
+- `aggregated_edges.json`
+- `derived_account_edges.csv`
+- `derived_account_edges.json`
 - `graph_manifest.json`
 
 ### Node identity
@@ -44,6 +55,7 @@ Edge IDs are deterministic and type-aware:
 - `APPEARS_IN:...`
 - `MATCH:<hash>`
 - `FLOW_AGG:<hash>`
+- `DERIVED_FLOW:<hash>`
 
 Relationship edges are deduplicated by `edge_id` so repeated supporting rows merge support metadata instead of creating unstable duplicates.
 
@@ -84,6 +96,10 @@ Transaction-level edges carry:
 
 Node rows also carry aggregated lineage so analysts can trace where a participant came from across files and rows.
 
+The graph manifest records schema/version/count information for bundle
+consumers. It is the contract that lets CSV/JSON exports and graph analytics
+agree on the same graph shape.
+
 ## i2 Export Strategy
 
 The ANX exporter in [`core/export_anx.py`](../../core/export_anx.py) intentionally exports a simplified subgraph:
@@ -108,6 +124,8 @@ It produces:
 
 - `graph_analysis.json`
 - `graph_analysis.xlsx`
+- `suspicious_findings.csv`
+- `suspicious_findings.json`
 - API payloads from `/api/graph-analysis`
 - Investigation Admin summaries in the `Graph Analysis` tab
 
@@ -122,6 +140,19 @@ Current analytics are deterministic and lineage-safe:
 - lineage coverage summary
 
 The analysis layer intentionally excludes bookkeeping-only `APPEARS_IN` edges from business connectivity metrics so graph structure remains useful to analysts.
+
+## Service-Layer Runtime Notes
+
+The live runtime adds a short-TTL cache in
+[`services/graph_analysis_service.py`](../../services/graph_analysis_service.py)
+for repeated graph exploration requests. This keeps the graph views responsive
+without changing any persisted evidence or graph truth.
+
+The graph-analysis service also applies hard query caps for analyst safety:
+- default graph query limit: `2000`
+- hard max: `5000`
+- default neighborhood node limit: `14`
+- default neighborhood edge limit: `24`
 
 ## Extension Guidance
 

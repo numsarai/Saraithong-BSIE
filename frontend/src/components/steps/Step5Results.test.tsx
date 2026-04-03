@@ -104,6 +104,8 @@ vi.mock('sonner', () => ({
   }),
 }))
 
+const { deleteOverride } = await import('@/api')
+
 function renderWithQueryClient() {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -124,6 +126,7 @@ describe('Step5Results date formatting', () => {
     useStore.getState().reset()
     useStore.setState({
       account: '1234567890',
+      operatorName: 'Case Reviewer',
       currentTab: 'transactions',
       results: null,
     })
@@ -158,5 +161,20 @@ describe('Step5Results date formatting', () => {
       fireEvent.click(screen.getByRole('button', { name: 'transactions' }))
     })
     expect(screen.getByText(/analyst · 31 03 2026/i)).toBeInTheDocument()
+  })
+
+  it('passes the stored operator when deleting an override', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: /delete/i }))
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(deleteOverride).toHaveBeenCalledWith('TXN-001', '1234567890', 'Case Reviewer')
+    confirmSpy.mockRestore()
   })
 })

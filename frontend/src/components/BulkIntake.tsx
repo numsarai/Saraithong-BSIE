@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
 import { fmtDateRange } from '@/lib/utils'
-import { useStore } from '@/store'
+import { normalizeOperatorName, useStore } from '@/store'
 
 
 function statusVariant(status: string): 'green' | 'red' | 'blue' | 'gray' {
@@ -67,6 +67,7 @@ export function BulkIntake() {
   const setResults = useStore(s => s.setResults)
   const setPage = useStore(s => s.setPage)
   const setStep = useStore(s => s.setStep)
+  const operatorName = useStore(s => s.operatorName)
   const [folderPath, setFolderPath] = useState('')
   const [recursive, setRecursive] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -110,6 +111,7 @@ export function BulkIntake() {
       const summary = await processFolder({
         folder_path: folderPath.trim(),
         recursive,
+        operator: normalizeOperatorName(operatorName),
       })
       setBulkSummary(summary)
       setStatusFilter('all')

@@ -11,6 +11,9 @@ class MappingConfirmRequest(BaseModel):
     columns: list[str] = Field(default_factory=list)
     header_row: int = 0
     sheet_name: str = ""
+    reviewer: str = "analyst"
+    detected_bank: Any | None = None
+    suggested_mapping: dict[str, str | None] = Field(default_factory=dict)
 
 
 class ProcessRequest(BaseModel):

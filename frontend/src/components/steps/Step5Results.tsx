@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { deleteOverride, getOverrides, getResults, saveOverride } from '@/api'
-import { useStore } from '@/store'
+import { normalizeOperatorName, useStore } from '@/store'
 import { Card, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -32,10 +32,11 @@ function getQuickDiagnosisThai(reconciliation: any, checkMode: 'file_order' | 'c
 }
 
 export function Step5Results() {
-  const { results, account, currentTab, setCurrentTab, reset } = useStore()
+  const { results, account, currentTab, setCurrentTab, reset, operatorName } = useStore()
+  const resolvedOperatorName = normalizeOperatorName(operatorName)
   const [page, setPage]       = useState(1)
   const [override, setOverride] = useState<OverrideState>(null)
-  const [ovForm, setOvForm]   = useState({ from: '', to: '', reason: '', by: 'analyst' })
+  const [ovForm, setOvForm]   = useState({ from: '', to: '', reason: '', by: resolvedOperatorName })
   const [checkMode, setCheckMode] = useState<'file_order' | 'chronological'>('file_order')
 
   const { data: txnData, refetch } = useQuery({
@@ -127,7 +128,7 @@ export function Step5Results() {
 
   const openOverride = (row: any) => {
     setOverride({ tid: row.transaction_id, from: row.from_account || '', to: row.to_account || '' })
-    setOvForm({ from: row.from_account || '', to: row.to_account || '', reason: '', by: 'analyst' })
+    setOvForm({ from: row.from_account || '', to: row.to_account || '', reason: '', by: resolvedOperatorName })
   }
 
   const handleSaveOverride = async () => {
@@ -139,7 +140,7 @@ export function Step5Results() {
         from_account: ovForm.from,
         to_account: ovForm.to,
         reason: ovForm.reason,
-        override_by: ovForm.by,
+        override_by: normalizeOperatorName(ovForm.by),
       })
       toast.success('Override saved')
       setOverride(null)
@@ -157,7 +158,7 @@ export function Step5Results() {
     const deletedOverride = overrideRows.find((row: any) => row.transaction_id === transactionId)
 
     try {
-      await deleteOverride(transactionId, account)
+      await deleteOverride(transactionId, account, resolvedOperatorName)
       refetch()
       refetchOverrides()
       toast('Override removed', {
@@ -172,7 +173,7 @@ export function Step5Results() {
                 from_account: deletedOverride.override_from_account,
                 to_account: deletedOverride.override_to_account,
                 reason: deletedOverride.override_reason || '',
-                override_by: deletedOverride.override_by || 'analyst',
+                override_by: deletedOverride.override_by || resolvedOperatorName,
               })
               toast.success('Override restored')
               refetch()
@@ -260,7 +261,7 @@ export function Step5Results() {
                   {row.override_reason || 'No reason provided'}
                 </div>
                 <div className="mt-1 text-[11px] text-muted">
-                  {row.override_by || 'analyst'} · {row.override_timestamp ? fmtDate(row.override_timestamp) : 'Unknown time'}
+                  {row.override_by || 'Unknown operator'} · {row.override_timestamp ? fmtDate(row.override_timestamp) : 'Unknown time'}
                 </div>
               </div>
             ))}

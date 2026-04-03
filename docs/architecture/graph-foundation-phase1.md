@@ -26,13 +26,21 @@ The graph layer must not:
 
 Phase 1 writes:
 - `nodes.csv`
+- `nodes.json`
 - `edges.csv`
+- `edges.json`
 - `aggregated_edges.csv`
+- `aggregated_edges.json`
 - `derived_account_edges.csv`
+- `derived_account_edges.json`
 - `graph_manifest.json`
 
 `derived_account_edges.csv` is the compact relationship layer derived from
 aggregated transaction flow where both endpoints are known full account nodes.
+
+The graph export layer is intentionally dual-format. CSV stays analyst-friendly
+and spreadsheet-friendly, while the JSON companions are used by downstream
+automation and API-facing consumers.
 
 ## Traceability
 
@@ -49,13 +57,44 @@ In practice, this is carried through the existing BSIE transaction fields and
 ## Service Boundary
 
 Phase 1 introduces a lightweight builder service:
-- `services/graph_builder_service.py`
+- [`/Users/saraithong/Documents/bsie/services/graph_builder_service.py`](/Users/saraithong/Documents/bsie/services/graph_builder_service.py)
 
 That service:
 - accepts finalized normalized transactions
 - optionally accepts match candidates
 - returns a typed `GraphBuildResult`
 - delegates graph transformation to the shared deterministic graph builder
+
+The current runtime also has a graph-analysis service boundary on top of the
+foundation:
+- [`/Users/saraithong/Documents/bsie/services/graph_analysis_service.py`](/Users/saraithong/Documents/bsie/services/graph_analysis_service.py)
+
+That higher layer:
+- loads graph-ready transactions and matches from persisted BSIE records
+- builds and caches graph bundles for short-lived repeated analyst queries
+- feeds the API and Investigation Admin graph views
+- keeps graph analytics additive rather than changing persisted transaction truth
+
+## Current Runtime Shape
+
+The graph foundation is no longer just an export-time helper. It now supports:
+
+- export jobs through [`/Users/saraithong/Documents/bsie/services/export_service.py`](/Users/saraithong/Documents/bsie/services/export_service.py)
+- graph analysis APIs in [`/Users/saraithong/Documents/bsie/app.py`](/Users/saraithong/Documents/bsie/app.py)
+- Investigation Admin graph browsing in [`/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.tsx)
+
+Primary API surfaces built on this foundation:
+- `/api/graph-analysis`
+- `/api/graph/nodes`
+- `/api/graph/edges`
+- `/api/graph/derived-edges`
+- `/api/graph/findings`
+- `/api/graph/neighborhood/{node_id}`
+- `/api/graph/neo4j-status`
+- `/api/graph/neo4j-sync`
+
+Graph requests are capped by the runtime graph-analysis service to preserve UI
+responsiveness and avoid unbounded load.
 
 ## Rollback
 

@@ -1,6 +1,7 @@
-export async function uploadFile(file: File) {
+export async function uploadFile(file: File, uploaded_by?: string) {
   const fd = new FormData()
   fd.append('file', file)
+  if (uploaded_by) fd.append('uploaded_by', uploaded_by)
   const r = await fetch('/api/upload', { method: 'POST', body: fd })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
@@ -12,11 +13,25 @@ export async function confirmMapping(
   columns: string[],
   header_row?: number,
   sheet_name?: string,
+  context?: {
+    reviewer?: string
+    detected_bank?: unknown
+    suggested_mapping?: Record<string, string | null>
+  },
 ) {
   const r = await fetch('/api/mapping/confirm', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ bank, mapping, columns, header_row, sheet_name }),
+    body: JSON.stringify({
+      bank,
+      mapping,
+      columns,
+      header_row,
+      sheet_name,
+      reviewer: context?.reviewer,
+      detected_bank: context?.detected_bank,
+      suggested_mapping: context?.suggested_mapping,
+    }),
   })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
@@ -45,6 +60,7 @@ export async function startProcess(payload: {
 export async function processFolder(payload: {
   folder_path: string
   recursive: boolean
+  operator?: string
 }) {
   const r = await fetch('/api/process-folder', {
     method: 'POST',
@@ -282,6 +298,17 @@ export async function getAuditLogs(params: Record<string, string | number | unde
   return r.json()
 }
 
+export async function getLearningFeedbackLogs(params: Record<string, string | number | undefined> = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
+  })
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  const r = await fetch(`/api/learning-feedback${suffix}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function getExportJobs() {
   const r = await fetch('/api/export-jobs')
   if (!r.ok) throw new Error(await r.text())
@@ -461,9 +488,10 @@ export async function getOverrides() {
   return r.json()
 }
 
-export async function deleteOverride(transactionId: string, accountNumber: string) {
+export async function deleteOverride(transactionId: string, accountNumber: string, operator?: string) {
   const params = new URLSearchParams()
   if (accountNumber) params.set('account_number', accountNumber)
+  if (operator) params.set('operator', operator)
   const r = await fetch(`/api/override/${encodeURIComponent(transactionId)}?${params.toString()}`, {
     method: 'DELETE',
   })

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { Step3Config } from '@/components/steps/Step3Config'
 import { useStore } from '@/store'
@@ -21,6 +21,7 @@ vi.mock('sonner', () => ({
 }))
 
 const { lookupRememberedAccountName } = await import('@/api')
+const { startProcess } = await import('@/api')
 
 describe('Step3Config remembered account name', () => {
   beforeEach(() => {
@@ -28,6 +29,7 @@ describe('Step3Config remembered account name', () => {
     useStore.getState().reset()
     useStore.setState({
       step: 3,
+      operatorName: 'Case Reviewer',
       tempFilePath: '/tmp/example.xlsx',
       bankKey: 'scb',
       account: '1234567890',
@@ -67,5 +69,26 @@ describe('Step3Config remembered account name', () => {
 
     await waitFor(() => expect(screen.getByText(/remembered from previous imports/i)).toBeInTheDocument())
     expect(screen.getByDisplayValue('Manual Name')).toBeInTheDocument()
+  })
+
+  it('passes the stored operator name when starting the pipeline', async () => {
+    useStore.setState({ name: 'Manual Name' })
+
+    render(<Step3Config />)
+
+    const runButton = await screen.findByRole('button', { name: /run pipeline/i })
+    fireEvent.click(runButton)
+
+    await waitFor(() => expect(startProcess).toHaveBeenCalledWith({
+      temp_file_path: '/tmp/example.xlsx',
+      file_id: null,
+      bank_key: 'scb',
+      account: '1234567890',
+      name: 'Manual Name',
+      confirmed_mapping: {},
+      operator: 'Case Reviewer',
+      header_row: 1,
+      sheet_name: 'Sheet1',
+    }))
   })
 })

@@ -7,6 +7,7 @@ import {
   getAccountDetail,
   getAccounts,
   getAuditLogs,
+  getLearningFeedbackLogs,
   getDatabaseBackupPreview,
   getDatabaseBackups,
   getDatabaseBackupSettings,
@@ -38,6 +39,7 @@ import { Badge } from '@/components/ui/badge'
 import { GraphExplorer } from '@/components/GraphExplorer'
 import { toast } from 'sonner'
 import { fmt, fmtDate } from '@/lib/utils'
+import { normalizeOperatorName, useStore } from '@/store'
 
 const TABS = [
   { id: 'database', label: 'Database' },
@@ -82,6 +84,13 @@ const INITIAL_FILTERS: TransactionFilters = {
   parser_run_id: '',
 }
 
+const AUDIT_QUICK_FILTERS = [
+  { value: '', label: 'All Audit' },
+  { value: 'learning_feedback', label: 'Learning Feedback' },
+  { value: 'account', label: 'Account Reviews' },
+  { value: 'transaction', label: 'Transaction Reviews' },
+] as const
+
 function formatValue(value: any) {
   if (value === null || value === undefined || value === '') return '—'
   if (typeof value === 'object') return JSON.stringify(value, null, 2)
@@ -93,6 +102,17 @@ function formatValue(value: any) {
 
 function compactHash(value: string) {
   return value ? `${value.slice(0, 16)}…` : '—'
+}
+
+function auditFeedbackBadgeVariant(status: string) {
+  switch (String(status || '').toLowerCase()) {
+    case 'corrected':
+      return 'green'
+    case 'confirmed':
+      return 'blue'
+    default:
+      return 'gray'
+  }
 }
 
 function StatCard({ label, value, tone = 'text-text' }: { label: string; value: ReactNode; tone?: string }) {
@@ -140,9 +160,16 @@ function SelectInput(props: SelectHTMLAttributes<HTMLSelectElement>) {
 }
 
 export function InvestigationDesk() {
+  const operatorName = useStore(s => s.operatorName)
+  const resolvedOperatorName = normalizeOperatorName(operatorName)
+  const defaultCorrectionReason = `${resolvedOperatorName} correction`
   const [tab, setTab] = useState<TabId>('database')
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
+  const [auditObjectType, setAuditObjectType] = useState('')
+  const [auditObjectId, setAuditObjectId] = useState('')
+  const deferredAuditObjectType = useDeferredValue(auditObjectType)
+  const deferredAuditObjectId = useDeferredValue(auditObjectId)
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilters>(INITIAL_FILTERS)
   const deferredTransactionFilters = useDeferredValue(transactionFilters)
   const [selectedFileId, setSelectedFileId] = useState('')
@@ -158,8 +185,8 @@ export function InvestigationDesk() {
   const [backupRetainCount, setBackupRetainCount] = useState('20')
   const [resetConfirmText, setResetConfirmText] = useState('')
   const [restoreConfirmText, setRestoreConfirmText] = useState('')
-  const [accountEdit, setAccountEdit] = useState({ account_holder_name: '', bank_name: '', notes: '', reason: 'analyst correction' })
-  const [transactionEdit, setTransactionEdit] = useState({ transaction_type: '', counterparty_name_normalized: '', review_status: '', reason: 'analyst correction' })
+  const [accountEdit, setAccountEdit] = useState({ account_holder_name: '', bank_name: '', notes: '', reason: defaultCorrectionReason })
+  const [transactionEdit, setTransactionEdit] = useState({ transaction_type: '', counterparty_name_normalized: '', review_status: '', reason: defaultCorrectionReason })
   const client = useQueryClient()
 
   const dbStatusQuery = useQuery({
@@ -230,8 +257,13 @@ export function InvestigationDesk() {
     enabled: tab === 'matches',
   })
   const auditQuery = useQuery({
-    queryKey: ['investigation', 'audit', deferredQuery],
-    queryFn: () => getAuditLogs({ object_type: deferredQuery, limit: 100 }),
+    queryKey: ['investigation', 'audit', deferredAuditObjectType, deferredAuditObjectId],
+    queryFn: () => getAuditLogs({ object_type: deferredAuditObjectType, object_id: deferredAuditObjectId, limit: 100 }),
+    enabled: tab === 'audit',
+  })
+  const learningFeedbackQuery = useQuery({
+    queryKey: ['investigation', 'learning-feedback-summary'],
+    queryFn: () => getLearningFeedbackLogs({ limit: 200 }),
     enabled: tab === 'audit',
   })
   const exportQuery = useQuery({
@@ -286,6 +318,33 @@ export function InvestigationDesk() {
     graphAnalysisQuery.data,
   ])
 
+  const learningFeedbackSummary = useMemo(() => {
+    const rows = learningFeedbackQuery.data?.items || []
+    const domainCounts = new Map<string, number>()
+    const statusCounts = new Map<string, number>()
+
+    for (const row of rows) {
+      const domain = String(row.extra_context_json?.learning_domain || 'unknown')
+      const status = String(row.extra_context_json?.feedback_status || 'unknown')
+      domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1)
+      statusCounts.set(status, (statusCounts.get(status) || 0) + 1)
+    }
+
+    const topDomains = Array.from(domainCounts.entries())
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 4)
+      .map(([domain, count]) => `${domain} (${count})`)
+
+    return {
+      total: rows.length,
+      corrected: statusCounts.get('corrected') || 0,
+      confirmed: statusCounts.get('confirmed') || 0,
+      accepted: statusCounts.get('accepted') || 0,
+      topDomains,
+      lastUpdated: rows[0]?.changed_at || '',
+    }
+  }, [learningFeedbackQuery.data])
+
   const refreshAll = () => {
     void client.invalidateQueries({ queryKey: ['investigation'] })
   }
@@ -299,7 +358,7 @@ export function InvestigationDesk() {
           ...(transactionFilters.file_id ? { file_id: transactionFilters.file_id } : {}),
           ...(transactionFilters.bank ? { bank: transactionFilters.bank } : {}),
         } : {},
-        created_by: 'analyst',
+        created_by: resolvedOperatorName,
       })
       toast.success(`${exportType} export created`)
       startTransition(() => setTab('exports'))
@@ -330,7 +389,7 @@ export function InvestigationDesk() {
 
   const handleDuplicateReview = async (groupId: string, decision: string) => {
     try {
-      await reviewDuplicate(groupId, { decision_value: decision, reviewer: 'analyst', reviewer_note: '' })
+      await reviewDuplicate(groupId, { decision_value: decision, reviewer: resolvedOperatorName, reviewer_note: '' })
       toast.success(`Duplicate group ${decision}`)
       refreshAll()
     } catch (error: any) {
@@ -340,7 +399,7 @@ export function InvestigationDesk() {
 
   const handleMatchReview = async (matchId: string, decision: string) => {
     try {
-      await reviewMatch(matchId, { decision_value: decision, reviewer: 'analyst', reviewer_note: '' })
+      await reviewMatch(matchId, { decision_value: decision, reviewer: resolvedOperatorName, reviewer_note: '' })
       toast.success(`Match ${decision}`)
       refreshAll()
     } catch (error: any) {
@@ -352,7 +411,7 @@ export function InvestigationDesk() {
     if (!selectedAccountId) return
     try {
       await reviewAccount(selectedAccountId, {
-        reviewer: 'analyst',
+        reviewer: resolvedOperatorName,
         reason: accountEdit.reason,
         changes: {
           account_holder_name: accountEdit.account_holder_name || undefined,
@@ -371,7 +430,7 @@ export function InvestigationDesk() {
     if (!selectedTransactionId) return
     try {
       await reviewTransaction(selectedTransactionId, {
-        reviewer: 'analyst',
+        reviewer: resolvedOperatorName,
         reason: transactionEdit.reason,
         changes: {
           transaction_type: transactionEdit.transaction_type || undefined,
@@ -390,7 +449,7 @@ export function InvestigationDesk() {
     if (!selectedRunId) return
     try {
       const payload = await reprocessParserRun(selectedRunId, {
-        reviewer: 'analyst',
+        reviewer: resolvedOperatorName,
         reviewer_note: 'reprocess from database admin',
         decision_value: 'reprocess',
       })
@@ -404,7 +463,7 @@ export function InvestigationDesk() {
   const handleCreateBackup = async () => {
     try {
       const payload = await createDatabaseBackup({
-        operator: 'analyst',
+        operator: resolvedOperatorName,
         note: adminNote || 'manual backup from investigation admin',
         backup_format: backupFormat,
       })
@@ -424,7 +483,7 @@ export function InvestigationDesk() {
         backup_format: backupFormat,
         retention_enabled: backupRetentionEnabled,
         retain_count: Number(backupRetainCount || 20),
-        updated_by: 'analyst',
+        updated_by: resolvedOperatorName,
       })
       setBackupEnabled(Boolean(payload.enabled))
       setBackupIntervalHours(String(payload.interval_hours))
@@ -448,7 +507,7 @@ export function InvestigationDesk() {
     try {
       const payload = await resetDatabase({
         confirm_text: resetConfirmText,
-        operator: 'analyst',
+        operator: resolvedOperatorName,
         note: adminNote || 'manual database reset from investigation admin',
         create_pre_reset_backup: true,
       })
@@ -480,7 +539,7 @@ export function InvestigationDesk() {
       const payload = await restoreDatabase({
         backup_filename: selectedBackupFilename,
         confirm_text: restoreConfirmText,
-        operator: 'analyst',
+        operator: resolvedOperatorName,
         note: adminNote || `manual restore from ${selectedBackupFilename}`,
         create_pre_restore_backup: true,
       })
@@ -519,7 +578,7 @@ export function InvestigationDesk() {
       account_holder_name: accountDetail.account_holder_name || '',
       bank_name: accountDetail.bank_name || '',
       notes: accountDetail.notes || '',
-      reason: 'analyst correction',
+      reason: `${resolvedOperatorName} correction`,
     })
   }, [accountDetail])
 
@@ -529,7 +588,7 @@ export function InvestigationDesk() {
       transaction_type: transactionDetail.transaction_type || '',
       counterparty_name_normalized: transactionDetail.counterparty_name_normalized || '',
       review_status: transactionDetail.review_status || '',
-      reason: 'analyst correction',
+      reason: `${resolvedOperatorName} correction`,
     })
   }, [transactionDetail])
 
@@ -583,11 +642,62 @@ export function InvestigationDesk() {
       {(tab === 'accounts' || tab === 'audit') && (
         <Card>
           <CardTitle>{tab === 'accounts' ? 'Account Query' : 'Audit Object Filter'}</CardTitle>
-          <TextInput
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={tab === 'accounts' ? 'Search account number, holder, or bank' : 'Optional object_type filter เช่น transaction, account'}
-          />
+          {tab === 'accounts' ? (
+            <TextInput
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search account number, holder, or bank"
+            />
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              <SelectInput value={auditObjectType} onChange={(event) => setAuditObjectType(event.target.value)}>
+                {AUDIT_QUICK_FILTERS.map((item) => (
+                  <option key={item.label} value={item.value}>{item.label}</option>
+                ))}
+              </SelectInput>
+              <TextInput
+                value={auditObjectId}
+                onChange={(event) => setAuditObjectId(event.target.value)}
+                placeholder="Optional object_id filter"
+              />
+            </div>
+          )}
+          {tab === 'audit' && (
+            <div className="mt-3 space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted">Quick Filters</div>
+              <div className="flex flex-wrap gap-2">
+                {AUDIT_QUICK_FILTERS.map((item) => (
+                  <Button
+                    key={item.label}
+                    size="sm"
+                    variant={auditObjectType === item.value ? 'outline' : 'ghost'}
+                    onClick={() => setAuditObjectType(item.value)}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+              <div className="text-xs text-text2">
+                Use <span className="font-mono">learning_feedback</span> to inspect what BSIE learned from confirmations and review corrections.
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {tab === 'audit' && (
+        <Card className="space-y-3">
+          <CardTitle>Learning Feedback Summary</CardTitle>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
+            <StatCard label="Signals" value={learningFeedbackSummary.total} />
+            <StatCard label="Corrected" value={learningFeedbackSummary.corrected} tone="text-success" />
+            <StatCard label="Confirmed" value={learningFeedbackSummary.confirmed} tone="text-accent" />
+            <StatCard label="Accepted" value={learningFeedbackSummary.accepted} tone="text-text2" />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <FieldBlock label="Top Learning Domains" value={learningFeedbackSummary.topDomains.length ? learningFeedbackSummary.topDomains.join(' · ') : '—'} />
+            <FieldBlock label="Latest Learning Signal" value={learningFeedbackSummary.lastUpdated || '—'} />
+          </div>
         </Card>
       )}
 
@@ -931,8 +1041,27 @@ export function InvestigationDesk() {
                         <td className="py-3 pr-3">
                           <div className="font-medium text-text">{row.object_type}</div>
                           <div className="font-mono text-xs text-muted">{row.object_id}</div>
+                          {row.object_type === 'learning_feedback' && row.extra_context_json?.source_object_type && row.extra_context_json?.source_object_id && (
+                            <div className="mt-1 text-xs text-text2">
+                              source {row.extra_context_json.source_object_type}:{row.extra_context_json.source_object_id}
+                            </div>
+                          )}
                         </td>
-                        <td className="py-3 pr-3">{formatValue(row.action_type)}</td>
+                        <td className="py-3 pr-3">
+                          <div className="text-text">{formatValue(row.action_type)}</div>
+                          {row.object_type === 'learning_feedback' && (
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {row.extra_context_json?.learning_domain && (
+                                <Badge variant="blue">{row.extra_context_json.learning_domain}</Badge>
+                              )}
+                              {row.extra_context_json?.feedback_status && (
+                                <Badge variant={auditFeedbackBadgeVariant(row.extra_context_json.feedback_status)}>
+                                  {row.extra_context_json.feedback_status}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </td>
                         <td className="py-3 pr-3">{formatValue(row.changed_by)}</td>
                         <td className="py-3 pr-3">{formatValue(row.changed_at)}</td>
                       </>

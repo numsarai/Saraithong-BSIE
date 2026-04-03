@@ -19,6 +19,7 @@ Workflow:
   GET  /api/duplicates      Review duplicate groups
   GET  /api/matches         Review match candidates
   GET  /api/audit-logs      Review audit trail
+  GET  /api/learning-feedback Review learning feedback signals
   GET  /api/admin/db-status Database runtime and schema status
   GET  /api/admin/backups   List database backups
   GET  /api/admin/backup-settings Get scheduled backup settings
@@ -164,7 +165,7 @@ from services.admin_service import (
     restore_database,
     update_backup_settings,
 )
-from services.audit_service import log_audit
+from services.audit_service import log_audit, record_learning_feedback
 from services.export_service import create_export_job, run_export_job
 from services.file_ingestion_service import get_file_record, persist_upload
 from services.graph_analysis_service import (
@@ -186,6 +187,7 @@ from services.search_service import (
     list_audit_logs,
     list_duplicate_groups,
     list_export_jobs,
+    list_learning_feedback_logs,
     list_files,
     list_matches,
     list_parser_runs,
@@ -253,6 +255,78 @@ def _repair_suggested_mapping(
             repaired[field] = value if value in available_columns else None
 
     return repaired
+
+
+def _normalize_feedback_text(value: object) -> str:
+    return str(value or "").strip().lower()
+
+
+def _normalized_mapping_snapshot(mapping: dict | None) -> dict[str, str]:
+    if not isinstance(mapping, dict):
+        return {}
+    snapshot: dict[str, str] = {}
+    for key, value in mapping.items():
+        text_key = str(key or "").strip()
+        if not text_key:
+            continue
+        text_value = str(value or "").strip()
+        snapshot[text_key] = text_value
+    return snapshot
+
+
+def _detected_bank_key(value: object) -> str:
+    if isinstance(value, dict):
+        for key in ("config_key", "key", "bank_key"):
+            candidate = _normalize_feedback_text(value.get(key))
+            if candidate:
+                return candidate
+        return _normalize_feedback_text(value.get("bank"))
+    return _normalize_feedback_text(value)
+
+
+def _bank_feedback_status(chosen_bank: str, detected_bank: str) -> str:
+    chosen = _normalize_feedback_text(chosen_bank)
+    detected = _normalize_feedback_text(detected_bank)
+    if not detected:
+        return "accepted"
+    return "confirmed" if chosen == detected else "corrected"
+
+
+def _mapping_feedback_status(confirmed_mapping: dict, suggested_mapping: dict) -> str:
+    suggested_snapshot = _normalized_mapping_snapshot(suggested_mapping)
+    if not suggested_snapshot:
+        return "accepted"
+
+    confirmed_snapshot = _normalized_mapping_snapshot(confirmed_mapping)
+    all_keys = sorted(set(confirmed_snapshot) | set(suggested_snapshot))
+    for key in all_keys:
+        confirmed_value = confirmed_snapshot.get(key, "")
+        suggested_value = suggested_snapshot.get(key, "")
+        if confirmed_value != suggested_value and (confirmed_value or suggested_value):
+            return "corrected"
+    return "confirmed"
+
+
+def _usage_increment_for_feedback(status: str) -> int:
+    return 2 if status == "corrected" else 1
+
+
+def _feedback_mode(bank_feedback: str, mapping_feedback: str) -> str:
+    statuses = {bank_feedback, mapping_feedback}
+    if "corrected" in statuses:
+        return "corrected"
+    if "confirmed" in statuses:
+        return "confirmed"
+    return "accepted"
+
+
+def _feedback_message(bank_feedback: str, mapping_feedback: str) -> str:
+    mode = _feedback_mode(bank_feedback, mapping_feedback)
+    if mode == "corrected":
+        return "Saved and reinforced your correction"
+    if mode == "confirmed":
+        return "Saved and reinforced the confirmed pattern"
+    return "Mapping saved"
 
 
 def _masked_database_url(url: str) -> str:
@@ -380,7 +454,7 @@ def _get_banks() -> List[Dict]:
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/upload")
-async def api_upload(file: UploadFile = File(...)):
+async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("analyst")):
     """
     Accept an Excel file, run bank + column auto-detection, and return:
     - detected bank
@@ -396,7 +470,7 @@ async def api_upload(file: UploadFile = File(...)):
     persisted = persist_upload(
         content=contents,
         original_filename=file.filename,
-        uploaded_by="analyst",
+        uploaded_by=(uploaded_by or "analyst").strip() or "analyst",
         mime_type=file.content_type,
     )
     save_path = Path(persisted["stored_path"])
@@ -449,10 +523,10 @@ async def api_upload(file: UploadFile = File(...)):
         ).dropna(how="all")
         data_df.columns = [str(c).strip() for c in data_df.columns]
 
-        bank_result  = detect_bank(data_df, extra_text=f"{file.filename} {sheet_name}")
+        bank_result  = detect_bank(data_df, extra_text=f"{file.filename} {sheet_name}", sheet_name=sheet_name)
         col_result   = detect_columns(data_df)
-        profile      = find_matching_profile(list(data_df.columns))
-        bank_memory  = find_matching_bank_fingerprint(list(data_df.columns))
+        profile      = find_matching_profile(list(data_df.columns), bank=bank_result.get("config_key", "") or "")
+        bank_memory  = find_matching_bank_fingerprint(list(data_df.columns), sheet_name=sheet_name)
         sample_rows = data_df.head(5).fillna("").to_dict(orient="records")
 
         auto_suggested = dict(col_result["suggested_mapping"])
@@ -500,27 +574,93 @@ async def api_upload(file: UploadFile = File(...)):
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/mapping/confirm")
-async def api_confirm_mapping(body: MappingConfirmRequest):
+async def api_confirm_mapping(request: Request):
     """Validate and store confirmed column mapping."""
+    payload = await request.json()
+    body = MappingConfirmRequest.model_validate(payload)
     bank = body.bank or "UNKNOWN"
     mapping = body.mapping
     columns = body.columns
     header_row = int(body.header_row or 0)
     sheet_name = str(body.sheet_name or "")
+    reviewer = str(body.reviewer or "analyst").strip() or "analyst"
+    detected_bank = _detected_bank_key(
+        payload.get("detected_bank")
+        if "detected_bank" in payload
+        else payload.get("detectedBank"),
+    )
+    suggested_mapping = payload.get("suggested_mapping") or payload.get("suggestedMapping") or {}
 
     if not mapping:
         raise HTTPException(400, "mapping is required")
 
     from core.mapping_memory import save_profile
-    profile = save_profile(bank, columns, mapping)
+    bank_feedback = _bank_feedback_status(bank, detected_bank)
+    mapping_feedback = _mapping_feedback_status(mapping, suggested_mapping)
+    profile = save_profile(
+        bank,
+        columns,
+        mapping,
+        usage_increment=_usage_increment_for_feedback(mapping_feedback),
+    )
     fingerprint = None
     if bank and str(bank).strip().lower() not in {"", "unknown", "generic"}:
-        fingerprint = save_bank_fingerprint(str(bank).strip(), columns, header_row=header_row, sheet_name=sheet_name)
+        fingerprint = save_bank_fingerprint(
+            str(bank).strip(),
+            columns,
+            header_row=header_row,
+            sheet_name=sheet_name,
+            usage_increment=_usage_increment_for_feedback(bank_feedback),
+        )
 
+    feedback_mode = _feedback_mode(bank_feedback, mapping_feedback)
+    learning_feedback_count = 0
+    with get_db_session() as session:
+        record_learning_feedback(
+            session,
+            learning_domain="mapping_memory",
+            action_type="mapping_confirmation",
+            source_object_type="mapping_profile",
+            source_object_id=profile["profile_id"],
+            feedback_status=mapping_feedback,
+            changed_by=reviewer,
+            old_value=suggested_mapping or None,
+            new_value=mapping,
+            extra_context={
+                "bank": bank,
+                "columns": list(columns or []),
+                "usage_increment": _usage_increment_for_feedback(mapping_feedback),
+            },
+        )
+        learning_feedback_count += 1
+        if fingerprint:
+            record_learning_feedback(
+                session,
+                learning_domain="bank_memory",
+                action_type="bank_confirmation",
+                source_object_type="bank_fingerprint",
+                source_object_id=fingerprint["fingerprint_id"],
+                feedback_status=bank_feedback,
+                changed_by=reviewer,
+                old_value={"detected_bank": detected_bank or None},
+                new_value={"selected_bank": bank},
+                extra_context={
+                    "header_row": header_row,
+                    "sheet_name": sheet_name,
+                    "usage_increment": _usage_increment_for_feedback(bank_feedback),
+                },
+            )
+            learning_feedback_count += 1
+        session.commit()
     return JSONResponse({
         "status": "ok",
         "profile_id": profile["profile_id"],
         "fingerprint_id": fingerprint["fingerprint_id"] if fingerprint else None,
+        "bank_feedback": bank_feedback,
+        "mapping_feedback": mapping_feedback,
+        "feedback_mode": feedback_mode,
+        "message": _feedback_message(bank_feedback, mapping_feedback),
+        "learning_feedback_count": learning_feedback_count,
     })
 
 
@@ -593,12 +733,13 @@ async def api_process_folder(request: Request):
     body = await request.json()
     folder_path = body.get("folder_path", "")
     recursive = bool(body.get("recursive", False))
+    operator = str(body.get("operator", "bulk-intake") or "bulk-intake").strip() or "bulk-intake"
 
     if not folder_path:
         raise HTTPException(400, "folder_path is required")
 
     try:
-        summary = process_folder(folder_path, recursive=recursive)
+        summary = process_folder(folder_path, recursive=recursive, operator=operator)
     except FileNotFoundError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
@@ -1478,6 +1619,12 @@ async def api_audit_logs(object_type: str = "", object_id: str = "", limit: int 
         return JSONResponse({"items": list_audit_logs(session, object_type=object_type, object_id=object_id, limit=limit, offset=offset)})
 
 
+@app.get("/api/learning-feedback")
+async def api_learning_feedback(object_id: str = "", limit: int = 200, offset: int = 0):
+    with get_db_session() as session:
+        return JSONResponse({"items": list_learning_feedback_logs(session, object_id=object_id, limit=limit, offset=offset)})
+
+
 @app.get("/api/export-jobs")
 async def api_export_jobs(limit: int = 100, offset: int = 0):
     with get_db_session() as session:
@@ -1579,17 +1726,18 @@ async def api_add_override(body: OverrideRequest):
 
 
 @app.delete("/api/override/{transaction_id}")
-async def api_remove_override(transaction_id: str, account_number: str = ""):
+async def api_remove_override(transaction_id: str, account_number: str = "", operator: str = "analyst"):
     removed = remove_override(transaction_id, account_number=account_number)
     if not removed:
         raise HTTPException(404, "Override not found")
+    changed_by = str(operator or "analyst").strip() or "analyst"
     with get_db_session() as session:
         log_audit(
             session,
             object_type="override",
             object_id=f"{account_number or 'global'}::{transaction_id}",
             action_type="delete_override",
-            changed_by="analyst",
+            changed_by=changed_by,
             reason="override removed",
         )
         session.commit()

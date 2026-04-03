@@ -187,7 +187,7 @@ def process_account(
     subject_name: str = "",
     bank_key: str = "",
     confirmed_mapping: Optional[Dict[str, Optional[str]]] = None,
-    save_mapping_profile: bool = True,
+    save_mapping_profile: bool = False,
     file_id: str = "",
     parser_run_id: str = "",
     operator: str = "analyst",
@@ -204,6 +204,7 @@ def process_account(
     confirmed_mapping     : dict {logical_field: actual_column} confirmed by user;
                             auto-detected if None
     save_mapping_profile  : whether to persist the mapping as a reusable profile
+                            (explicit only; default off)
 
     Returns
     -------
@@ -303,7 +304,7 @@ def process_account(
     # ── Step 2: Detect bank ───────────────────────────────────────────────
     logger.info("[Step 2] Detecting bank")
     if not _bank_cfg_key:
-        detection = detect_bank(_raw_preview, extra_text=f"{input_file.stem} {_sheet_name}")
+        detection = detect_bank(_raw_preview, extra_text=f"{input_file.stem} {_sheet_name}", sheet_name=_sheet_name)
         _bank_cfg_key = detection.get("config_key", "")
         logger.info(f"  Detected: {detection['bank']} (conf={detection['confidence']})")
     else:
@@ -342,7 +343,10 @@ def process_account(
 
     # ── Step 4: Suggest mapping from auto-detect + memory ─────────────────
     logger.info("[Step 4] Loading mapping memory")
-    profile = find_matching_profile(list(raw_df.columns))
+    profile = find_matching_profile(
+        [column for column in raw_df.columns if not str(column).startswith("_")],
+        bank=_bank_cfg_key,
+    )
 
     if confirmed_mapping is None:
         if profile:

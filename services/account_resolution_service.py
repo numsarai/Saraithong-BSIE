@@ -23,6 +23,47 @@ def bank_code_from_name(bank_name: str | None) -> str:
     return text.replace(" ", "_")[:32] if text else "unknown"
 
 
+def best_known_account_holder_name(
+    session: Session,
+    *,
+    bank_name: str | None,
+    raw_account_number: object,
+) -> str | None:
+    normalized = normalize_account_number(raw_account_number)
+    if not normalized:
+        return None
+
+    bank_code = bank_code_from_name(bank_name)
+    exact_match = session.scalars(
+        select(Account).where(
+            Account.bank_code == bank_code,
+            Account.normalized_account_number == normalized,
+        )
+    ).first()
+    if exact_match and str(exact_match.account_holder_name or "").strip():
+        return str(exact_match.account_holder_name).strip()
+
+    named_matches = session.scalars(
+        select(Account).where(
+            Account.normalized_account_number == normalized,
+            Account.account_holder_name.is_not(None),
+            Account.account_holder_name != "",
+        ).order_by(Account.last_seen_at.desc())
+    ).all()
+    distinct_names = []
+    seen_names: set[str] = set()
+    for match in named_matches:
+        name = str(match.account_holder_name or "").strip()
+        if not name or name in seen_names:
+            continue
+        seen_names.add(name)
+        distinct_names.append(name)
+    if len(distinct_names) == 1:
+        return distinct_names[0]
+
+    return None
+
+
 def resolve_account(
     session: Session,
     *,
@@ -38,6 +79,11 @@ def resolve_account(
         return None
 
     bank_code = bank_code_from_name(bank_name)
+    resolved_name = str(account_holder_name or "").strip() or best_known_account_holder_name(
+        session,
+        bank_name=bank_name,
+        raw_account_number=raw_account_number,
+    )
     existing = session.scalars(
         select(Account).where(
             Account.bank_code == bank_code,
@@ -52,8 +98,8 @@ def resolve_account(
         existing.source_count = int(existing.source_count or 0) + 1
         existing.raw_account_number = str(raw_account_number or existing.raw_account_number or "")
         existing.display_account_number = display
-        if account_holder_name and not existing.account_holder_name:
-            existing.account_holder_name = account_holder_name
+        if resolved_name and not existing.account_holder_name:
+            existing.account_holder_name = resolved_name
         if notes:
             existing.notes = notes
         session.add(existing)
@@ -66,7 +112,7 @@ def resolve_account(
         raw_account_number=str(raw_account_number or ""),
         normalized_account_number=normalized,
         display_account_number=display,
-        account_holder_name=account_holder_name or None,
+        account_holder_name=resolved_name or None,
         account_type=account_type,
         first_seen_at=now,
         last_seen_at=now,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@/store'
-import { getBanks, startProcess } from '@/api'
+import { getBanks, lookupRememberedAccountName, startProcess } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
@@ -12,10 +12,46 @@ export function Step3Config() {
     banks, setBanks, tempFilePath, fileId, headerRow, sheetName, confirmedMapping, setJobId, setParserRunId, setStep,
   } = useStore()
   const [loading, setLoading] = useState(false)
+  const [rememberedName, setRememberedName] = useState('')
+  const [checkingRememberedName, setCheckingRememberedName] = useState(false)
 
   useEffect(() => {
     getBanks().then(setBanks).catch(() => toast.error('Could not load bank list'))
   }, [setBanks])
+
+  useEffect(() => {
+    const safeAccount = account.replace(/\D/g, '')
+    if (!safeAccount.match(/^\d{10}$|^\d{12}$/)) {
+      setRememberedName('')
+      setCheckingRememberedName(false)
+      return
+    }
+
+    let cancelled = false
+    setCheckingRememberedName(true)
+    setRememberedName('')
+
+    lookupRememberedAccountName({ account: safeAccount, bank_key: bankKey })
+      .then((data) => {
+        if (cancelled) return
+        const nextRememberedName = String(data.remembered_name || '').trim()
+        setRememberedName(nextRememberedName)
+        if (nextRememberedName && !useStore.getState().name.trim()) {
+          setName(nextRememberedName)
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setRememberedName('')
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingRememberedName(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [account, bankKey, setName])
 
   const handleRun = async () => {
     if (!account.match(/^\d{10}$|^\d{12}$/)) {
@@ -91,6 +127,17 @@ export function Step3Config() {
               className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none"
             />
           </div>
+          {(checkingRememberedName || rememberedName) ? (
+            <div className="col-span-2 rounded-lg border border-border bg-surface2/70 px-3 py-2 text-xs text-muted">
+              {checkingRememberedName
+                ? 'Checking remembered account name from previous imports…'
+                : (
+                  <>
+                    Remembered from previous imports: <span className="font-semibold text-text">{rememberedName}</span>. You can edit this before running.
+                  </>
+                )}
+            </div>
+          ) : null}
         </div>
       </Card>
 

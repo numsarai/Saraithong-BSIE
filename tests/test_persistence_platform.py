@@ -7,7 +7,7 @@ import pandas as pd
 
 from database import init_db
 from persistence.base import get_db_session
-from persistence.models import AuditLog, ExportJob, FileRecord, ParserRun, StatementBatch, Transaction
+from persistence.models import Account, AuditLog, ExportJob, FileRecord, ParserRun, StatementBatch, Transaction
 from pipeline.process_account import process_account
 from services.export_service import create_export_job, run_export_job
 from services.file_ingestion_service import persist_upload
@@ -110,6 +110,82 @@ def test_ofx_pipeline_persists_parser_run_batch_and_transactions(tmp_path: Path)
         transactions = session.query(Transaction).filter(Transaction.parser_run_id == run.id).all()
         assert len(transactions) == 2
         assert all(tx.lineage_json.get("file_id") == upload_meta["file_id"] for tx in transactions)
+
+
+def test_account_name_is_persisted_and_reused_when_later_ingest_lacks_name(tmp_path: Path):
+    init_db()
+    account = f"{uuid4().int % 10**10:010d}"
+    named_ofx_path = tmp_path / "named.ofx"
+    unnamed_ofx_path = tmp_path / "unnamed.ofx"
+    named_ofx_path.write_text(_sample_ofx(account, amount="120.00"), encoding="utf-8")
+    unnamed_ofx_path.write_text(_sample_ofx(account, amount="130.00"), encoding="utf-8")
+
+    first_upload = persist_upload(
+        content=named_ofx_path.read_bytes(),
+        original_filename=named_ofx_path.name,
+        uploaded_by="tester",
+    )
+    first_run = create_parser_run(
+        file_id=first_upload["file_id"],
+        bank_detected="ofx",
+        confirmed_mapping={},
+        operator="tester",
+    )
+
+    process_account(
+        input_file=named_ofx_path,
+        subject_account=account,
+        subject_name="Persisted Name",
+        bank_key="ofx",
+        confirmed_mapping={},
+        file_id=first_upload["file_id"],
+        parser_run_id=first_run["parser_run_id"],
+        operator="tester",
+    )
+
+    second_upload = persist_upload(
+        content=unnamed_ofx_path.read_bytes(),
+        original_filename=unnamed_ofx_path.name,
+        uploaded_by="tester",
+    )
+    second_run = create_parser_run(
+        file_id=second_upload["file_id"],
+        bank_detected="ofx",
+        confirmed_mapping={},
+        operator="tester",
+    )
+
+    second_output_dir = process_account(
+        input_file=unnamed_ofx_path,
+        subject_account=account,
+        subject_name="",
+        bank_key="ofx",
+        confirmed_mapping={},
+        file_id=second_upload["file_id"],
+        parser_run_id=second_run["parser_run_id"],
+        operator="tester",
+    )
+
+    with get_db_session() as session:
+        row = (
+            session.query(Account)
+            .filter(Account.bank_code == "ofx", Account.normalized_account_number == account)
+            .one()
+        )
+        second_parser_run = session.get(ParserRun, second_run["parser_run_id"])
+        second_transactions = (
+            session.query(Transaction)
+            .filter(Transaction.parser_run_id == second_run["parser_run_id"])
+            .all()
+        )
+        assert row.account_holder_name == "Persisted Name"
+        assert row.source_count == 2
+        assert row.display_account_number == account
+        assert second_parser_run is not None
+        assert second_parser_run.summary_json["subject_name"] == "Persisted Name"
+        assert second_transactions
+        assert all(tx.lineage_json.get("subject_name") == "Persisted Name" for tx in second_transactions)
+    assert (second_output_dir / "processed" / "Persisted Name_OFX_report.xlsx").exists()
 
 
 def test_transaction_review_and_export_job_create_audit_and_artifacts(tmp_path: Path):

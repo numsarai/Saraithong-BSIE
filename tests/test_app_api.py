@@ -301,6 +301,42 @@ def test_upload_repairs_stale_profile_mapping_for_debit_credit_layout(tmp_path):
     assert payload["suggested_mapping"]["balance"] == "จำนวนเงินคงเหลือ"
 
 
+def test_account_remembered_name_endpoint_returns_match():
+    with patch.object(app, "best_known_account_holder_name", return_value="Persisted Name") as lookup_name:
+        response = client.get(
+            "/api/accounts/remembered-name",
+            params={"account": "123-456-7890", "bank_key": "scb"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "bank_key": "scb",
+        "account": "123-456-7890",
+        "normalized_account_number": "1234567890",
+        "remembered_name": "Persisted Name",
+        "matched": True,
+    }
+    lookup_name.assert_called_once()
+
+
+def test_account_remembered_name_endpoint_returns_empty_payload_for_invalid_account():
+    with patch.object(app, "best_known_account_holder_name") as lookup_name:
+        response = client.get(
+            "/api/accounts/remembered-name",
+            params={"account": "abc123", "bank_key": "scb"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "bank_key": "scb",
+        "account": "abc123",
+        "normalized_account_number": "",
+        "remembered_name": "",
+        "matched": False,
+    }
+    lookup_name.assert_not_called()
+
+
 def test_db_status_endpoint_reports_investigation_schema():
     response = client.get("/api/admin/db-status")
 

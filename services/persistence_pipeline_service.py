@@ -178,6 +178,9 @@ def persist_pipeline_run(
             account_holder_name=subject_name,
             notes="subject account from parser run",
         )
+        effective_subject_name = str(
+            (subject_account_row.account_holder_name if subject_account_row else "") or subject_name or ""
+        ).strip()
 
         raw_row_map: dict[int, str] = {}
         for idx, row in raw_df.reset_index(drop=True).iterrows():
@@ -313,7 +316,7 @@ def persist_pipeline_run(
                 "duplicate_reason": duplicate_reason,
                 "transaction_record_id": str(row.get("transaction_id", "") or ""),
                 "subject_account": subject_account,
-                "subject_name": subject_name,
+                "subject_name": effective_subject_name,
             }
             transaction = Transaction(
                 statement_batch_id=batch.id,
@@ -380,7 +383,7 @@ def persist_pipeline_run(
             "bank_key": bank_key,
             "bank_name": bank_name,
             "subject_account": subject_account,
-            "subject_name": subject_name,
+            "subject_name": effective_subject_name,
             "transaction_count": len(persisted_transactions),
             "statement_batch_id": batch.id,
             "output_dir": str(output_dir),

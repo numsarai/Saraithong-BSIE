@@ -14,6 +14,7 @@ Workflow:
   GET  /api/files           Search persisted file evidence
   GET  /api/parser-runs     Search parser run history
   GET  /api/accounts        Search account registry
+  GET  /api/accounts/remembered-name Lookup remembered account holder name
   GET  /api/transactions/search Search persisted transactions
   GET  /api/duplicates      Review duplicate groups
   GET  /api/matches         Review match candidates
@@ -176,6 +177,7 @@ from services.graph_analysis_service import (
 )
 from services.neo4j_service import get_neo4j_status, sync_graph_to_neo4j
 from services.persistence_pipeline_service import create_parser_run, mark_parser_run_failed
+from services.account_resolution_service import best_known_account_holder_name, normalize_account_number
 from services.review_service import get_account_review_payload, review_duplicate_group, review_match, update_account_fields, update_transaction_fields
 from services.search_service import (
     get_account_detail,
@@ -942,6 +944,30 @@ async def api_parser_run_reprocess(parser_run_id: str, body: ReviewRequest):
 async def api_accounts(q: str = "", limit: int = 100, offset: int = 0):
     with get_db_session() as session:
         return JSONResponse({"items": list_accounts(session, q=q, limit=limit, offset=offset)})
+
+
+@app.get("/api/accounts/remembered-name")
+async def api_account_remembered_name(bank_key: str = "", account: str = ""):
+    resolved_bank = str(bank_key or "").strip()
+    raw_account = str(account or "").strip()
+    normalized_account = normalize_account_number(raw_account) or ""
+    remembered_name = ""
+
+    if normalized_account:
+        with get_db_session() as session:
+            remembered_name = best_known_account_holder_name(
+                session,
+                bank_name=resolved_bank,
+                raw_account_number=raw_account,
+            ) or ""
+
+    return JSONResponse({
+        "bank_key": resolved_bank,
+        "account": raw_account,
+        "normalized_account_number": normalized_account,
+        "remembered_name": remembered_name,
+        "matched": bool(remembered_name),
+    })
 
 
 @app.get("/api/accounts/{account_id}")

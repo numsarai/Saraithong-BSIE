@@ -1,14 +1,10 @@
 """Focused API regression tests for app.py."""
 from io import BytesIO
 import json
-from decimal import Decimal
 from unittest.mock import patch
-from uuid import uuid4
 
 from fastapi.testclient import TestClient
 import app
-from persistence.base import get_db_session
-from persistence.models import Account
 
 
 client = TestClient(app.app)

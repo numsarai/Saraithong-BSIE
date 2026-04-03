@@ -1,18 +1,22 @@
 """Focused API regression tests for app.py."""
+from io import BytesIO
+import json
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-import json
-from io import BytesIO
-
 import app
 
 
 client = TestClient(app.app)
 
 
-def test_favicon_route_serves_built_asset():
-    """The root favicon path should serve the built frontend asset."""
+def test_favicon_route_serves_built_asset(tmp_path, monkeypatch):
+    """The root favicon path should serve a built favicon when one is available."""
+    react_dist = tmp_path / "dist"
+    react_dist.mkdir()
+    (react_dist / "favicon.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg' />", encoding="utf-8")
+    monkeypatch.setattr(app, "_REACT_DIST", react_dist)
+
     response = client.get("/favicon.svg")
 
     assert response.status_code == 200

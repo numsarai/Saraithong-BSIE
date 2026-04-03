@@ -2,11 +2,18 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from core.autodetect import analyze_file
 from core.bank_detector import detect_bank
 from core.loader import find_best_sheet_and_header, load_config, load_excel
 from core.normalizer import normalize
+
+
+def _skip_if_missing(paths: list[Path], label: str) -> None:
+    missing = [str(path) for path in paths if not path.exists()]
+    if missing:
+        pytest.skip(f"{label} not available in this checkout: {', '.join(missing)}")
 
 
 def test_detect_bank_identifies_scb_dual_account_headers():
@@ -95,10 +102,10 @@ def test_detect_bank_matches_real_sample_workbooks():
         "sample_08_kbank_en.xlsx": "kbank",
         "sample_09_scb_savings.xlsx": "scb",
     }
+    _skip_if_missing([sample_dir / filename for filename in expectations], "golden sample workbooks")
 
     for filename, expected_key in expectations.items():
         path = sample_dir / filename
-        assert path.exists(), f"Missing sample workbook: {filename}"
         xf = pd.ExcelFile(path, engine="openpyxl")
         preview = pd.read_excel(path, sheet_name=xf.sheet_names[0], header=None, nrows=40, dtype=str).fillna("")
         result = detect_bank(preview, extra_text=f"{path.stem} {xf.sheet_names[0]}")
@@ -107,7 +114,7 @@ def test_detect_bank_matches_real_sample_workbooks():
 
 def test_detect_bank_marks_real_messy_sample_as_generic():
     path = Path("data/sample_statements/sample_10_mixed_messy.xlsx")
-    assert path.exists(), "Missing messy sample workbook"
+    _skip_if_missing([path], "messy sample workbook")
     xf = pd.ExcelFile(path, engine="openpyxl")
     preview = pd.read_excel(path, sheet_name=xf.sheet_names[0], header=None, nrows=40, dtype=str).fillna("")
 
@@ -120,7 +127,7 @@ def test_detect_bank_marks_real_messy_sample_as_generic():
 
 def test_find_best_sheet_and_header_skips_empty_cover_sheet_on_real_scb_workbook():
     path = Path("ตัวอย่างไฟล์ธนาคาร/ตัวอย่าง ไทยพาณิชย์ 68058421-6302541889 นาย กฤตกร เพิ่มพูล.xlsx")
-    assert path.exists(), "Missing attached SCB workbook"
+    _skip_if_missing([path], "attached SCB workbook")
 
     pick = find_best_sheet_and_header(path)
 
@@ -142,10 +149,10 @@ def test_detect_bank_matches_attached_real_workbooks():
         "ตัวอย่าง ไทยพาณิชย์ 68058421-6302541889 นาย กฤตกร เพิ่มพูล.xlsx": "scb",
         "ตัวอย่าง ไทยพาณิชย์ 68058421-8112726972 นาย นราพล บุญแก้ว.xlsx": "scb",
     }
+    _skip_if_missing([real_dir / filename for filename in expectations], "attached real workbooks")
 
     for filename, expected_key in expectations.items():
         path = real_dir / filename
-        assert path.exists(), f"Missing attached workbook: {filename}"
         pick = find_best_sheet_and_header(path, preview_rows=40, scan_rows=15)
         df = pd.read_excel(path, sheet_name=pick["sheet_name"], header=pick["header_row"], dtype=str).dropna(how="all")
         df.columns = [str(col).strip() for col in df.columns]
@@ -155,7 +162,7 @@ def test_detect_bank_matches_attached_real_workbooks():
 
 def test_normalize_real_bay_direction_marker_workbook():
     path = Path("ตัวอย่างไฟล์ธนาคาร/ตัวอย่าง กรุงศรี A-002-6941230651-EStatement.xlsx")
-    assert path.exists(), "Missing attached BAY workbook"
+    _skip_if_missing([path], "attached BAY workbook")
 
     cfg = load_config("bay")
     raw_df = load_excel(path, cfg)
@@ -172,7 +179,7 @@ def test_normalize_real_bay_direction_marker_workbook():
 
 def test_normalize_real_ciaf_export_workbook():
     path = Path("ตัวอย่างไฟล์ธนาคาร/stm  วรุตม์.xlsx")
-    assert path.exists(), "Missing attached CIAF workbook"
+    _skip_if_missing([path], "attached CIAF workbook")
 
     cfg = load_config("ciaf")
     raw_df = load_excel(path, cfg)

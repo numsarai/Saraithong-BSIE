@@ -11,21 +11,32 @@ The goal is not to guess aggressively. We prefer:
 
 from __future__ import annotations
 
+from collections import Counter
 import re
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+from core.account_parser import parse_account
+
 
 ACCOUNT_ALIASES = {
     "เลขที่บัญชี",
     "หมายเลขบัญชี",
     "บัญชีเลขที่",
+    "บัญชีผู้โอน",
+    "บัญชีผู้รับโอน",
+    "เลขบัญชีผู้โอน",
+    "เลขบัญชีผู้รับโอน",
     "account number",
     "account no",
     "account no.",
     "a/c no",
+    "sender account",
+    "receiver account",
+    "from account",
+    "to account",
     "account",
 }
 
@@ -33,11 +44,17 @@ NAME_ALIASES = {
     "ชื่อบัญชี",
     "ชื่อเจ้าของบัญชี",
     "ชื่อบัญชีผู้ถือ",
+    "ชื่อผู้โอน",
+    "ชื่อผู้รับโอน",
     "ชื่อ-สกุล",
     "ชื่อสกุล",
     "account name",
     "account holder",
     "holder name",
+    "sender name",
+    "receiver name",
+    "from name",
+    "to name",
     "customer name",
     "name",
 }
@@ -54,15 +71,65 @@ IGNORE_NAME_TOKENS = {
 }
 
 
-def infer_subject_identity(file_path: str | Path, preview_df: pd.DataFrame | None = None) -> dict[str, str]:
+def infer_subject_identity(
+    file_path: str | Path,
+    preview_df: pd.DataFrame | None = None,
+    transaction_df: pd.DataFrame | None = None,
+) -> dict[str, str]:
+    return infer_subject_identity_from_frames(
+        file_path,
+        preview_df=preview_df,
+        transaction_df=transaction_df,
+    )
+
+
+def infer_subject_identity_from_frames(
+    file_path: str | Path,
+    *,
+    preview_df: pd.DataFrame | None = None,
+    transaction_df: pd.DataFrame | None = None,
+) -> dict[str, str]:
     file_path = Path(file_path)
 
     filename_identity = _infer_from_filename(file_path.stem)
-    if filename_identity["account"]:
-        return filename_identity
-
     workbook_identity = _infer_from_preview(preview_df)
-    return workbook_identity
+    transaction_identity = _infer_from_transaction_rows(transaction_df)
+
+    account = (
+        filename_identity["account"]
+        or workbook_identity["account"]
+        or transaction_identity["account"]
+    )
+    name = (
+        filename_identity["name"]
+        or workbook_identity["name"]
+        or transaction_identity["name"]
+    )
+    account_source = (
+        filename_identity.get("account_source", "")
+        or workbook_identity.get("account_source", "")
+        or transaction_identity.get("account_source", "")
+    )
+    name_source = (
+        filename_identity.get("name_source", "")
+        or workbook_identity.get("name_source", "")
+        or transaction_identity.get("name_source", "")
+    )
+    sources = {value for value in (account_source, name_source) if value}
+    if not sources:
+        source = ""
+    elif len(sources) == 1:
+        source = next(iter(sources))
+    else:
+        source = "mixed"
+
+    return {
+        "account": account,
+        "name": name,
+        "account_source": account_source,
+        "name_source": name_source,
+        "source": source,
+    }
 
 
 def _infer_from_filename(stem: str) -> dict[str, str]:
@@ -80,12 +147,17 @@ def _infer_from_filename(stem: str) -> dict[str, str]:
             tail = compact.split(account, 1)[-1]
         name = _clean_name_fragment(tail)
 
-    return {"account": account, "name": name}
+    return {
+        "account": account,
+        "name": name,
+        "account_source": "filename" if account else "",
+        "name_source": "filename" if name else "",
+    }
 
 
 def _infer_from_preview(preview_df: pd.DataFrame | None) -> dict[str, str]:
     if preview_df is None or preview_df.empty:
-        return {"account": "", "name": ""}
+        return {"account": "", "name": "", "account_source": "", "name_source": ""}
 
     account = ""
     name = ""
@@ -94,28 +166,116 @@ def _infer_from_preview(preview_df: pd.DataFrame | None) -> dict[str, str]:
 
     for row_idx in range(scan_rows):
         row_values = [str(preview_df.iat[row_idx, col_idx] or "").strip() for col_idx in range(scan_cols)]
+        next_row_values = (
+            [str(preview_df.iat[row_idx + 1, col_idx] or "").strip() for col_idx in range(scan_cols)]
+            if row_idx + 1 < scan_rows
+            else []
+        )
+        alias_like_count = sum(1 for value in row_values if _looks_like_alias(value))
         for col_idx, cell in enumerate(row_values):
             lower = _norm(cell)
             if not account and any(alias in lower for alias in ACCOUNT_ALIASES):
-                account = _extract_first_account(cell) or _extract_neighbor_account(row_values, col_idx)
+                account = _extract_first_account(cell)
+                if not account and alias_like_count <= 1:
+                    account = _extract_neighbor_account(row_values, col_idx)
+                if not account and next_row_values and alias_like_count <= 1:
+                    account = _extract_neighbor_account(next_row_values, col_idx)
             if not name and any(alias in lower for alias in NAME_ALIASES):
-                name = _extract_name_from_labeled_cell(cell) or _extract_neighbor_name(row_values, col_idx)
+                name = _extract_name_from_labeled_cell(cell)
+                if not name and alias_like_count <= 1:
+                    name = _extract_neighbor_name(row_values, col_idx)
+                if not name and next_row_values and alias_like_count <= 1:
+                    name = _extract_neighbor_name(next_row_values, col_idx)
         if account and name:
             break
 
-    return {"account": account, "name": name}
+    return {
+        "account": account,
+        "name": name,
+        "account_source": "workbook_header" if account else "",
+        "name_source": "workbook_header" if name else "",
+    }
+
+
+def _infer_from_transaction_rows(transaction_df: pd.DataFrame | None) -> dict[str, str]:
+    if transaction_df is None or transaction_df.empty:
+        return {"account": "", "name": "", "account_source": "", "name_source": ""}
+
+    scan_df = transaction_df.head(25).copy()
+    account_columns = [column for column in scan_df.columns if _looks_like_account_column(column)]
+    name_columns = [column for column in scan_df.columns if _looks_like_name_column(column)]
+    if not account_columns:
+        return {"account": "", "name": "", "account_source": "", "name_source": ""}
+
+    account_counts: Counter[str] = Counter()
+    for _, row in scan_df.iterrows():
+        for column in account_columns:
+            parsed = parse_account(row.get(column, ""))
+            if parsed["type"] == "ACCOUNT" and parsed["clean"]:
+                account_counts[parsed["clean"]] += 1
+
+    if not account_counts:
+        return {"account": "", "name": "", "account_source": "", "name_source": ""}
+
+    ranked_accounts = account_counts.most_common(2)
+    top_account, top_count = ranked_accounts[0]
+    second_count = ranked_accounts[1][1] if len(ranked_accounts) > 1 else 0
+    if top_count < 2 or top_count <= second_count:
+        return {"account": "", "name": "", "account_source": "", "name_source": ""}
+
+    name_counts: Counter[str] = Counter()
+    if name_columns:
+        for _, row in scan_df.iterrows():
+            row_accounts = {
+                parse_account(row.get(column, "")).get("clean", "")
+                for column in account_columns
+            }
+            if top_account not in row_accounts:
+                continue
+            for column in name_columns:
+                candidate = _clean_name_fragment(row.get(column, ""))
+                if not candidate or _looks_like_alias(candidate):
+                    continue
+                if _extract_account_candidates(candidate):
+                    continue
+                name_counts[candidate] += 1
+
+    top_name = ""
+    if name_counts:
+        ranked_names = name_counts.most_common(2)
+        candidate_name, candidate_count = ranked_names[0]
+        second_name_count = ranked_names[1][1] if len(ranked_names) > 1 else 0
+        if candidate_count >= 2 and candidate_count > second_name_count:
+            top_name = candidate_name
+
+    return {
+        "account": top_account,
+        "name": top_name,
+        "account_source": "transaction_pattern",
+        "name_source": "transaction_pattern" if top_name else "",
+    }
 
 
 def _extract_account_candidates(text: str) -> list[str]:
     candidates: list[str] = []
     seen: set[str] = set()
+    stripped_text = str(text or "").strip()
+    if re.match(r"^-?\d+(\.\d+)?[eE][+\-]?\d+$", stripped_text) or re.match(r"^-?\d+\.\d+$", stripped_text):
+        parsed = parse_account(stripped_text)
+        if parsed["type"] == "ACCOUNT" and parsed["clean"]:
+            return [parsed["clean"]]
     for digits in re.findall(r"\d{10,12}", text):
         if digits not in seen:
             seen.add(digits)
             candidates.append(digits)
+    parsed = parse_account(text)
+    if parsed["type"] == "ACCOUNT" and parsed["clean"] and parsed["clean"] not in seen:
+        seen.add(parsed["clean"])
+        candidates.append(parsed["clean"])
     for raw in re.findall(r"[\d\- ]{8,20}", text):
-        digits = re.sub(r"\D", "", raw)
-        if len(digits) in {10, 12} and digits not in seen:
+        parsed = parse_account(raw)
+        digits = str(parsed.get("clean") or "")
+        if parsed["type"] == "ACCOUNT" and digits and digits not in seen:
             seen.add(digits)
             candidates.append(digits)
     return candidates
@@ -171,6 +331,16 @@ def _clean_name_fragment(value: Any) -> str:
 def _looks_like_alias(value: str) -> bool:
     lowered = _norm(value)
     return any(alias in lowered for alias in ACCOUNT_ALIASES | NAME_ALIASES)
+
+
+def _looks_like_account_column(value: Any) -> bool:
+    lowered = _norm(value)
+    return any(alias in lowered for alias in ACCOUNT_ALIASES)
+
+
+def _looks_like_name_column(value: Any) -> bool:
+    lowered = _norm(value)
+    return any(alias in lowered for alias in NAME_ALIASES)
 
 
 def _norm(value: Any) -> str:

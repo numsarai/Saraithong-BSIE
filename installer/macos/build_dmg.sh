@@ -20,10 +20,17 @@ fi
 
 rm -rf "${DMG_STAGING}"
 mkdir -p "${DMG_STAGING}"
-cp -r "${DIST_DIR}/${APP_NAME}.app" "${DMG_STAGING}/"
+TMP_APP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/bsie-sign.XXXXXX")"
+TMP_APP="${TMP_APP_DIR}/${APP_NAME}.app"
+ditto "${DIST_DIR}/${APP_NAME}.app" "${TMP_APP}"
+xattr -cr "${TMP_APP}" || true
+codesign --force --deep --sign - "${TMP_APP}" || true
+ditto "${TMP_APP}" "${DMG_STAGING}/${APP_NAME}.app"
+rmdir "${TMP_APP_DIR}" 2>/dev/null || true
 cp "installer/macos/dmg-readme.md" "${DMG_STAGING}/README.md"
 
 mkdir -p "${DIST_DIR}"
+rm -f "${DIST_DIR}/${DMG_NAME}.dmg"
 
 create-dmg \
   --volname "${APP_NAME}" \

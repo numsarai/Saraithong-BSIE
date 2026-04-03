@@ -10,12 +10,16 @@ import { ChevronLeft, Play } from 'lucide-react'
 export function Step3Config() {
   const {
     bankKey, account, name, setBankKey, setAccount, setName,
-    banks, setBanks, tempFilePath, fileId, headerRow, sheetName, confirmedMapping, setJobId, setParserRunId, setStep, operatorName,
+    banks, setBanks, tempFilePath, fileId, headerRow, sheetName, confirmedMapping, setJobId, setParserRunId, setStep, operatorName, identityGuess,
   } = useStore()
   const [loading, setLoading] = useState(false)
   const [rememberedName, setRememberedName] = useState('')
   const [checkingRememberedName, setCheckingRememberedName] = useState(false)
   const selectedBank = banks.find((bank: any) => bank.key === bankKey) || null
+  const guessedAccount = String(identityGuess?.account || '').trim()
+  const guessedName = String(identityGuess?.name || '').trim()
+  const accountGuessSource = formatIdentitySource(identityGuess?.account_source)
+  const nameGuessSource = formatIdentitySource(identityGuess?.name_source)
 
   useEffect(() => {
     getBanks().then(setBanks).catch(() => toast.error('Could not load bank list'))
@@ -136,6 +140,17 @@ export function Step3Config() {
               className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none"
             />
           </div>
+          {(guessedAccount || guessedName) ? (
+            <div className="col-span-2 rounded-lg border border-accent/25 bg-accent/[0.06] px-3 py-2 text-xs text-muted">
+              <span className="font-semibold text-text">Detected from uploaded statement:</span>{' '}
+              {guessedAccount
+                ? <>Account <span className="font-mono text-text">{guessedAccount}</span>{accountGuessSource ? ` via ${accountGuessSource}` : ''}.</>
+                : 'Account not detected.'}{' '}
+              {guessedName
+                ? <>Name <span className="font-semibold text-text">{guessedName}</span>{nameGuessSource ? ` via ${nameGuessSource}` : ''}.</>
+                : 'Name not detected.'}
+            </div>
+          ) : null}
           {(checkingRememberedName || rememberedName) ? (
             <div className="col-span-2 rounded-lg border border-border bg-surface2/70 px-3 py-2 text-xs text-muted">
               {checkingRememberedName
@@ -160,4 +175,14 @@ export function Step3Config() {
       </div>
     </div>
   )
+}
+
+function formatIdentitySource(value: unknown) {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized) return ''
+  if (normalized === 'filename') return 'filename'
+  if (normalized === 'workbook_header') return 'workbook header'
+  if (normalized === 'transaction_pattern') return 'repeated transaction pattern'
+  if (normalized === 'ofx_account_block') return 'OFX account block'
+  return normalized.replace(/_/g, ' ')
 }

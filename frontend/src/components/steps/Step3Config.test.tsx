@@ -34,6 +34,12 @@ describe('Step3Config remembered account name', () => {
       bankKey: 'scb',
       account: '1234567890',
       name: '',
+      identityGuess: {
+        account: '1234567890',
+        name: 'Detected Name',
+        account_source: 'transaction_pattern',
+        name_source: 'transaction_pattern',
+      },
       confirmedMapping: {},
       headerRow: 1,
       sheetName: 'Sheet1',
@@ -53,6 +59,7 @@ describe('Step3Config remembered account name', () => {
 
     expect(await screen.findByDisplayValue('Persisted Name')).toBeInTheDocument()
     expect(screen.getByText(/remembered from previous imports/i)).toBeInTheDocument()
+    expect(screen.getByText(/detected from uploaded statement/i)).toBeInTheDocument()
     expect(screen.getByAltText('SCB logo')).toBeInTheDocument()
   })
 

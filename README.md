@@ -95,6 +95,16 @@ PYTHONPATH=$PWD pytest tests -q
 cd frontend && npm test && npm run build
 ```
 
+**6. Build a desktop app (optional)**
+```bash
+bash build.sh
+```
+
+On macOS this produces `dist/BSIE.app`. If `create-dmg` is installed, use:
+```bash
+bash build.sh --dmg
+```
+
 ---
 
 ## Documentation Map
@@ -105,8 +115,14 @@ cd frontend && npm test && npm run build
 - Frontend structure: [`/Users/saraithong/Documents/bsie/frontend/README.md`](/Users/saraithong/Documents/bsie/frontend/README.md)
 - Multi-agent orchestration guide: [`/Users/saraithong/Documents/bsie/docs/architecture/agent-orchestration.md`](/Users/saraithong/Documents/bsie/docs/architecture/agent-orchestration.md)
 - Subagent checklists and prompt templates: [`/Users/saraithong/Documents/bsie/docs/architecture/subagent-checklists.md`](/Users/saraithong/Documents/bsie/docs/architecture/subagent-checklists.md)
+- Installer guide: [`/Users/saraithong/Documents/bsie/installer/README.md`](/Users/saraithong/Documents/bsie/installer/README.md)
 
 Subagent work in BSIE should follow the current chokepoints of the codebase, not generic backend/frontend splits. In practice, the safest default is one backend owner for [`/Users/saraithong/Documents/bsie/app.py`](/Users/saraithong/Documents/bsie/app.py), one pipeline/schema owner when contracts change, one frontend owner only if UI work is needed, and one tester/reviewer.
+
+Packaged desktop builds use a writable per-user data directory outside the app bundle:
+- macOS: `~/Library/Application Support/BSIE`
+- Windows: `%LOCALAPPDATA%\BSIE`
+- Existing legacy installs under `Documents/BSIE` continue to work automatically
 
 ---
 

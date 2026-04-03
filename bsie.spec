@@ -78,8 +78,6 @@ a = Analysis(
         "pystray._xorg",
         "PIL",
         "PIL.Image",
-        "tkinter",
-        "tkinter.messagebox",
         # ── data / ML ────────────────────────────────────────────────────────
         "openpyxl",
         "xlrd",
@@ -115,14 +113,12 @@ a = Analysis(
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 if sys.platform == "darwin":
-    # macOS: embed everything into the EXE so BUNDLE can wrap it as a .app
+    # macOS: build an onedir app bundle instead of a onefile bundle-in-app.
     exe = EXE(
         pyz,
         a.scripts,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
         [],
+        exclude_binaries=True,
         name="BSIE",
         debug=False,
         bootloader_ignore_signals=False,
@@ -138,8 +134,18 @@ if sys.platform == "darwin":
         entitlements_file=None,
         icon=_icon,
     )
-    app = BUNDLE(
+    coll = COLLECT(
         exe,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name="BSIE",
+    )
+    app = BUNDLE(
+        coll,
         name="BSIE.app",
         icon=_icns,
         bundle_identifier="com.bsie.app",

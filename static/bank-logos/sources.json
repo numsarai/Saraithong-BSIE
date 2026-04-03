@@ -1,0 +1,233 @@
+[
+  {
+    "key": "scb",
+    "name": "Siam Commercial Bank",
+    "official_url": "https://www.scb.co.th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "scb.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "kbank",
+    "name": "Kasikornbank",
+    "official_url": "https://www.kasikornbank.com/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "kbank.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "ktb",
+    "name": "Krung Thai Bank",
+    "official_url": "https://krungthai.com/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "ktb.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "bbl",
+    "name": "Bangkok Bank",
+    "official_url": "https://www.bangkokbank.com/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "bbl.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "bay",
+    "name": "Bank of Ayudhya",
+    "official_url": "https://www.krungsri.com/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "bay.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "ttb",
+    "name": "ttb",
+    "official_url": "https://www.ttbbank.com/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "ttb.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "gsb",
+    "name": "Government Savings Bank",
+    "official_url": "https://www.gsb.or.th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "gsb.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "baac",
+    "name": "Bank for Agriculture and Agricultural Cooperatives",
+    "official_url": "https://www.baac.or.th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "baac.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "ghab",
+    "name": "Government Housing Bank",
+    "official_url": "https://www.ghbank.co.th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "ghab.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "exim",
+    "name": "Export-Import Bank of Thailand",
+    "official_url": "https://www.exim.go.th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "exim.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "islami",
+    "name": "Islamic Bank of Thailand",
+    "official_url": "https://www.ibank.co.th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "islami.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "kkp",
+    "name": "Kiatnakin Phatra Bank",
+    "official_url": "https://www.kkpfg.com/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "kkp.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "cimb_thai",
+    "name": "CIMB Thai Bank",
+    "official_url": "https://www.cimbthai.com/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "cimb_thai.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "tisco",
+    "name": "TISCO Bank",
+    "official_url": "https://www.tisco.co.th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "tisco.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "thai_credit",
+    "name": "Thai Credit Bank",
+    "official_url": "https://www.thaicreditbank.com/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "thai_credit.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "uob_thai",
+    "name": "UOB Thailand",
+    "official_url": "https://www.uob.co.th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "uob_thai.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "lh_bank",
+    "name": "Land and Houses Bank",
+    "official_url": "https://www.lhbank.co.th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "lh_bank.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "icbc_thai",
+    "name": "ICBC Thai",
+    "official_url": "https://www.icbcthai.com/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "icbc_thai.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "boc_thai",
+    "name": "Bank of China (Thai)",
+    "official_url": "https://www.bankofchina.com/th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "boc_thai.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "scbt",
+    "name": "Standard Chartered Bank Thai",
+    "official_url": "https://www.sc.com/th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "scbt.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  },
+  {
+    "key": "sme_d",
+    "name": "SME D Bank",
+    "official_url": "https://www.smebank.co.th/",
+    "fetched_via": "https://www.google.com/s2/favicons",
+    "fetched_at_utc": "2026-04-03T18:06:43.149621+00:00",
+    "width": 256,
+    "height": 256,
+    "output_file": "sme_d.png",
+    "note": "Official-site favicon/app icon cached via Google S2. Replace with exact brand artwork later if needed."
+  }
+]

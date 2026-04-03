@@ -55,6 +55,7 @@ export interface AppState {
   sampleRows: any[]
   headerRow: number
   sheetName: string
+  identityGuess: any | null
   memoryMatch: any | null
   bankMemoryMatch: any | null
   bankReviewed: boolean
@@ -107,6 +108,7 @@ const workflowInitialState = {
   sampleRows: [] as any[],
   headerRow: 0,
   sheetName: '',
+  identityGuess: null as any | null,
   memoryMatch: null as any | null,
   bankMemoryMatch: null as any | null,
   bankReviewed: false,
@@ -167,6 +169,7 @@ export const useStore = create<AppState>((set) => ({
       sampleRows: data.sample_rows || [],
       headerRow: data.header_row || 0,
       sheetName: data.sheet_name || '',
+      identityGuess: data.identity_guess || null,
       memoryMatch: data.memory_match || null,
       bankMemoryMatch: data.bank_memory_match || null,
       bankReviewed,

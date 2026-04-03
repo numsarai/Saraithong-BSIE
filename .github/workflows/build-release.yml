@@ -34,19 +34,16 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt pyinstaller
 
-      - name: Generate placeholder icons
-        run: |
-          python -c "
-          from PIL import Image
-          import os
-          os.makedirs('installer', exist_ok=True)
-          img = Image.new('RGB', (256, 256), color=(30, 100, 200))
-          img.save('installer/bsie.png')
-          img.save('installer/bsie.ico', format='ICO', sizes=[(256,256),(128,128),(64,64),(32,32),(16,16)])
-          "
-
       - name: Build with PyInstaller
         run: python -m PyInstaller bsie.spec --noconfirm
+
+      - name: Smoke test Windows bundle
+        shell: pwsh
+        run: |
+          python scripts\smoke_bundle.py `
+            --target dist\BSIE\BSIE.exe `
+            --port 8761 `
+            --user-data-dir "$env:RUNNER_TEMP\bsie-smoke"
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
@@ -88,19 +85,15 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt pyinstaller
 
-      - name: Generate placeholder icons
-        run: |
-          python -c "
-          from PIL import Image
-          import os
-          os.makedirs('installer', exist_ok=True)
-          img = Image.new('RGB', (256, 256), color=(30, 100, 200))
-          img.save('installer/bsie.png')
-          img.save('installer/bsie.icns')
-          "
-
       - name: Build with PyInstaller
         run: python -m PyInstaller bsie.spec --noconfirm
+
+      - name: Smoke test macOS bundle
+        run: |
+          python scripts/smoke_bundle.py \
+            --target dist/BSIE.app \
+            --port 8761 \
+            --user-data-dir "$RUNNER_TEMP/bsie-smoke"
 
       - name: Install create-dmg
         run: brew install create-dmg

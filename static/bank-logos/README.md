@@ -15,3 +15,10 @@ Rules:
   to the deterministic generated badge until a raster override is added.
 - When no override exists, BSIE uses the generated badge from
   [`/Users/saraithong/Documents/bsie/core/bank_logo_registry.py`](/Users/saraithong/Documents/bsie/core/bank_logo_registry.py).
+- Use [`/Users/saraithong/Documents/bsie/scripts/sync_bank_logos.py`](/Users/saraithong/Documents/bsie/scripts/sync_bank_logos.py)
+  to refresh the current real-logo set from each bank's official domain favicon/app icon.
+- Current fetched asset provenance is tracked in
+  [`/Users/saraithong/Documents/bsie/static/bank-logos/sources.json`](/Users/saraithong/Documents/bsie/static/bank-logos/sources.json).
+- These files are third-party bank trademarks. Treat them as product branding assets,
+  not evidence, and replace them with exact brand artwork later if the bank provides a
+  better official press-kit/logo file.

@@ -17,22 +17,38 @@ import sys
 import os
 import time
 import threading
+import subprocess
 import webbrowser
 import urllib.request
 import urllib.error
 import logging
-from pathlib import Path
 
 # Import paths first — works in both bundle and source mode
 from paths import (
-    INPUT_DIR, OUTPUT_DIR, OVERRIDES_DIR, PROFILES_DIR,
-    BUNDLE_DIR, USER_DATA_DIR,
+    INPUT_DIR,
+    EVIDENCE_DIR,
+    OUTPUT_DIR,
+    EXPORTS_DIR,
+    BACKUPS_DIR,
+    OVERRIDES_DIR,
+    PROFILES_DIR,
+    CONFIG_DIR,
+    BUNDLE_DIR,
+    USER_DATA_DIR,
 )
 
 PORT = int(os.environ.get("PORT", "8757"))
 BASE_URL = f"http://127.0.0.1:{PORT}"
 HEALTH_URL = f"{BASE_URL}/health"
 MAX_WAIT_SECONDS = 10
+
+
+def _env_enabled(name: str, default: bool = True) -> bool:
+    """Interpret common truthy/falsey env values for launcher toggles."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _setup_user_dirs() -> None:
@@ -42,7 +58,16 @@ def _setup_user_dirs() -> None:
     it explicitly first so _redirect_output_to_log can safely open bsie.log.
     """
     USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    for directory in [INPUT_DIR, OUTPUT_DIR, OVERRIDES_DIR, PROFILES_DIR]:
+    for directory in [
+        INPUT_DIR,
+        EVIDENCE_DIR,
+        OUTPUT_DIR,
+        EXPORTS_DIR,
+        BACKUPS_DIR,
+        OVERRIDES_DIR,
+        PROFILES_DIR,
+        CONFIG_DIR,
+    ]:
         directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -81,17 +106,80 @@ def _start_server() -> None:
     entirely and also ensures PyInstaller's static analysis picks up app.py and
     all its transitive imports at build time.
     """
-    import uvicorn
-    from app import app as fastapi_app  # noqa: PLC0415 — deferred to keep startup fast
-    config = uvicorn.Config(
-        fastapi_app,
-        host="127.0.0.1",
-        port=PORT,
-        log_level="info",
+    try:
+        import uvicorn
+        from app import app as fastapi_app  # noqa: PLC0415 — deferred to keep startup fast
+
+        config = uvicorn.Config(
+            fastapi_app,
+            host="127.0.0.1",
+            port=PORT,
+            log_level="info",
+        )
+        server = uvicorn.Server(config)
+        _start_server.server = server
+        _start_server.error = None
+        server.run()
+    except Exception as exc:  # pragma: no cover - exercised via launcher smoke test
+        _start_server.error = exc
+        logging.getLogger("bsie.launcher").exception("Server thread failed to start")
+
+
+def _startup_failure_message() -> str:
+    """Build a user-facing startup failure message."""
+    message = (
+        f"Server failed to start on port {PORT}.\n"
+        f"Check {USER_DATA_DIR / 'bsie.log'} for details."
     )
-    server = uvicorn.Server(config)
-    _start_server.server = server
-    server.run()
+    error = getattr(_start_server, "error", None)
+    if error:
+        message = f"{message}\n\nLast error: {error}"
+    return message
+
+
+def _show_startup_error(message: str) -> None:
+    """Show a native OS dialog when startup fails, without tkinter."""
+    title = "BSIE"
+
+    try:
+        if sys.platform == "darwin":
+            safe_message = message.replace("\\", "\\\\").replace('"', '\\"')
+            apple_script = (
+                f'display alert "{title}" '
+                f'message "{safe_message}" '
+                'as critical buttons {"OK"} default button "OK"'
+            )
+            subprocess.run(
+                ["osascript", "-e", apple_script],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            return
+
+        if sys.platform.startswith("win"):
+            ps_message = message.replace("'", "''")
+            subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    (
+                        "Add-Type -AssemblyName PresentationFramework; "
+                        f"[System.Windows.MessageBox]::Show('{ps_message}', '{title}') | Out-Null"
+                    ),
+                ],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            return
+    except Exception:
+        logging.getLogger("bsie.launcher").exception("Failed to show native startup error dialog")
+
+    logging.getLogger("bsie.launcher").error("%s", message)
 
 
 def _wait_for_server() -> bool:
@@ -138,19 +226,29 @@ def main() -> None:
     server_thread.start()
 
     if not _wait_for_server():
-        import tkinter.messagebox as mb
-        mb.showerror(
-            "BSIE",
-            f"Server failed to start on port {PORT}.\n"
-            "Check bsie.log for details."
-        )
+        _show_startup_error(_startup_failure_message())
         sys.exit(1)
 
-    logger.info("Server ready — opening browser")
-    webbrowser.open(BASE_URL)
+    if _env_enabled("BSIE_OPEN_BROWSER", True):
+        logger.info("Server ready — opening browser")
+        webbrowser.open(BASE_URL)
+    else:
+        logger.info("Server ready — browser auto-open disabled")
+
+    if not _env_enabled("BSIE_ENABLE_TRAY", True):
+        logger.info("Tray icon disabled — running in headless launcher mode")
+        try:
+            server_thread.join()
+        except KeyboardInterrupt:
+            logger.info("Interrupt received — shutting down server")
+            if hasattr(_start_server, "server"):
+                _start_server.server.should_exit = True
+            server_thread.join(timeout=5)
+        return
 
     # System tray icon (blocks until icon.stop() is called)
     import pystray
+
     tray_image = _load_tray_icon()
     menu = pystray.Menu(
         pystray.MenuItem("Quit BSIE", _quit_app),

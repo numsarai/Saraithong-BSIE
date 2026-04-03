@@ -1,10 +1,10 @@
 """Tests for paths.py — verifies all constants are defined and correct in dev mode."""
 import sys
 from pathlib import Path
-import pytest
 
 # Must run outside a PyInstaller bundle
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
+    import pytest
     pytest.skip("test_paths must run outside a PyInstaller bundle", allow_module_level=True)
 
 import paths
@@ -39,3 +39,45 @@ def test_writable_dirs_are_under_user_data_dir():
 def test_config_dir_exists_in_project():
     """config/ directory must actually exist for the project to work."""
     assert paths.CONFIG_DIR.is_dir(), f"config/ not found at {paths.CONFIG_DIR}"
+
+
+def test_platform_user_data_home_for_macos():
+    home = Path("/Users/tester")
+    assert paths._platform_user_data_home("darwin", env={}, home=home) == (
+        home / "Library" / "Application Support"
+    )
+
+
+def test_platform_user_data_home_for_windows_prefers_localappdata():
+    env = {"LOCALAPPDATA": r"C:\Users\tester\AppData\Local"}
+    home = Path(r"C:\Users\tester")
+    assert paths._platform_user_data_home("win32", env=env, home=home) == Path(
+        r"C:\Users\tester\AppData\Local"
+    )
+
+
+def test_bundled_user_data_dir_prefers_env_override():
+    env = {"BSIE_USER_DATA_DIR": "~/Custom/BSIE"}
+    home = Path("/Users/tester")
+    assert paths._bundled_user_data_dir("darwin", env=env, home=home) == (
+        home / "Custom" / "BSIE"
+    )
+
+
+def test_bundled_user_data_dir_uses_legacy_documents_dir_if_present(tmp_path):
+    legacy = tmp_path / "Documents" / "BSIE"
+    legacy.mkdir(parents=True)
+    preferred = tmp_path / "Library" / "Application Support" / "BSIE"
+
+    resolved = paths._bundled_user_data_dir("darwin", env={}, home=tmp_path)
+
+    assert resolved == legacy
+    assert resolved != preferred
+
+
+def test_bundled_user_data_dir_uses_platform_default_when_no_legacy_exists(tmp_path):
+    preferred = tmp_path / "Library" / "Application Support" / "BSIE"
+
+    resolved = paths._bundled_user_data_dir("darwin", env={}, home=tmp_path)
+
+    assert resolved == preferred

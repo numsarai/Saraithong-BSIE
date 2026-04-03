@@ -8,8 +8,8 @@
 4. BSIE opens in your browser automatically at `http://127.0.0.1:8757`
 5. A tray icon appears in your menu bar — click it to **Quit BSIE**
 
-**Data location:** `~/Documents/BSIE/`
-**Logs:** `~/Documents/BSIE/bsie.log`
+**Data location:** `~/Library/Application Support/BSIE/`
+**Logs:** `~/Library/Application Support/BSIE/bsie.log`
 
 ---
 
@@ -20,8 +20,8 @@
 3. BSIE launches automatically and opens in your browser
 4. A tray icon appears in the system tray — right-click → **Quit BSIE**
 
-**Data location:** `C:\Users\<you>\Documents\BSIE\`
-**Logs:** `C:\Users\<you>\Documents\BSIE\bsie.log`
+**Data location:** `%LOCALAPPDATA%\BSIE\`
+**Logs:** `%LOCALAPPDATA%\BSIE\bsie.log`
 
 ---
 
@@ -33,6 +33,30 @@ Everything is bundled — no additional software needed:
 - React web interface
 - Database (SQLite)
 - All processing libraries (pandas, openpyxl, etc.)
+
+Existing installs that already use the legacy `Documents/BSIE` folder keep using
+that location automatically so upgrades do not strand old case data.
+
+## Maintainer Verification
+
+After building a desktop bundle, you can smoke-test it without opening a tray
+icon or browser:
+
+```bash
+python scripts/smoke_bundle.py \
+  --target dist/BSIE.app \
+  --port 8761 \
+  --user-data-dir /tmp/bsie-smoke
+```
+
+On Windows, point `--target` at `dist\BSIE\BSIE.exe` instead.
+
+The smoke test verifies more than `/health`:
+- the embedded FastAPI server responds
+- root UI assets load
+- the bundled writable runtime folders are created
+- the packaged bank logo catalog is available
+- at least one real packaged bank logo asset (`scb`) is served successfully
 
 ---
 
@@ -50,5 +74,5 @@ To add a new bank: open BSIE → click **Bank Manager** in the sidebar.
 |---------|----------|
 | App won't open on macOS | Right-click → Open, then click "Open" in the dialog |
 | Port 8757 already in use | Quit any other BSIE instance, or change `PORT` in `.env` |
-| Data not showing | Check `~/Documents/BSIE/bsie.log` for errors |
-| Lost data after update | Data is in `~/Documents/BSIE/` — safe across updates |
+| Data not showing | Check the `bsie.log` file in the app data folder for your platform |
+| Lost data after update | Existing installs keep using their original BSIE data folder automatically |

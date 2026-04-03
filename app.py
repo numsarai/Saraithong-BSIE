@@ -118,6 +118,7 @@ from core.bank_logo_registry   import (
     render_bank_logo_svg,
 )
 from core.column_detector      import detect_columns, get_field_aliases, _norm
+from core.subject_inference    import infer_subject_identity_from_frames
 from core.mapping_memory       import find_matching_profile, list_profiles
 from core.bank_memory          import find_matching_bank_fingerprint, save_bank_fingerprint
 from core.bulk_processor       import process_folder
@@ -519,6 +520,13 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
             data_df = parse_ofx_file(save_path)
             identity = infer_identity_from_ofx(save_path, data_df)
             sample_rows = data_df.head(5).fillna("").to_dict(orient="records")
+            identity_guess = {
+                "account": identity.get("account", ""),
+                "name": identity.get("name", ""),
+                "account_source": "ofx_account_block" if identity.get("account") else "",
+                "name_source": "filename" if identity.get("name") else "",
+                "source": "mixed" if identity.get("account") and identity.get("name") else ("ofx_account_block" if identity.get("account") else ("filename" if identity.get("name") else "")),
+            }
             return JSONResponse({
                 "job_id": job_id,
                 "file_id": persisted["file_id"],
@@ -549,17 +557,30 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
                 "sheet_name": "OFX",
                 "account_guess": identity.get("account", ""),
                 "name_guess": identity.get("name", ""),
+                "identity_guess": identity_guess,
             })
 
         sheet_pick = find_best_sheet_and_header(save_path)
         header_row = int(sheet_pick["header_row"])
         sheet_name = str(sheet_pick["sheet_name"])
+        identity_preview_df = pd.read_excel(
+            str(save_path),
+            sheet_name=sheet_name,
+            header=None,
+            dtype=str,
+            nrows=max(header_row + 8, 15),
+        ).fillna("")
         data_df = pd.read_excel(
             str(save_path),
             sheet_name=sheet_name,
             header=header_row, dtype=str,
         ).dropna(how="all")
         data_df.columns = [str(c).strip() for c in data_df.columns]
+        identity = infer_subject_identity_from_frames(
+            save_path,
+            preview_df=identity_preview_df,
+            transaction_df=data_df,
+        )
 
         bank_result  = detect_bank(data_df, extra_text=f"{file.filename} {sheet_name}", sheet_name=sheet_name)
         col_result   = detect_columns(data_df)
@@ -600,6 +621,9 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
             "banks":            _get_banks(),
             "header_row":       header_row,
             "sheet_name":       sheet_name,
+            "account_guess":    identity.get("account", ""),
+            "name_guess":       identity.get("name", ""),
+            "identity_guess":   identity,
         })
 
     except Exception as e:

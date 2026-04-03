@@ -48,7 +48,8 @@ def test_banks_endpoint_includes_logo_metadata():
     assert response.status_code == 200
     payload = response.json()
     scb = next(item for item in payload if item["key"] == "scb")
-    assert scb["logo_url"] == "/api/bank-logos/scb.svg"
+    assert scb["logo_url"] == "/static/bank-logos/scb.png"
+    assert scb["logo_source"] == "static_asset"
     assert scb["has_template"] is True
     assert scb["template_status"] == "template_ready"
 
@@ -59,7 +60,8 @@ def test_bank_logo_catalog_includes_future_thai_banks():
     assert response.status_code == 200
     payload = response.json()
     baac = next(item for item in payload if item["key"] == "baac")
-    assert baac["logo_url"] == "/api/bank-logos/baac.svg"
+    assert baac["logo_url"] == "/static/bank-logos/baac.png"
+    assert baac["logo_source"] == "static_asset"
     assert baac["has_template"] is False
     assert baac["template_status"] == "logo_ready"
 
@@ -320,6 +322,7 @@ VERSION:102
     payload = response.json()
     assert payload["detected_bank"]["config_key"] == "ofx"
     assert payload["account_guess"] == "1234567890"
+    assert payload["identity_guess"]["account_source"] == "ofx_account_block"
     assert payload["sheet_name"] == "OFX"
 
 
@@ -420,6 +423,51 @@ def test_upload_repairs_stale_profile_mapping_for_debit_credit_layout(tmp_path):
     payload = response.json()
     assert payload["suggested_mapping"]["amount"] is None
     assert payload["suggested_mapping"]["balance"] == "จำนวนเงินคงเหลือ"
+
+
+def test_upload_excel_returns_identity_guess_from_repeated_transaction_pattern(tmp_path):
+    workbook = tmp_path / "sample_identity.xlsx"
+    import pandas as pd
+
+    pd.DataFrame([
+        ["วันที่", "บัญชีผู้โอน", "ชื่อผู้โอน", "บัญชีผู้รับโอน", "ชื่อผู้รับโอน", "รายการ"],
+        ["2026-03-01", "2109876543", "สุดารัตน์ แสงทอง", "3456789012", "ประภาส พิชิต", "โอนเงิน"],
+        ["2026-03-02", "0812345678", "นภา จันทร์เพ็ญ", "2109876543", "สุดารัตน์ แสงทอง", "รับโอน"],
+        ["2026-03-03", "2109876543", "สุดารัตน์ แสงทอง", "6667778889", "อนันต์ เจริญผล", "โอนต่างธนาคาร"],
+    ]).to_excel(workbook, header=False, index=False)
+
+    fake_sheet_pick = {"header_row": 0, "sheet_name": "Sheet1"}
+    fake_bank = {"bank": "SCB", "config_key": "scb", "key": "scb", "confidence": 1.0, "ambiguous": False}
+    fake_columns = {
+        "suggested_mapping": {
+            "date": "วันที่",
+            "description": "รายการ",
+        },
+        "confidence_scores": {"date": 1.0, "description": 1.0},
+        "all_columns": ["วันที่", "บัญชีผู้โอน", "ชื่อผู้โอน", "บัญชีผู้รับโอน", "ชื่อผู้รับโอน", "รายการ"],
+        "unmatched_columns": [],
+        "required_found": True,
+    }
+
+    with (
+        patch.object(app, "find_best_sheet_and_header", return_value=fake_sheet_pick),
+        patch.object(app, "detect_bank", return_value=fake_bank),
+        patch.object(app, "detect_columns", return_value=fake_columns),
+        patch.object(app, "find_matching_profile", return_value=None),
+        patch.object(app, "find_matching_bank_fingerprint", return_value=None),
+    ):
+        with workbook.open("rb") as fh:
+            response = client.post(
+                "/api/upload",
+                files={"file": ("sample_identity.xlsx", fh, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["account_guess"] == "2109876543"
+    assert payload["name_guess"] == "สุดารัตน์ แสงทอง"
+    assert payload["identity_guess"]["account_source"] == "transaction_pattern"
+    assert payload["identity_guess"]["name_source"] == "transaction_pattern"
 
 
 def test_account_remembered_name_endpoint_returns_match():

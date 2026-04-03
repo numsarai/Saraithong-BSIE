@@ -52,6 +52,20 @@ rm -rf build/ dist/
 python3 -m PyInstaller bsie.spec --noconfirm
 echo "  ✓ PyInstaller complete"
 
+if [ "$PLATFORM" = "darwin" ] && [ -d "dist/BSIE.app" ]; then
+  echo "  → Normalizing macOS app bundle metadata..."
+  TMP_APP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/bsie-sign.XXXXXX")"
+  TMP_APP="${TMP_APP_DIR}/BSIE.app"
+  ditto "dist/BSIE.app" "$TMP_APP"
+  xattr -cr "$TMP_APP" || true
+  if command -v codesign &>/dev/null; then
+    codesign --force --deep --sign - "$TMP_APP" || true
+  fi
+  rm -rf "dist/BSIE.app"
+  mv "$TMP_APP" "dist/BSIE.app"
+  rmdir "$TMP_APP_DIR" 2>/dev/null || true
+fi
+
 # ── Step 4: Package installer ───────────────────────────────────
 echo ""
 echo "▶ [4/4] Packaging installer..."

@@ -72,8 +72,8 @@ These are in [`/Users/saraithong/Documents/bsie/services`](/Users/saraithong/Doc
 
 ### Default runtime
 
-- PostgreSQL if `DATABASE_URL` is set
-- SQLite fallback if not set
+- SQLite local-only mode by default via `BSIE_LOCAL_ONLY=1`
+- `DATABASE_URL` is only used when local-only mode is explicitly disabled
 
 ### Backup modes
 

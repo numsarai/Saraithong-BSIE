@@ -501,10 +501,10 @@ Expected: all tests pass
 - [ ] **Step 13: Smoke test — start from source (no run_bsie.py)**
 
 ```
-python -m uvicorn app:app --host 127.0.0.1 --port 5001
+python -m uvicorn app:app --host 127.0.0.1 --port 8757
 ```
-Open `http://127.0.0.1:5001/health` → `{"status":"ok"}`.
-Open `http://127.0.0.1:5001/` → UI loads normally.
+Open `http://127.0.0.1:8757/health` → `{"status":"ok"}`.
+Open `http://127.0.0.1:8757/` → UI loads normally.
 Stop with Ctrl+C.
 
 - [ ] **Step 14: Commit**
@@ -621,9 +621,9 @@ PyInstaller entry point for the BSIE desktop application.
 Responsibilities (in order):
   1. Create user data directories if they don't exist (first-run setup)
   2. Redirect stdout/stderr to bsie.log in the user data directory
-  3. Start uvicorn (FastAPI server) in a background thread on port 5001
+  3. Start uvicorn (FastAPI server) in a background thread on port 8757
   4. Poll GET /health until the server is ready (max 10 seconds)
-  5. Open the user's default browser to http://127.0.0.1:5001
+  5. Open the user's default browser to http://127.0.0.1:8757
   6. Show a system tray icon with a "Quit BSIE" menu item
   7. On "Quit BSIE": stop uvicorn, remove tray icon, exit process
 """
@@ -644,7 +644,7 @@ from paths import (
     BUNDLE_DIR, USER_DATA_DIR,
 )
 
-PORT = 5001
+PORT = 8757
 BASE_URL = f"http://127.0.0.1:{PORT}"
 HEALTH_URL = f"{BASE_URL}/health"
 MAX_WAIT_SECONDS = 10
@@ -774,7 +774,7 @@ Expected: `import OK`
 python main_launcher.py
 ```
 Verify:
-- Browser opens to `http://127.0.0.1:5001`
+- Browser opens to `http://127.0.0.1:8757`
 - System tray icon appears (Windows: bottom-right; macOS: top-right menu bar)
 - App keeps running when browser tab is closed
 - "Quit BSIE" option stops the server and exits
@@ -958,8 +958,8 @@ open dist/BSIE.app
 ```
 
 Pass criteria:
-- Browser opens automatically to `http://127.0.0.1:5001`
-- `GET http://127.0.0.1:5001/health` returns `{"status": "ok"}`
+- Browser opens automatically to `http://127.0.0.1:8757`
+- `GET http://127.0.0.1:8757/health` returns `{"status": "ok"}`
 - System tray icon appears
 - `~/Documents/BSIE/` directory created with `data/input/`, `data/output/`, `overrides/`, `mapping_profiles/`
 - `~/Documents/BSIE/bsie.log` is written and growing
@@ -1272,7 +1272,7 @@ Expected: all tests pass (test_paths, test_path_migration, test_health, test_mai
 - [ ] **Step 2: Smoke test — source mode via uvicorn**
 
 ```
-python -m uvicorn app:app --host 127.0.0.1 --port 5001
+python -m uvicorn app:app --host 127.0.0.1 --port 8757
 ```
 - Upload a bank statement → pipeline completes → output in `data/output/`
 - Stop with Ctrl+C
@@ -1294,7 +1294,7 @@ pyinstaller bsie.spec
 ```
 
 Run the produced binary. Pass criteria:
-1. Browser opens automatically to `http://127.0.0.1:5001`
+1. Browser opens automatically to `http://127.0.0.1:8757`
 2. `GET /health` → `{"status": "ok"}`
 3. `~/Documents/BSIE/` created with correct subdirs
 4. `~/Documents/BSIE/bsie.log` exists and is written

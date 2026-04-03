@@ -5,7 +5,7 @@
 1. Open `BSIE-vX.X.X-macos.dmg`
 2. Drag **BSIE** to your **Applications** folder
 3. First launch: right-click BSIE → **Open** (bypasses Gatekeeper for unsigned apps)
-4. BSIE opens in your browser automatically at `http://127.0.0.1:5001`
+4. BSIE opens in your browser automatically at `http://127.0.0.1:8757`
 5. A tray icon appears in your menu bar — click it to **Quit BSIE**
 
 **Data location:** `~/Documents/BSIE/`
@@ -49,6 +49,6 @@ To add a new bank: open BSIE → click **Bank Manager** in the sidebar.
 | Problem | Solution |
 |---------|----------|
 | App won't open on macOS | Right-click → Open, then click "Open" in the dialog |
-| Port 5001 already in use | Quit any other BSIE instance, or change `PORT` in app.py |
+| Port 8757 already in use | Quit any other BSIE instance, or change `PORT` in `.env` |
 | Data not showing | Check `~/Documents/BSIE/bsie.log` for errors |
 | Lost data after update | Data is in `~/Documents/BSIE/` — safe across updates |

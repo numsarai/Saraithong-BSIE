@@ -975,7 +975,7 @@ export function InvestigationDesk() {
           </div>
           <div className="rounded-xl border border-border bg-surface2 p-4 text-sm text-text2 space-y-2">
             <div>สถานะปัจจุบันของโปรเจคนี้เป็นระบบฐานข้อมูลถาวรแล้ว และตอนนี้รองรับทั้ง ingest ซ้ำ, duplicate detection, parser run history, transaction search, review, audit log, และ reproducible export jobs.</div>
-            <div>runtime ตอนนี้อ่านจาก `.env` / environment ได้แล้ว และถ้า `DATABASE_URL` ถูกตั้งไว้ แอปจะใช้ PostgreSQL เป็นค่าเริ่มต้นทันที.</div>
+            <div>runtime ค่าเริ่มต้นของโปรเจคนี้เป็น local-only แล้ว โดยจะใช้ SQLite ในเครื่องทันทีเมื่อ `BSIE_LOCAL_ONLY=1` และจะไม่หลุดไปพึ่ง `DATABASE_URL` ที่ค้างอยู่ใน environment.</div>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">

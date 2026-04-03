@@ -6,9 +6,9 @@ PyInstaller entry point for the BSIE desktop application.
 Responsibilities (in order):
   1. Create user data directories if they don't exist (first-run setup)
   2. Redirect stdout/stderr to bsie.log in the user data directory
-  3. Start uvicorn (FastAPI server) in a background thread on port 5001
+  3. Start uvicorn (FastAPI server) in a background thread on port 8757
   4. Poll GET /health until the server is ready (max 10 seconds)
-  5. Open the user's default browser to http://127.0.0.1:5001
+  5. Open the user's default browser to http://127.0.0.1:8757
   6. Show a system tray icon with a "Quit BSIE" menu item
   7. On "Quit BSIE": stop uvicorn, remove tray icon, exit process
 """
@@ -30,7 +30,7 @@ from paths import (
     BUNDLE_DIR, USER_DATA_DIR,
 )
 
-PORT = 5001
+PORT = int(os.environ.get("PORT", "8757"))
 BASE_URL = f"http://127.0.0.1:{PORT}"
 HEALTH_URL = f"{BASE_URL}/health"
 MAX_WAIT_SECONDS = 10

@@ -59,35 +59,34 @@ BSIE is now a persistent, investigation-grade bank statement intelligence platfo
 pip install -r requirements.txt
 ```
 
-**2. Configure the database**
+**2. Configure local runtime**
 ```bash
 cp .env.example .env
 ```
 
-BSIE auto-loads `.env` during normal app startup, so a local `DATABASE_URL` can become the default runtime without changing the launch command.
-
-If `DATABASE_URL` is not set, BSIE falls back to the local SQLite database at `bsie.db`.
+BSIE now starts in local-only mode by default. With `BSIE_LOCAL_ONLY=1`, the app always uses the local SQLite database at `bsie.db` and ignores any `DATABASE_URL` left in the environment.
 
 Optional operational settings:
 
+- `PORT=8757`
 - `BSIE_ENABLE_AUTO_BACKUP=1`
 - `BSIE_BACKUP_INTERVAL_HOURS=24`
 - `BSIE_AUTO_BACKUP_FORMAT=auto`
 - `BSIE_BACKUP_POLL_SECONDS=60`
 
-**3. Create or upgrade the schema**
+**3. Create or upgrade the local schema**
 ```bash
 alembic upgrade head
 ```
 
-Runtime startup also creates tables automatically for local/dev continuity, but Alembic is the canonical schema path.
+Runtime startup also creates tables automatically for local continuity, but Alembic is the canonical schema path.
 
 **4. Run the server**
 ```bash
 python app.py
 ```
 
-The app starts at **http://127.0.0.1:5001**
+The app starts at **http://127.0.0.1:8757**
 
 **5. Run tests**
 ```bash
@@ -128,7 +127,7 @@ It infers the subject account conservatively from the filename first, then from
 explicit workbook header labels when available.
 
 ```bash
-curl -X POST http://127.0.0.1:5001/api/process-folder \
+curl -X POST http://127.0.0.1:8757/api/process-folder \
   -H "Content-Type: application/json" \
   -d '{
     "folder_path": "/absolute/path/to/case-folder",

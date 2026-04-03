@@ -41,7 +41,7 @@ alembic upgrade head
 5. Verify runtime backend:
 
 ```bash
-curl http://127.0.0.1:5001/api/admin/db-status
+curl http://127.0.0.1:8757/api/admin/db-status
 ```
 
 The response should report:

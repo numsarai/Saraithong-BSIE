@@ -1809,7 +1809,7 @@ async def api_bank_learn(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 5001))
+    port = int(os.environ.get("PORT", 8757))
     logger.info("=" * 60)
     logger.info("  BSIE – Bank Statement Intelligence Engine v3.0")
     logger.info("  Web App  →  http://127.0.0.1:%d", port)

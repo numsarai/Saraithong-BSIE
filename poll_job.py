@@ -5,7 +5,7 @@ import json
 
 try:
     with open('/Users/saraithong/Library/CloudStorage/OneDrive-Personal/Saraithong Code/Test2/69001371-4017603071.xlsx', 'rb') as f:
-        res = requests.post('http://127.0.0.1:5001/api/process',
+        res = requests.post('http://127.0.0.1:8757/api/process',
             data={'bank': 'kbank', 'account': '4017603071', 'name': 'น.ส. จริยา ทองคำ'},
             files={'file': f}
         )
@@ -14,7 +14,7 @@ try:
 
     for i in range(20):
         time.sleep(2)
-        st = requests.get(f'http://127.0.0.1:5001/api/job/{job_id}').json()
+        st = requests.get(f'http://127.0.0.1:8757/api/job/{job_id}').json()
         if st['status'] in ('done', 'error'):
             print(f"STATUS: {st['status']}")
             if st.get('error'):

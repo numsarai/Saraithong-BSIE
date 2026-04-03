@@ -41,6 +41,8 @@ from core.entity       import build_entities
 from core.reconciliation import reconcile_balances
 from core.exporter     import export_package
 from core.ofx_io       import parse_ofx_file
+from persistence.base import get_db_session
+from services.account_resolution_service import best_known_account_holder_name
 from services.classification_service import apply_ai_classification_enrichment
 from services.persistence_pipeline_service import persist_pipeline_run
 
@@ -66,6 +68,22 @@ TRANSACTION_COLUMNS: List[str] = [
     "balance_source", "expected_balance", "balance_difference", "balance_check_status",
     "nlp_type_hint", "nlp_confidence", "nlp_best_name",
 ]
+
+
+def _effective_subject_name(subject_account: str, subject_name: str, bank_name: str) -> str:
+    explicit_name = str(subject_name or "").strip()
+    if explicit_name:
+        return explicit_name
+    try:
+        with get_db_session() as session:
+            return best_known_account_holder_name(
+                session,
+                bank_name=bank_name,
+                raw_account_number=subject_account,
+            ) or ""
+    except Exception as exc:
+        logger.warning("Could not resolve subject name from account memory (non-fatal): %s", exc)
+        return ""
 
 
 def _assign_transaction_ids(df: pd.DataFrame) -> pd.DataFrame:
@@ -200,6 +218,7 @@ def process_account(
 
     if input_file.suffix.lower() == ".ofx" or bank_key.lower() == "ofx":
         logger.info("[Step 1] Loading OFX")
+        effective_subject_name = _effective_subject_name(subject_account, subject_name, "OFX")
         norm_df = parse_ofx_file(input_file)
         if norm_df.empty:
             raise ValueError(f"No transactions found in OFX file: {input_file.name}")
@@ -209,7 +228,7 @@ def process_account(
         raw_df["_raw_row_json"] = raw_df.apply(lambda row: json.dumps({k: str(v) for k, v in row.to_dict().items()}, ensure_ascii=False), axis=1)
         raw_df["_parser_run_id"] = parser_run_id or ""
         norm_df["subject_account"] = subject_account
-        norm_df["subject_name"] = subject_name
+        norm_df["subject_name"] = effective_subject_name
         norm_df["bank"] = "OFX"
         logger.info("[Step 2-8] OFX input already normalized to standard schema")
         logger.info("[Step 9] NLP enrichment")
@@ -237,7 +256,7 @@ def process_account(
             account_number=subject_account,
             bank="OFX",
             original_file=input_file,
-            subject_name=subject_name,
+            subject_name=effective_subject_name,
             reconciliation_df=reconciliation.reconciliation,
             reconciliation_summary=reconciliation.summary,
         )
@@ -252,7 +271,7 @@ def process_account(
                 bank_key="ofx",
                 bank_name="OFX",
                 subject_account=subject_account,
-                subject_name=subject_name,
+                subject_name=effective_subject_name,
                 confirmed_mapping=confirmed_mapping or {},
                 header_row=0,
                 sheet_name="OFX",
@@ -369,7 +388,12 @@ def process_account(
 
     # ── Step 6: Normalize data ────────────────────────────────────────────
     logger.info("[Step 6] Normalizing data")
-    norm_df = normalize(raw_df, _effective_config, subject_account, subject_name, source_file=input_file.name)
+    effective_subject_name = _effective_subject_name(
+        subject_account,
+        subject_name,
+        bank_config.get("bank_name", _bank_cfg_key.upper()),
+    )
+    norm_df = normalize(raw_df, _effective_config, subject_account, effective_subject_name, source_file=input_file.name)
 
     # ── Steps 7+8 are inside normalize (account parsing + description extraction)
     logger.info("[Step 7-8] Account parsing + description extraction (done in normalize)")
@@ -423,7 +447,7 @@ def process_account(
         account_number=subject_account,
         bank=bank_config.get("bank_name", _bank_cfg_key.upper()),
         original_file=input_file,
-        subject_name=subject_name,
+        subject_name=effective_subject_name,
         reconciliation_df=reconciliation.reconciliation,
         reconciliation_summary=reconciliation.summary,
     )
@@ -439,7 +463,7 @@ def process_account(
             bank_key=_bank_cfg_key,
             bank_name=bank_config.get("bank_name", _bank_cfg_key.upper()),
             subject_account=subject_account,
-            subject_name=subject_name,
+            subject_name=effective_subject_name,
             confirmed_mapping=confirmed_mapping or {},
             header_row=_header_row,
             sheet_name=_sheet_name,

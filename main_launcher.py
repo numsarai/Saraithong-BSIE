@@ -74,10 +74,18 @@ def _start_server() -> None:
     set — but in practice _quit_app is only reachable after the tray icon runs,
     which only starts after _wait_for_server() succeeds, by which point this
     thread has already stored the reference.
+
+    IMPORTANT: We import and pass the FastAPI app *object* directly rather than
+    using the string form "app:app".  In a PyInstaller frozen bundle, uvicorn's
+    string-based importer cannot resolve module names — it raises
+    "Could not import module 'app'".  Passing the live object bypasses that
+    entirely and also ensures PyInstaller's static analysis picks up app.py and
+    all its transitive imports at build time.
     """
     import uvicorn
+    from app import app as fastapi_app  # noqa: PLC0415 — deferred to keep startup fast
     config = uvicorn.Config(
-        "app:app",
+        fastapi_app,
         host="127.0.0.1",
         port=PORT,
         log_level="info",

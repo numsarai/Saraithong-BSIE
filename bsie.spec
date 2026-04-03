@@ -30,6 +30,29 @@ a = Analysis(
         ("worker_entry.py",     "."),
     ],
     hiddenimports=[
+        # ── application modules ──────────────────────────────────────────────
+        # app.py is now imported directly (not via string "app:app"), so
+        # PyInstaller resolves it statically.  These entries are belt-and-
+        # suspenders for any dynamic imports that static analysis may miss.
+        "app",
+        "paths",
+        "pipeline.process_account",
+        "core.loader",
+        "core.bank_detector",
+        "core.column_detector",
+        "core.mapping_memory",
+        "core.override_manager",
+        "core.account_parser",
+        "core.autodetect",
+        "core.classifier",
+        "core.entity",
+        "core.exporter",
+        "core.link_builder",
+        "core.nlp_engine",
+        "core.normalizer",
+        "utils.date_utils",
+        "utils.text_utils",
+        # ── uvicorn internals ────────────────────────────────────────────────
         "uvicorn.logging",
         "uvicorn.loops",
         "uvicorn.loops.auto",
@@ -42,6 +65,7 @@ a = Analysis(
         "uvicorn.lifespan",
         "uvicorn.lifespan.on",
         "uvicorn.lifespan.off",
+        # ── web framework ────────────────────────────────────────────────────
         "fastapi",
         "starlette",
         "starlette.routing",
@@ -49,6 +73,7 @@ a = Analysis(
         "starlette.middleware.base",
         "starlette.staticfiles",
         "starlette.templating",
+        # ── UI / tray ────────────────────────────────────────────────────────
         "pystray",
         "pystray._win32",
         "pystray._darwin",
@@ -57,29 +82,27 @@ a = Analysis(
         "PIL.Image",
         "tkinter",
         "tkinter.messagebox",
-        # SQLModel / SQLAlchemy
+        # ── data / ML ────────────────────────────────────────────────────────
+        "openpyxl",
+        "xlrd",
+        "pandas",
+        "jinja2",
+        "jinja2.ext",
+        "aiofiles",
+        "rapidfuzz",
+        "rapidfuzz.distance",
+        "dateutil",
+        "dateutil.parser",
+        "multipart",
+        "python_multipart",
+        # ── persistence / task runtime ──────────────────────────────────────
         "sqlmodel",
         "sqlalchemy",
         "sqlalchemy.dialects.sqlite",
         "sqlalchemy.orm",
-        # Celery (imported lazily in server mode, but needs to be present)
         "celery",
         "kombu",
         "billiard",
-        # pandas engines
-        "openpyxl",
-        "xlrd",
-        # rapidfuzz
-        "rapidfuzz",
-        "rapidfuzz.distance",
-        # dateutil
-        "dateutil",
-        "dateutil.parser",
-        # aiofiles
-        "aiofiles",
-        # multipart
-        "multipart",
-        "python_multipart",
     ],
     hookspath=[],
     hooksconfig={},

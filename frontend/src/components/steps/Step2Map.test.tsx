@@ -1,0 +1,176 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Step2Map } from '@/components/steps/Step2Map'
+import { useStore } from '@/store'
+
+vi.mock('@/api', () => ({
+  confirmMapping: vi.fn(async () => ({ status: 'ok' })),
+  getBanks: vi.fn(async () => ([
+    { key: 'scb', name: 'SCB' },
+    { key: 'ktb', name: 'KTB' },
+    { key: 'ciaf', name: 'CIAF Export' },
+  ])),
+  learnBank: vi.fn(async () => ({ status: 'ok' })),
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}))
+
+const { confirmMapping } = await import('@/api')
+
+function seedUpload(data: Record<string, unknown> = {}) {
+  useStore.getState().setUploadResult({
+    temp_file_path: '/tmp/example.xlsx',
+    detected_bank: {
+      key: 'scb',
+      bank: 'SCB',
+      confidence: 0.91,
+      ambiguous: false,
+      scores: { scb: 10.2, ktb: 4.1 },
+      top_candidates: ['scb', 'ktb'],
+      evidence: { positive: [], negative: [], layout: 'dual_account_like' },
+    },
+    suggested_mapping: {
+      date: 'วันที่',
+      description: 'รายละเอียด',
+      amount: 'จำนวนเงิน',
+    },
+    all_columns: ['วันที่', 'รายละเอียด', 'จำนวนเงิน', 'ถอนเงิน', 'ฝากเงิน'],
+    confidence_scores: { date: 100, description: 100, amount: 100 },
+    sample_rows: [{ วันที่: '2026-01-01', รายละเอียด: 'โอนเงิน', จำนวนเงิน: '100.00' }],
+    header_row: 1,
+    sheet_name: 'Sheet1',
+    memory_match: null,
+    bank_memory_match: null,
+    ...data,
+  }, 'example.xlsx')
+}
+
+describe('Step2Map analyst gate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useStore.getState().reset()
+  })
+
+  it('blocks ambiguous detections until the bank is explicitly confirmed', async () => {
+    seedUpload({
+      detected_bank: {
+        key: 'scb',
+        bank: 'SCB',
+        confidence: 0.92,
+        ambiguous: true,
+        scores: { scb: 10.2, ktb: 9.8 },
+        top_candidates: ['scb', 'ktb'],
+        evidence: { positive: ['keyword:SCB'], negative: [], layout: 'dual_account_like' },
+      },
+    })
+
+    render(<Step2Map />)
+
+    const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
+    expect(continueButton).toBeDisabled()
+    expect(screen.getByText(/analyst review required before step 3/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /confirm selected bank/i }))
+
+    await waitFor(() => expect(continueButton).toBeEnabled())
+    fireEvent.click(continueButton)
+
+    await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
+    expect(useStore.getState().step).toBe(3)
+  })
+
+  it('requires mapping readiness when critical mapping is incomplete', async () => {
+    seedUpload({
+      suggested_mapping: {
+        date: 'วันที่',
+        description: null,
+        amount: null,
+        debit: null,
+        credit: null,
+      },
+      confidence_scores: { date: 100, description: 0, amount: 0, debit: 0, credit: 0 },
+    })
+
+    render(<Step2Map />)
+
+    const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
+    const mappingConfirmButton = screen.getByRole('button', { name: /confirm mapping readiness/i })
+    const selects = screen.getAllByRole('combobox')
+
+    expect(continueButton).toBeDisabled()
+    expect(mappingConfirmButton).toBeDisabled()
+
+    fireEvent.change(selects[3], { target: { value: 'รายละเอียด' } })
+    fireEvent.change(selects[4], { target: { value: 'จำนวนเงิน' } })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /confirm mapping readiness/i })).toBeEnabled())
+
+    fireEvent.click(screen.getByRole('button', { name: /confirm mapping readiness/i }))
+
+    await waitFor(() => expect(continueButton).toBeEnabled())
+  })
+
+  it('clears bank review when the selected bank changes', async () => {
+    seedUpload({
+      detected_bank: {
+        key: 'scb',
+        bank: 'SCB',
+        confidence: 0.6,
+        ambiguous: false,
+        scores: { scb: 7.0, ktb: 6.0 },
+        top_candidates: ['scb', 'ktb'],
+        evidence: { positive: [], negative: ['low_confidence'], layout: 'unknown' },
+      },
+    })
+
+    render(<Step2Map />)
+
+    const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
+    fireEvent.click(screen.getByRole('button', { name: /confirm selected bank/i }))
+
+    await waitFor(() => expect(continueButton).toBeEnabled())
+
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'ktb' } })
+
+    await waitFor(() => expect(continueButton).toBeDisabled())
+    expect(screen.getByText('Required')).toBeInTheDocument()
+  })
+
+  it('clears mapping review when a critical mapping changes after confirmation', async () => {
+    seedUpload({
+      detected_bank: {
+        key: 'scb',
+        bank: 'SCB',
+        confidence: 0.94,
+        ambiguous: false,
+        scores: { scb: 12.0 },
+        top_candidates: ['scb'],
+        evidence: { positive: [], negative: [], layout: 'dual_account_like' },
+      },
+      suggested_mapping: {
+        date: 'วันที่',
+        description: 'รายละเอียด',
+        amount: null,
+        debit: 'ถอนเงิน',
+        credit: null,
+      },
+      confidence_scores: { date: 100, description: 100, debit: 100 },
+    })
+
+    render(<Step2Map />)
+
+    const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
+    expect(continueButton).toBeEnabled()
+    expect(screen.getByRole('button', { name: /mapping confirmed/i })).toBeInTheDocument()
+
+    const selects = screen.getAllByRole('combobox')
+    fireEvent.change(selects[5], { target: { value: '' } })
+
+    await waitFor(() => expect(continueButton).toBeDisabled())
+  })
+})

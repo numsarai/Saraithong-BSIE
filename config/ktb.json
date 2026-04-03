@@ -4,6 +4,12 @@
   "header_row": 0,
   "currency": "THB",
   "amount_mode": "unsigned",
+  "detection": {
+    "keywords": ["ktb", "krungthai", "กรุงไทย"],
+    "strong_headers": ["เลขที่บัญชีผู้โอน", "เลขที่บัญชีผู้รับโอน", "ธนาคารผู้โอน", "ธนาคารผู้รับโอน"],
+    "weak_headers": ["รายละเอียด", "จำนวนเงิน", "ชื่อผู้โอน", "ชื่อผู้รับโอน"],
+    "negative_headers": ["บัญชีผู้รับโอน", "หมายเลขบัญชีต้นทาง", "ชื่อบัญชีปลายทาง"]
+  },
   "column_mapping": {
     "date":             ["วันที่ทำรายการ", "วันที่", "Date", "date"],
     "time":             ["เวลา", "Time", "time"],

@@ -25,12 +25,19 @@ else:
     USER_DATA_DIR = BUNDLE_DIR
 
 # ── Read-only bundled assets (inside the bundle / source tree) ─────────────
-CONFIG_DIR    = BUNDLE_DIR / "config"
-TEMPLATES_DIR = BUNDLE_DIR / "templates"
-STATIC_DIR    = BUNDLE_DIR / "static"
+BUILTIN_CONFIG_DIR = BUNDLE_DIR / "config"
+TEMPLATES_DIR      = BUNDLE_DIR / "templates"
+STATIC_DIR         = BUNDLE_DIR / "static"
+
+# ── Writable config dir (user-created banks go here; falls back to bundled) ──
+CONFIG_DIR = USER_DATA_DIR / "config" if getattr(sys, 'frozen', False) else BUILTIN_CONFIG_DIR
 
 # ── Runtime user data (writable, never inside the bundle) ─────────────────
 INPUT_DIR     = USER_DATA_DIR / "data" / "input"
+EVIDENCE_DIR  = USER_DATA_DIR / "data" / "evidence"
 OUTPUT_DIR    = USER_DATA_DIR / "data" / "output"
+EXPORTS_DIR   = USER_DATA_DIR / "data" / "exports"
+BACKUPS_DIR   = USER_DATA_DIR / "data" / "backups"
 OVERRIDES_DIR = USER_DATA_DIR / "overrides"
 PROFILES_DIR  = USER_DATA_DIR / "mapping_profiles"
+DB_PATH       = USER_DATA_DIR / "bsie.db"

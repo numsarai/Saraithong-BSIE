@@ -5,6 +5,12 @@
   "format_type": "standard",
   "currency": "THB",
   "amount_mode": "debit_credit",
+  "detection": {
+    "keywords": ["gsb", "government savings", "ออมสิน"],
+    "strong_headers": [],
+    "weak_headers": ["ถอนเงิน", "ฝากเงิน", "รายละเอียด"],
+    "negative_headers": ["บัญชีผู้โอน", "หมายเลขบัญชีต้นทาง", "เลขที่บัญชีผู้โอน"]
+  },
   "column_mapping": {
     "date":        ["วันที่", "Date", "date", "DATE", "วันที่ทำรายการ", "Transaction Date"],
     "time":        ["เวลา", "Time", "time", "TIME"],

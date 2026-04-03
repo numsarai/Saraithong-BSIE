@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest'
+import { evaluateReviewGate, hasCriticalMapping, REVIEW_CONFIDENCE_THRESHOLD } from '@/lib/reviewGate'
+
+describe('reviewGate', () => {
+  it('blocks ambiguous bank detection until both reviews are complete', () => {
+    const gate = evaluateReviewGate({
+      detectedBank: { confidence: 0.92, ambiguous: true },
+      mapping: { date: 'วันที่', description: 'รายละเอียด', amount: 'จำนวนเงิน' },
+      bankReviewed: false,
+      mappingReviewed: false,
+    })
+
+    expect(gate.isBlockedCase).toBe(true)
+    expect(gate.bankNeedsReview).toBe(true)
+    expect(gate.mappingNeedsReview).toBe(false)
+    expect(gate.canProceedToConfig).toBe(false)
+  })
+
+  it('blocks low confidence cases below the threshold even when not ambiguous', () => {
+    const gate = evaluateReviewGate({
+      detectedBank: { confidence: (REVIEW_CONFIDENCE_THRESHOLD - 1) / 100, ambiguous: false },
+      mapping: { date: 'วันที่', description: 'รายละเอียด', amount: 'จำนวนเงิน' },
+      bankReviewed: false,
+      mappingReviewed: true,
+    })
+
+    expect(gate.bankNeedsReview).toBe(true)
+    expect(gate.isBlockedCase).toBe(true)
+    expect(gate.canProceedToConfig).toBe(false)
+  })
+
+  it('requires date, description, and one amount path for critical mapping', () => {
+    expect(hasCriticalMapping({ date: 'วันที่', description: 'รายละเอียด', amount: 'จำนวนเงิน' })).toBe(true)
+    expect(hasCriticalMapping({ date: 'วันที่', description: 'รายละเอียด', debit: 'ถอนเงิน' })).toBe(true)
+    expect(hasCriticalMapping({ date: 'วันที่', description: 'รายละเอียด', credit: 'ฝากเงิน' })).toBe(true)
+    expect(hasCriticalMapping({ description: 'รายละเอียด', amount: 'จำนวนเงิน' })).toBe(false)
+    expect(hasCriticalMapping({ date: 'วันที่', amount: 'จำนวนเงิน' })).toBe(false)
+    expect(hasCriticalMapping({ date: 'วันที่', description: 'รายละเอียด' })).toBe(false)
+  })
+
+  it('unblocks when both reviews are completed for a blocked case', () => {
+    const gate = evaluateReviewGate({
+      detectedBank: { confidence: 0.6, ambiguous: false },
+      mapping: { date: 'วันที่', description: 'รายละเอียด', debit: 'ถอนเงิน' },
+      bankReviewed: true,
+      mappingReviewed: true,
+    })
+
+    expect(gate.isBlockedCase).toBe(true)
+    expect(gate.canProceedToConfig).toBe(true)
+  })
+
+  it('auto-clears when confidence and critical mapping are already good', () => {
+    const gate = evaluateReviewGate({
+      detectedBank: { confidence: 0.91, ambiguous: false },
+      mapping: { date: 'วันที่', description: 'รายละเอียด', amount: 'จำนวนเงิน' },
+      bankReviewed: true,
+      mappingReviewed: true,
+    })
+
+    expect(gate.isBlockedCase).toBe(false)
+    expect(gate.canProceedToConfig).toBe(true)
+    expect(gate.blockingReasons).toEqual([])
+  })
+})

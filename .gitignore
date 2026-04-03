@@ -33,7 +33,26 @@ Thumbs.db
 .idea/
 
 # Local settings
+.env
 .claude/settings.local.json
 
 # PyInstaller
 *.spec.bak
+
+# SQLite runtime files
+*.db
+*.db-shm
+*.db-wal
+
+# Runtime mapping profiles (user data)
+mapping_profiles/
+
+# Claude worktrees
+.claude/worktrees/
+
+# Frontend build output (built by CI)
+static/dist/
+
+# Node
+frontend/node_modules/
+frontend/dist/

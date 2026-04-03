@@ -1,0 +1,40 @@
+{
+  "registry_version": 1,
+  "entries": [
+    {
+      "config_key": "kbank",
+      "sample_path": "data/sample_statements/sample_01_kbank.xlsx",
+      "expected_bank": "kbank"
+    },
+    {
+      "config_key": "scb",
+      "sample_path": "data/sample_statements/sample_02_scb.xlsx",
+      "expected_bank": "scb"
+    },
+    {
+      "config_key": "ktb",
+      "sample_path": "data/sample_statements/sample_03_ktb.xlsx",
+      "expected_bank": "ktb"
+    },
+    {
+      "config_key": "bay",
+      "sample_path": "ตัวอย่างไฟล์ธนาคาร/ตัวอย่าง กรุงศรี A-002-6941230651-EStatement.xlsx",
+      "expected_bank": "bay",
+      "normalize_assert": {
+        "subject_account": "6941230651",
+        "subject_name": "MR. KORT THANTHAVONGSA",
+        "required_columns": ["date", "amount", "direction", "counterparty_account"]
+      }
+    },
+    {
+      "config_key": "ciaf",
+      "sample_path": "ตัวอย่างไฟล์ธนาคาร/stm  วรุตม์.xlsx",
+      "expected_bank": "ciaf",
+      "normalize_assert": {
+        "subject_account": "9249452112",
+        "subject_name": "นาย วิวัฒน์ ศรีสมรูป",
+        "required_columns": ["date", "amount", "direction", "counterparty_account"]
+      }
+    }
+  ]
+}

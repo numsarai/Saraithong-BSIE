@@ -5,6 +5,12 @@
   "format_type": "standard",
   "currency": "THB",
   "amount_mode": "signed",
+  "detection": {
+    "keywords": ["bbl", "bangkok bank", "กรุงเทพ"],
+    "strong_headers": ["Transaction Date", "Outstanding Balance"],
+    "weak_headers": ["Description", "Amount", "Balance"],
+    "negative_headers": ["หมายเลขบัญชีต้นทาง", "บัญชีผู้โอน", "เลขที่บัญชีผู้รับโอน"]
+  },
   "column_mapping": {
     "date":                ["Transaction Date", "วันที่", "Date", "date", "DATE", "วันที่ทำรายการ"],
     "time":                ["Time", "เวลา", "time", "TIME"],

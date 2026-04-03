@@ -48,11 +48,11 @@ Creates user data directories (first-run setup):
 Redirects stdout/stderr to ~/Documents/BSIE/bsie.log
 (PyInstaller bundles suppress the console; log file is the only debug output)
         ↓
-Starts uvicorn server in a background thread (port 5001)
+Starts uvicorn server in a background thread (port 8757)
         ↓
 Polls GET /health until ready (max ~10 seconds)
         ↓
-Opens user's default browser to http://127.0.0.1:5001
+Opens user's default browser to http://127.0.0.1:8757
         ↓
 System tray icon appears:
   Windows → system tray (bottom-right)
@@ -63,7 +63,7 @@ Closing browser tab → app keeps running in background
 Clicking "Quit BSIE" → server stops → process exits
 ```
 
-**Port conflict:** If port 5001 is already in use, the health poll will time out and the app will show an OS error dialog. This is a known v1 limitation; port selection is not in scope.
+**Port conflict:** If port 8757 is already in use, the health poll will time out and the app will show an OS error dialog. This is a known v1 limitation; port selection is not in scope.
 
 ### New endpoint in app.py
 ```python

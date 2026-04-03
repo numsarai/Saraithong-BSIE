@@ -5,6 +5,12 @@
   "format_type": "dual_account",
   "currency": "THB",
   "amount_mode": "debit_credit",
+  "detection": {
+    "keywords": ["scb", "siam commercial", "ไทยพาณิชย์", "scb easy"],
+    "strong_headers": ["บัญชีผู้โอน", "ชื่อผู้โอน", "บัญชีผู้รับโอน", "ชื่อผู้รับโอน"],
+    "weak_headers": ["ถอนเงิน", "เงินฝาก", "จำนวนเงินคงเหลือ", "SCB EASY"],
+    "negative_headers": ["หมายเลขบัญชีต้นทาง", "ชื่อบัญชีต้นทาง", "เลขที่บัญชีผู้โอน"]
+  },
   "column_mapping": {
     "date":             ["วันที่", "Date", "date", "DATE", "Transaction Date"],
     "time":             ["เวลา", "Time", "time", "TIME"],

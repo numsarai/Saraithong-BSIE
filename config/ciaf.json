@@ -1,0 +1,27 @@
+{
+  "bank_name": "CIAF_EXPORT",
+  "sheet_index": 0,
+  "header_row": 0,
+  "format_type": "dual_account",
+  "currency": "THB",
+  "amount_mode": "debit_credit",
+  "detection": {
+    "keywords": ["ciaf", "authorityid", "fromaccountno", "toaccountno", "txdate", "txchannel"],
+    "strong_headers": ["AUTHORITYID", "ACCOUNTNO", "TXDATE", "FROMACCOUNTNO", "TOACCOUNTNO", "WITHDRAWAL", "DEPOSIT"],
+    "weak_headers": ["ACCOUNTNAME", "TXTIME", "FROMACCOUNTNAME", "TOACCOUNTNAME", "BALANCE", "BANKCODE", "TOBANKCODE"],
+    "negative_headers": ["บัญชีผู้โอน", "หมายเลขบัญชีต้นทาง", "ประเภทการทำรายการ"]
+  },
+  "column_mapping": {
+    "date": ["TXDATE"],
+    "time": ["TXTIME"],
+    "description": ["TXTYPE"],
+    "debit": ["WITHDRAWAL"],
+    "credit": ["DEPOSIT"],
+    "balance": ["BALANCE"],
+    "channel": ["TXCHANNEL"],
+    "sender_account": ["FROMACCOUNTNO"],
+    "sender_name": ["FROMACCOUNTNAME"],
+    "receiver_account": ["TOACCOUNTNO"],
+    "receiver_name": ["TOACCOUNTNAME"]
+  }
+}

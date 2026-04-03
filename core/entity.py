@@ -12,6 +12,7 @@ Entity types:
 Each entity gets a unique entity_id and all source transaction_ids are
 preserved for full traceability.
 """
+from __future__ import annotations
 
 import hashlib
 import logging

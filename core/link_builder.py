@@ -15,6 +15,7 @@ RULE:
 
 DO NOT trust bank column labels like "to/from" — rely solely on direction + amount sign.
 """
+from __future__ import annotations
 
 import logging
 

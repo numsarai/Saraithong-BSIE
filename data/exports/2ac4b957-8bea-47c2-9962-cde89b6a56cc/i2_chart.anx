@@ -1,0 +1,63 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Chart IdReferenceLinking="false" Rigorous="false">
+  <ChartItemCollection>
+    <ChartItem Label="Graph Tester (1234500088)">
+      <End>
+        <Entity EntityId="ACCOUNT:1234500088" Identity="ACCOUNT:1234500088" LabelIsIdentity="false">
+          <Icon>
+            <IconStyle Type="BankAccount" />
+          </Icon>
+        </Entity>
+      </End>
+      <Description>NodeType:Account | Identity:1234500088 | Account:1234500088 | Entity:Graph Tester | Bank:OFX | Review:pending | Confidence:0.87 | Files:60943c50-73b5-4677-a417-49337b349b9e | ParserRuns:05cd5eef-e15c-4058-a8d3-f85a23c0b183 | Rows:1|2</Description>
+    </ChartItem>
+    <ChartItem Label="Cash">
+      <End>
+        <Entity EntityId="CASH:UNSPECIFIED" Identity="CASH:UNSPECIFIED" LabelIsIdentity="false">
+          <Icon>
+            <IconStyle Type="Person" />
+          </Icon>
+        </Entity>
+      </End>
+      <Description>NodeType:Cash | Identity:cash | Bank:OFX | Review:pending | Confidence:0.85 | Files:60943c50-73b5-4677-a417-49337b349b9e | ParserRuns:05cd5eef-e15c-4058-a8d3-f85a23c0b183 | Rows:1</Description>
+    </ChartItem>
+    <ChartItem Label="Graph Tester">
+      <End>
+        <Entity EntityId="ENTITY:BBC6ECEDC503F1EC" Identity="ENTITY:BBC6ECEDC503F1EC" LabelIsIdentity="false">
+          <Icon>
+            <IconStyle Type="Person" />
+          </Icon>
+        </Entity>
+      </End>
+      <Description>NodeType:Entity | Identity:graph tester | Entity:Graph Tester | Bank:OFX | Confidence:1.0 | Files:60943c50-73b5-4677-a417-49337b349b9e | ParserRuns:05cd5eef-e15c-4058-a8d3-f85a23c0b183 | Rows:1|2</Description>
+    </ChartItem>
+    <ChartItem Label="Transfer">
+      <End>
+        <Entity EntityId="ENTITY:34420CF5D681717F" Identity="ENTITY:34420CF5D681717F" LabelIsIdentity="false">
+          <Icon>
+            <IconStyle Type="Person" />
+          </Icon>
+        </Entity>
+      </End>
+      <Description>NodeType:Entity | Identity:transfer | Entity:Transfer | Bank:OFX | Review:pending | Confidence:0.87 | Files:60943c50-73b5-4677-a417-49337b349b9e | ParserRuns:05cd5eef-e15c-4058-a8d3-f85a23c0b183 | Rows:2</Description>
+    </ChartItem>
+    <ChartItem Label="Owns">
+      <Link End1Id="ENTITY:BBC6ECEDC503F1EC" End2Id="ACCOUNT:1234500088">
+        <LinkStyle ArrowStyle="ArrowOnHead" MlStyle="MultiplicityMultiple" Type="Link" />
+      </Link>
+      <Description>EdgeType:OWNS | Confidence:1.0 | Review:pending | Assertion:derived_from_statement | Transactions:TX:2CACB3AF9395C1D0|TX:C8B3DE593CFCE1F1 | Description:Graph Tester owns 1234500088 | Files:60943c50-73b5-4677-a417-49337b349b9e | ParserRuns:05cd5eef-e15c-4058-a8d3-f85a23c0b183 | Batch:aec198a8-a081-4223-9a88-69af3e89bbea | Row:1|2 | Sheet:OFX | SourceFile:graphable.ofx</Description>
+    </ChartItem>
+    <ChartItem Label="Received From 175.00 THB">
+      <Link End1Id="CASH:UNSPECIFIED" End2Id="ACCOUNT:1234500088">
+        <LinkStyle ArrowStyle="ArrowOnHead" MlStyle="MultiplicityMultiple" Type="Link" />
+      </Link>
+      <Description>EdgeType:RECEIVED_FROM | Confidence:0.85 | Review:pending | Assertion:derived_from_statement | Transaction:TX:C8B3DE593CFCE1F1 | Transactions:TX:C8B3DE593CFCE1F1 | Description:Cash deposit | Files:60943c50-73b5-4677-a417-49337b349b9e | ParserRuns:05cd5eef-e15c-4058-a8d3-f85a23c0b183 | Batch:aec198a8-a081-4223-9a88-69af3e89bbea | Row:1 | Sheet:OFX | SourceFile:graphable.ofx</Description>
+    </ChartItem>
+    <ChartItem Label="Sent To 50.00 THB">
+      <Link End1Id="ACCOUNT:1234500088" End2Id="ENTITY:34420CF5D681717F">
+        <LinkStyle ArrowStyle="ArrowOnHead" MlStyle="MultiplicityMultiple" Type="Link" />
+      </Link>
+      <Description>EdgeType:SENT_TO | Confidence:0.87 | Review:pending | Assertion:derived_from_statement | Transaction:TX:2CACB3AF9395C1D0 | Transactions:TX:2CACB3AF9395C1D0 | Description:Transfer to 1234567890 | Files:60943c50-73b5-4677-a417-49337b349b9e | ParserRuns:05cd5eef-e15c-4058-a8d3-f85a23c0b183 | Batch:aec198a8-a081-4223-9a88-69af3e89bbea | Row:2 | Sheet:OFX | SourceFile:graphable.ofx</Description>
+    </ChartItem>
+  </ChartItemCollection>
+</Chart>

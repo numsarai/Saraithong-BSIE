@@ -1,0 +1,63 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Chart IdReferenceLinking="false" Rigorous="false">
+  <ChartItemCollection>
+    <ChartItem Label="Graph Tester (1234500088)">
+      <End>
+        <Entity EntityId="ACCOUNT:1234500088" Identity="ACCOUNT:1234500088" LabelIsIdentity="false">
+          <Icon>
+            <IconStyle Type="BankAccount" />
+          </Icon>
+        </Entity>
+      </End>
+      <Description>NodeType:Account | Identity:1234500088 | Account:1234500088 | Entity:Graph Tester | Bank:OFX | Review:needs_review | Confidence:0.87 | Files:4105c83c-6ddf-4e2d-899c-cf45d4c353f5 | ParserRuns:c80e5145-25a0-4a94-9d4d-3909cfd02f9c | Rows:1|2</Description>
+    </ChartItem>
+    <ChartItem Label="Cash">
+      <End>
+        <Entity EntityId="CASH:UNSPECIFIED" Identity="CASH:UNSPECIFIED" LabelIsIdentity="false">
+          <Icon>
+            <IconStyle Type="Person" />
+          </Icon>
+        </Entity>
+      </End>
+      <Description>NodeType:Cash | Identity:cash | Bank:OFX | Review:needs_review | Confidence:0.85 | Files:4105c83c-6ddf-4e2d-899c-cf45d4c353f5 | ParserRuns:c80e5145-25a0-4a94-9d4d-3909cfd02f9c | Rows:1</Description>
+    </ChartItem>
+    <ChartItem Label="Graph Tester">
+      <End>
+        <Entity EntityId="ENTITY:BBC6ECEDC503F1EC" Identity="ENTITY:BBC6ECEDC503F1EC" LabelIsIdentity="false">
+          <Icon>
+            <IconStyle Type="Person" />
+          </Icon>
+        </Entity>
+      </End>
+      <Description>NodeType:Entity | Identity:graph tester | Entity:Graph Tester | Bank:OFX | Confidence:1.0 | Files:4105c83c-6ddf-4e2d-899c-cf45d4c353f5 | ParserRuns:c80e5145-25a0-4a94-9d4d-3909cfd02f9c | Rows:1|2</Description>
+    </ChartItem>
+    <ChartItem Label="Transfer">
+      <End>
+        <Entity EntityId="ENTITY:34420CF5D681717F" Identity="ENTITY:34420CF5D681717F" LabelIsIdentity="false">
+          <Icon>
+            <IconStyle Type="Person" />
+          </Icon>
+        </Entity>
+      </End>
+      <Description>NodeType:Entity | Identity:transfer | Entity:Transfer | Bank:OFX | Review:needs_review | Confidence:0.87 | Files:4105c83c-6ddf-4e2d-899c-cf45d4c353f5 | ParserRuns:c80e5145-25a0-4a94-9d4d-3909cfd02f9c | Rows:2</Description>
+    </ChartItem>
+    <ChartItem Label="Owns">
+      <Link End1Id="ENTITY:BBC6ECEDC503F1EC" End2Id="ACCOUNT:1234500088">
+        <LinkStyle ArrowStyle="ArrowOnHead" MlStyle="MultiplicityMultiple" Type="Link" />
+      </Link>
+      <Description>EdgeType:OWNS | Confidence:1.0 | Review:needs_review | Assertion:derived_from_statement | Transactions:TX:83E77298CB7C65F8|TX:C9129F9995030987 | Description:Graph Tester owns 1234500088 | Files:4105c83c-6ddf-4e2d-899c-cf45d4c353f5 | ParserRuns:c80e5145-25a0-4a94-9d4d-3909cfd02f9c | Batch:74bfe202-14ed-4ec9-8a3f-968eb6028d5b | Row:1|2 | Sheet:OFX | SourceFile:graphable.ofx</Description>
+    </ChartItem>
+    <ChartItem Label="Received From 175.00 THB">
+      <Link End1Id="CASH:UNSPECIFIED" End2Id="ACCOUNT:1234500088">
+        <LinkStyle ArrowStyle="ArrowOnHead" MlStyle="MultiplicityMultiple" Type="Link" />
+      </Link>
+      <Description>EdgeType:RECEIVED_FROM | Date:01 03 2026 | Time:09:00:00 | Amount:175 | Confidence:0.85 | Review:needs_review | Assertion:derived_from_statement | Transaction:TX:C9129F9995030987 | Transactions:TX:C9129F9995030987 | Description:Cash deposit | Files:4105c83c-6ddf-4e2d-899c-cf45d4c353f5 | ParserRuns:c80e5145-25a0-4a94-9d4d-3909cfd02f9c | Batch:74bfe202-14ed-4ec9-8a3f-968eb6028d5b | Row:1 | Sheet:OFX | SourceFile:graphable.ofx</Description>
+    </ChartItem>
+    <ChartItem Label="Sent To 50.00 THB">
+      <Link End1Id="ACCOUNT:1234500088" End2Id="ENTITY:34420CF5D681717F">
+        <LinkStyle ArrowStyle="ArrowOnHead" MlStyle="MultiplicityMultiple" Type="Link" />
+      </Link>
+      <Description>EdgeType:SENT_TO | Date:01 03 2026 | Time:10:00:00 | Amount:50 | Confidence:0.87 | Review:needs_review | Assertion:derived_from_statement | Transaction:TX:83E77298CB7C65F8 | Transactions:TX:83E77298CB7C65F8 | Description:Transfer to 1234567890 | Files:4105c83c-6ddf-4e2d-899c-cf45d4c353f5 | ParserRuns:c80e5145-25a0-4a94-9d4d-3909cfd02f9c | Batch:74bfe202-14ed-4ec9-8a3f-968eb6028d5b | Row:2 | Sheet:OFX | SourceFile:graphable.ofx</Description>
+    </ChartItem>
+  </ChartItemCollection>
+</Chart>

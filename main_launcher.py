@@ -6,15 +6,16 @@ PyInstaller entry point for the BSIE desktop application.
 Responsibilities (in order):
   1. Create user data directories if they don't exist (first-run setup)
   2. Redirect stdout/stderr to bsie.log in the user data directory
-  3. Start uvicorn (FastAPI server) in a background thread on port 5001
+  3. Start uvicorn (FastAPI server) in a background thread on port 8757
   4. Poll GET /health until the server is ready (max 10 seconds)
-  5. Open the user's default browser to http://127.0.0.1:5001
+  5. Open the user's default browser to http://127.0.0.1:8757
   6. Show a system tray icon with a "Quit BSIE" menu item
   7. On "Quit BSIE": stop uvicorn, remove tray icon, exit process
 """
 
 import sys
 import os
+import subprocess
 import time
 import threading
 import webbrowser
@@ -29,7 +30,7 @@ from paths import (
     BUNDLE_DIR, USER_DATA_DIR,
 )
 
-PORT = 5001
+PORT = int(os.environ.get("PORT", "8757"))
 BASE_URL = f"http://127.0.0.1:{PORT}"
 HEALTH_URL = f"{BASE_URL}/health"
 MAX_WAIT_SECONDS = 10
@@ -117,11 +118,34 @@ def _load_tray_icon():
     return Image.open(icon_path)
 
 
+def _start_worker() -> None:
+    """Spawn Celery worker subprocess (server mode only). No-op in bundled mode."""
+    if getattr(sys, "frozen", False):
+        # Bundled desktop mode — pipeline runs in-thread, no Celery/Redis needed
+        _start_worker.proc = None
+        return
+    worker_script = BUNDLE_DIR / "worker_entry.py"
+    cmd = [sys.executable, str(worker_script)]
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        cwd=str(BUNDLE_DIR),
+    )
+    _start_worker.proc = proc
+
+
 def _quit_app(icon, item) -> None:
     """Called when user selects 'Quit BSIE' from the tray menu."""
     icon.stop()
     if hasattr(_start_server, "server"):
         _start_server.server.should_exit = True
+    if hasattr(_start_worker, "proc") and _start_worker.proc is not None:
+        try:
+            _start_worker.proc.terminate()
+            _start_worker.proc.wait(timeout=5)
+        except Exception:
+            pass
     time.sleep(1)
     os._exit(0)
 
@@ -136,6 +160,13 @@ def main() -> None:
     # Start uvicorn in a background daemon thread
     server_thread = threading.Thread(target=_start_server, daemon=True)
     server_thread.start()
+
+    # Start Celery worker as a subprocess (no-op in bundled mode)
+    try:
+        _start_worker()
+        logger.info("Celery worker: %s", "disabled (bundled mode)" if getattr(sys, "frozen", False) else f"pid={_start_worker.proc.pid}")
+    except Exception as exc:
+        logger.warning("Could not start Celery worker: %s", exc)
 
     if not _wait_for_server():
         import tkinter.messagebox as mb

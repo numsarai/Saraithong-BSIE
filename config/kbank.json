@@ -5,15 +5,21 @@
   "format_type": "dual_account",
   "currency": "THB",
   "amount_mode": "debit_credit",
+  "detection": {
+    "keywords": ["kbank", "kasikorn", "กสิกร"],
+    "strong_headers": ["หมายเลขบัญชีต้นทาง", "ชื่อบัญชีต้นทาง", "หมายเลขบัญชีปลายทาง", "ชื่อบัญชีปลายทาง", "Source Account", "Source Account Name", "Destination Account", "Destination Account Name"],
+    "weak_headers": ["ประเภทรายการ", "ยอดเงินคงเหลือ", "เวลาที่ทำรายการ"],
+    "negative_headers": ["บัญชีผู้โอน", "บัญชีผู้รับโอน", "เลขที่บัญชีผู้โอน"]
+  },
   "column_mapping": {
     "date":             ["วันที่ทำรายการ", "วันที่", "Date", "date", "DATE", "Transaction Date"],
     "time":             ["เวลาที่ทำรายการ", "เวลา", "Time", "time", "TIME"],
     "description":      ["ประเภทรายการ", "รายการ", "Description", "description", "DESC", "Narration", "หมายเหตุ"],
     "channel":          ["ช่องทาง", "Channel", "channel", "CHANNEL"],
-    "sender_account":   ["หมายเลขบัญชีต้นทาง"],
-    "sender_name":      ["ชื่อบัญชีต้นทาง"],
-    "receiver_account": ["หมายเลขบัญชีปลายทาง"],
-    "receiver_name":    ["ชื่อบัญชีปลายทาง"],
+    "sender_account":   ["หมายเลขบัญชีต้นทาง", "Source Account"],
+    "sender_name":      ["ชื่อบัญชีต้นทาง", "Source Account Name"],
+    "receiver_account": ["หมายเลขบัญชีปลายทาง", "Destination Account"],
+    "receiver_name":    ["ชื่อบัญชีปลายทาง", "Destination Account Name"],
     "debit":            ["ถอนเงิน", "เดบิต", "Debit", "debit", "DEBIT", "ถอน"],
     "credit":           ["ฝากเงิน", "เครดิต", "Credit", "credit", "CREDIT", "ฝาก", "เงินฝาก"],
     "balance":          ["ยอดเงินคงเหลือ", "ยอดคงเหลือ", "Balance", "balance", "BALANCE", "คงเหลือ", "จำนวนเงินคงเหลือ"]

@@ -1,0 +1,224 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+import { InvestigationDesk } from '@/components/InvestigationDesk'
+
+vi.mock('@/api', () => ({
+  createDatabaseBackup: vi.fn(async () => ({ filename: 'backup.json', pruned_backups: [] })),
+  createExportJob: vi.fn(async () => ({ id: 'EXP-1' })),
+  getAccountDetail: vi.fn(async () => null),
+  getAccounts: vi.fn(async () => ({ items: [] })),
+  getAuditLogs: vi.fn(async () => ({
+    items: [
+      {
+        id: 'AUD-1',
+        object_type: 'transaction',
+        object_id: 'TXN-001',
+        action_type: 'update',
+        changed_by: 'analyst',
+        changed_at: '2026-03-30T23:30:00Z',
+      },
+    ],
+  })),
+  getDatabaseBackupPreview: vi.fn(async () => ({ counts: {} })),
+  getDatabaseBackups: vi.fn(async () => ({ items: [], reset_confirmation_text: 'RESET BSIE DATABASE', restore_confirmation_text: 'RESTORE BSIE DATABASE' })),
+  getDatabaseBackupSettings: vi.fn(async () => ({ enabled: false, interval_hours: 24, backup_format: 'auto', retention_enabled: false, retain_count: 20 })),
+  getDbStatus: vi.fn(async () => ({ database_backend: 'postgresql', database_runtime_source: 'environment', table_count: 22, has_investigation_schema: true, key_record_counts: {}, tables: [], database_url_masked: 'postgresql://***' })),
+  getDuplicates: vi.fn(async () => ({ items: [] })),
+  getExportJobs: vi.fn(async () => ({ items: [] })),
+  getFileDetail: vi.fn(async () => null),
+  getFiles: vi.fn(async () => ({
+    items: [
+      {
+        id: 'FILE-1',
+        original_filename: 'sample.xlsx',
+        import_status: 'stored',
+        uploaded_at: '2026-03-30T23:30:00Z',
+        file_hash_sha256: '1234567890abcdef1234567890abcdef',
+      },
+    ],
+  })),
+  getGraphDerivedEdges: vi.fn(async () => ({ items: [] })),
+  getGraphAnalysis: vi.fn(async () => ({
+    overview: {
+      transaction_rows: 12,
+      business_node_count: 5,
+      business_edge_count: 4,
+      connected_components: 2,
+      review_candidate_nodes: 1,
+      suggested_match_edges: 1,
+      suspicious_finding_count: 2,
+      top_node_by_degree: { label: 'Subject Account' },
+      top_node_by_flow: { label: 'Alice (2222222222)' },
+    },
+    top_nodes_by_degree: [
+      { node_id: 'ACCOUNT:1111111111', label: 'Subject Account', node_type: 'Account', degree: 4, in_degree: 2, out_degree: 2, total_flow_value: 1500 },
+    ],
+    review_candidates: [
+      { node_id: 'PARTIAL_ACCOUNT:12345', label: 'Partial 12345', node_type: 'PartialAccount', reason_count: 2, reason_codes: 'partial_account_only|review_pending' },
+    ],
+    connected_components: [
+      { component_id: 'COMP-001', size: 3, node_labels: 'Subject Account|Alice (2222222222)|Partial 12345' },
+    ],
+    lineage_summary: { file_count: 1, parser_run_count: 1 },
+    query_meta: { cache_hit: true, transactions_loaded: 0, truncated: false },
+  })),
+  getGraphEdges: vi.fn(async () => ({ items: [] })),
+  getGraphFindings: vi.fn(async () => ({
+    items: [
+      {
+        finding_id: 'F-1',
+        severity: 'high',
+        summary: 'High fan-in into ACCOUNT:1111111111',
+        subject_node_ids: 'ACCOUNT:1111111111|ACCOUNT:2222222222',
+        reason_codes: 'fan_in|multi_source',
+      },
+    ],
+  })),
+  getGraphNeighborhood: vi.fn(async () => ({
+    center_node_id: 'ACCOUNT:1111111111',
+    nodes: [
+      {
+        node_id: 'ACCOUNT:1111111111',
+        label: 'Subject Account',
+        node_type: 'Account',
+        review_status: 'pending',
+        source_transaction_ids: 'TXN-1|TXN-2',
+        source_files: 'statement.xlsx',
+      },
+      {
+        node_id: 'ACCOUNT:2222222222',
+        label: 'Alice (2222222222)',
+        node_type: 'Account',
+        review_status: '',
+        source_transaction_ids: 'TXN-1',
+        source_files: 'statement.xlsx',
+      },
+    ],
+    edges: [
+      {
+        edge_id: 'DERIVED-1',
+        from_node_id: 'ACCOUNT:2222222222',
+        to_node_id: 'ACCOUNT:1111111111',
+        edge_type: 'DERIVED_ACCOUNT_TO_ACCOUNT',
+      },
+    ],
+    suspicious_node_ids: ['ACCOUNT:1111111111'],
+    findings: [
+      {
+        finding_id: 'F-1',
+        severity: 'high',
+        rule_type: 'fan_in_accounts',
+        summary: 'High fan-in into ACCOUNT:1111111111',
+        subject_node_ids: 'ACCOUNT:1111111111|ACCOUNT:2222222222',
+      },
+    ],
+    findings_by_node: {
+      'ACCOUNT:1111111111': [
+        {
+          finding_id: 'F-1',
+          severity: 'high',
+          rule_type: 'fan_in_accounts',
+          summary: 'High fan-in into ACCOUNT:1111111111',
+        },
+      ],
+    },
+    query_meta: { cache_hit: true, transactions_loaded: 0, truncated: false },
+    graph_meta: { hidden_node_count: 0, hidden_node_ids: [], hidden_findings_count: 0 },
+  })),
+  getGraphNeo4jStatus: vi.fn(async () => ({
+    enabled: false,
+    configured: false,
+    driver_available: false,
+    driver_version: '',
+    uri_masked: '',
+  })),
+  getGraphNodes: vi.fn(async () => ({
+    items: [
+      { node_id: 'ACCOUNT:1111111111', label: 'Subject Account', node_type: 'Account', review_status: 'pending' },
+      { node_id: 'ACCOUNT:2222222222', label: 'Alice (2222222222)', node_type: 'Account', review_status: '' },
+    ],
+    meta: { transactions_loaded: 0, cache_hit: false, truncated: false },
+  })),
+  getMatches: vi.fn(async () => ({ items: [] })),
+  getParserRunDetail: vi.fn(async () => null),
+  getParserRuns: vi.fn(async () => ({
+    items: [
+      {
+        id: 'RUN-1',
+        status: 'done',
+        bank_detected: 'SCB',
+        started_at: '2026-03-30T23:30:00Z',
+      },
+    ],
+  })),
+  getTransactionDetail: vi.fn(async () => null),
+  reprocessParserRun: vi.fn(async () => ({ job_id: 'JOB-1' })),
+  resetDatabase: vi.fn(async () => ({ status: 'ok' })),
+  restoreDatabase: vi.fn(async () => ({ restored_backup: 'backup.json' })),
+  syncGraphToNeo4j: vi.fn(async () => ({ status: 'ok', node_count: 2, edge_count: 1, derived_edge_count: 0 })),
+  updateDatabaseBackupSettings: vi.fn(async () => ({ enabled: false, interval_hours: 24, backup_format: 'auto', retention_enabled: false, retain_count: 20 })),
+  reviewAccount: vi.fn(async () => ({ status: 'ok' })),
+  reviewDuplicate: vi.fn(async () => ({ status: 'ok' })),
+  reviewMatch: vi.fn(async () => ({ status: 'ok' })),
+  reviewTransaction: vi.fn(async () => ({ status: 'ok' })),
+  searchTransactionRecords: vi.fn(async () => ({ items: [] })),
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}))
+
+function renderWithQueryClient() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  })
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <InvestigationDesk />
+    </QueryClientProvider>
+  )
+}
+
+describe('InvestigationDesk date formatting', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders file, parser run, and audit dates as DD MM YYYY', async () => {
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Files' }))
+    expect(await screen.findByText('31 03 2026')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Parser Runs' }))
+    expect(await screen.findByText('31 03 2026')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audit' }))
+    expect(await screen.findByText('31 03 2026')).toBeInTheDocument()
+  })
+
+  it('renders graph analysis tab from persisted normalized transaction analytics', async () => {
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Graph Analysis' }))
+
+    expect(await screen.findByText('BSIE Graph Analysis Module')).toBeInTheDocument()
+    expect((await screen.findAllByText('Subject Account')).length).toBeGreaterThan(0)
+    expect(await screen.findByText(/partial_account_only/i)).toBeInTheDocument()
+    expect(await screen.findByText('Graph Explorer')).toBeInTheDocument()
+    expect((await screen.findAllByText('High fan-in into ACCOUNT:1111111111')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Suspicious')).toBeInTheDocument()
+    expect(await screen.findByText(/Loaded 0 transactions/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Hidden node count:/i)).toBeInTheDocument()
+    expect(await screen.findByText('Neo4j Enabled')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Sync To Neo4j' })).toBeInTheDocument()
+  })
+})

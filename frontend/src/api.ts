@@ -187,6 +187,15 @@ export async function getAccounts(q = '') {
   return r.json()
 }
 
+export async function lookupRememberedAccountName(params: { account: string; bank_key?: string }) {
+  const search = new URLSearchParams()
+  search.set('account', params.account)
+  if (params.bank_key) search.set('bank_key', params.bank_key)
+  const r = await fetch(`/api/accounts/remembered-name?${search.toString()}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function getAccountDetail(accountId: string) {
   const r = await fetch(`/api/accounts/${accountId}`)
   if (!r.ok) throw new Error(await r.text())

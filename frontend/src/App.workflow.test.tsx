@@ -11,6 +11,7 @@ vi.mock('@/api', () => ({
     { key: 'scb', name: 'SCB' },
     { key: 'ktb', name: 'KTB' },
   ])),
+  lookupRememberedAccountName: vi.fn(async () => ({ matched: false, remembered_name: '' })),
   learnBank: vi.fn(async () => ({ status: 'ok' })),
   startProcess: vi.fn(async () => ({ job_id: 'job-1' })),
   getJobStatus: vi.fn(async () => ({ status: 'queued', log: [] })),

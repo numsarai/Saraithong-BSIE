@@ -76,7 +76,7 @@ class CaseTagAssignRequest(BaseModel):
 class DatabaseBackupRequest(BaseModel):
     operator: str = "analyst"
     note: str = ""
-    backup_format: str = "auto"
+    backup_format: str = "json"
 
 
 class DatabaseResetRequest(BaseModel):
@@ -97,7 +97,7 @@ class DatabaseRestoreRequest(BaseModel):
 class DatabaseBackupSettingsRequest(BaseModel):
     enabled: bool = False
     interval_hours: float = Field(default=24.0, ge=1.0)
-    backup_format: str = "auto"
+    backup_format: str = "json"
     retention_enabled: bool = False
     retain_count: int = Field(default=20, ge=1)
     updated_by: str = "analyst"

@@ -60,10 +60,6 @@ from sqlalchemy import func, inspect, select
 _BASE = Path(__file__).parent
 sys.path.insert(0, str(_BASE))
 
-# ── Bundled mode detection ────────────────────────────────────────────────
-# When frozen by PyInstaller, skip Celery+Redis and run pipeline in-thread.
-IS_BUNDLED = getattr(sys, "frozen", False)
-
 from paths import (
     STATIC_DIR, TEMPLATES_DIR, CONFIG_DIR, BUILTIN_CONFIG_DIR,
     INPUT_DIR, OUTPUT_DIR, EVIDENCE_DIR, EXPORTS_DIR, BACKUPS_DIR,
@@ -74,19 +70,7 @@ from database import (
     db_create_job, db_update_job, db_get_job, db_append_log, insert_job_meta,
 )
 from migrate_to_db import migrate_json_to_db
-
-if not IS_BUNDLED:
-    from tasks import run_pipeline_task
-
-
-def _celery_workers_available() -> bool:
-    """Return True only if a Celery broker is reachable AND at least one worker is online."""
-    try:
-        inspect = run_pipeline_task.app.control.inspect(timeout=1)
-        active = inspect.active_queues()
-        return bool(active)
-    except Exception:
-        return False
+from tasks import run_pipeline_sync
 
 
 def _dispatch_pipeline(
@@ -103,51 +87,26 @@ def _dispatch_pipeline(
     header_row: int = 0,
     sheet_name: str = "",
 ) -> None:
-    """Dispatch pipeline — Celery when broker is up, else thread."""
-    import threading
-    from tasks import run_pipeline_sync
-
-    use_celery = (
-        not IS_BUNDLED
-        and hasattr(run_pipeline_task, 'delay')
-        and _celery_workers_available()
+    """Dispatch the pipeline using the local background thread."""
+    logger.info("Dispatching pipeline via local background thread")
+    t = threading.Thread(
+        target=run_pipeline_sync,
+        kwargs={
+            "job_id": job_id,
+            "upload_path_str": upload_path_str,
+            "bank_key": bank_key,
+            "account": account,
+            "name": name,
+            "confirmed_mapping": confirmed_mapping,
+            "file_id": file_id,
+            "parser_run_id": parser_run_id,
+            "operator": operator,
+            "header_row": header_row,
+            "sheet_name": sheet_name,
+        },
+        daemon=True,
     )
-
-    if use_celery:
-        logger.info("Dispatching pipeline via Celery")
-        run_pipeline_task.delay(
-            job_id,
-            upload_path_str,
-            bank_key,
-            account,
-            name,
-            confirmed_mapping,
-            file_id=file_id,
-            parser_run_id=parser_run_id,
-            operator=operator,
-            header_row=header_row,
-            sheet_name=sheet_name,
-        )
-    else:
-        logger.info("Dispatching pipeline via thread (no Celery broker)")
-        t = threading.Thread(
-            target=run_pipeline_sync,
-            kwargs={
-                "job_id": job_id,
-                "upload_path_str": upload_path_str,
-                "bank_key": bank_key,
-                "account": account,
-                "name": name,
-                "confirmed_mapping": confirmed_mapping,
-                "file_id": file_id,
-                "parser_run_id": parser_run_id,
-                "operator": operator,
-                "header_row": header_row,
-                "sheet_name": sheet_name,
-            },
-            daemon=True,
-        )
-        t.start()
+    t.start()
 
 from core.loader               import load_config, find_best_sheet_and_header
 from core.bank_detector        import detect_bank

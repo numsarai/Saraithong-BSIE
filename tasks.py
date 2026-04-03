@@ -1,20 +1,15 @@
-# tasks.py — Celery tasks for BSIE pipeline
+# tasks.py — Background pipeline helpers for BSIE
 from __future__ import annotations
+
 import json
 import logging
 import threading
 from pathlib import Path
 
-try:
-    from celery_app import celery_app
-    _CELERY_AVAILABLE = True
-except ImportError:
-    _CELERY_AVAILABLE = False
-    celery_app = None
-
 from database import (
-    get_session, Job,
-    db_create_job, db_update_job, db_append_log, db_get_job, insert_job_meta
+    db_append_log,
+    db_update_job,
+    insert_job_meta,
 )
 
 log = logging.getLogger(__name__)
@@ -58,7 +53,7 @@ def run_pipeline_sync(job_id: str, upload_path_str: str, bank_key: str,
                       file_id: str = "", parser_run_id: str = "",
                       operator: str = "analyst", header_row: int = 0,
                       sheet_name: str = "") -> None:
-    """Core pipeline runner — called by both Celery task and direct thread."""
+    """Core pipeline runner for the in-process background thread."""
     import pandas as pd
     from pipeline.process_account import process_account
 
@@ -141,10 +136,6 @@ def run_pipeline_sync(job_id: str, upload_path_str: str, bank_key: str,
         root_logger.removeHandler(handler)
 
 
-if _CELERY_AVAILABLE and celery_app:
-    @celery_app.task(bind=True, name="bsie.run_pipeline", max_retries=0, acks_late=True)
-    def run_pipeline_task(self, job_id, upload_path_str, bank_key, account, name, confirmed_mapping, **kwargs):
-        run_pipeline_sync(job_id, upload_path_str, bank_key, account, name, confirmed_mapping, **kwargs)
-else:
-    def run_pipeline_task(*args, **kwargs):
-        run_pipeline_sync(*args, **kwargs)
+def run_pipeline_task(*args, **kwargs):
+    """Compatibility wrapper kept for older import sites."""
+    run_pipeline_sync(*args, **kwargs)

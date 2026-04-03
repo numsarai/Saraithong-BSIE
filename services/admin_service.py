@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
-import subprocess
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -13,7 +11,6 @@ from uuid import uuid4
 
 from sqlalchemy import Table, func, select, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, sessionmaker
 from sqlmodel import SQLModel
 
@@ -45,9 +42,8 @@ BACKUP_SCHEMA_VERSION = "1.0"
 RESET_CONFIRMATION_TEXT = "RESET BSIE DATABASE"
 RESTORE_CONFIRMATION_TEXT = "RESTORE BSIE DATABASE"
 BACKUP_SETTINGS_KEY = "database_backup"
-BACKUP_FORMATS = {"auto", "json", "pg_dump"}
+BACKUP_FORMATS = {"json"}
 DEFAULT_BACKUP_RETAIN_COUNT = 20
-POSTGRES_DOCKER_CONTAINER = os.getenv("BSIE_POSTGRES_CONTAINER", "bsie-postgres")
 
 
 @dataclass(frozen=True)
@@ -101,59 +97,18 @@ def _env_truthy(name: str, default: str = "0") -> bool:
 
 def _default_backup_settings(bind_engine: Engine | None = None) -> dict[str, Any]:
     bind_engine = bind_engine or engine
-    configured_format = os.getenv("BSIE_AUTO_BACKUP_FORMAT", "auto").strip().lower() or "auto"
-    if configured_format not in BACKUP_FORMATS:
-        configured_format = "auto"
     return {
         "enabled": _env_truthy("BSIE_ENABLE_AUTO_BACKUP", "0"),
         "interval_hours": max(1.0, float(os.getenv("BSIE_BACKUP_INTERVAL_HOURS", "24") or "24")),
-        "backup_format": configured_format,
+        "backup_format": "json",
         "retention_enabled": _env_truthy("BSIE_BACKUP_RETENTION_ENABLED", "0"),
         "retain_count": max(1, int(os.getenv("BSIE_BACKUP_RETAIN_COUNT", str(DEFAULT_BACKUP_RETAIN_COUNT)) or str(DEFAULT_BACKUP_RETAIN_COUNT))),
-    }
-
-
-def _run_subprocess(cmd: list[str], **kwargs):
-    return subprocess.run(cmd, check=True, capture_output=True, text=True, **kwargs)
-
-
-def _docker_backup_tools_status() -> dict[str, bool]:
-    docker_path = shutil.which("docker")
-    if not docker_path:
-        return {"docker_available": False, "docker_pg_tools_available": False}
-    try:
-        _run_subprocess([docker_path, "inspect", "-f", "{{.State.Running}}", POSTGRES_DOCKER_CONTAINER])
-        return {"docker_available": True, "docker_pg_tools_available": True}
-    except Exception:
-        return {"docker_available": True, "docker_pg_tools_available": False}
-
-
-def _pg_backup_tools_status() -> dict[str, bool | str]:
-    docker_status = _docker_backup_tools_status()
-    host_dump = bool(shutil.which("pg_dump"))
-    host_restore = bool(shutil.which("pg_restore"))
-    pg_dump_available = host_dump or bool(docker_status["docker_pg_tools_available"])
-    pg_restore_available = host_restore or bool(docker_status["docker_pg_tools_available"])
-    source = "host"
-    if not host_dump or not host_restore:
-        if docker_status["docker_pg_tools_available"]:
-            source = "docker"
-        elif host_dump or host_restore:
-            source = "partial_host"
-        else:
-            source = "unavailable"
-    return {
-        "pg_dump_available": pg_dump_available,
-        "pg_restore_available": pg_restore_available,
-        "pg_tools_source": source,
-        **docker_status,
     }
 
 
 def get_backup_settings(*, bind_engine: Engine | None = None) -> dict[str, Any]:
     bind_engine = bind_engine or engine
     defaults = _default_backup_settings(bind_engine)
-    tools = _pg_backup_tools_status()
     session_factory = _session_factory(bind_engine)
     with session_factory() as session:
         row = session.get(AdminSetting, BACKUP_SETTINGS_KEY)
@@ -161,7 +116,6 @@ def get_backup_settings(*, bind_engine: Engine | None = None) -> dict[str, Any]:
             effective_format = _resolve_backup_format(defaults["backup_format"], bind_engine)
             return {
                 **defaults,
-                **tools,
                 "effective_backup_format": effective_format,
                 "source": "environment_defaults",
                 "updated_at": None,
@@ -178,7 +132,6 @@ def get_backup_settings(*, bind_engine: Engine | None = None) -> dict[str, Any]:
             "backup_format": backup_format,
             "retention_enabled": bool(value.get("retention_enabled", defaults["retention_enabled"])),
             "retain_count": max(1, int(value.get("retain_count", defaults["retain_count"]))),
-            **tools,
             "effective_backup_format": effective_format,
             "source": "database",
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -197,15 +150,7 @@ def update_backup_settings(
     bind_engine: Engine | None = None,
 ) -> dict[str, Any]:
     bind_engine = bind_engine or engine
-    normalized_format = (backup_format or "auto").strip().lower()
-    if normalized_format not in BACKUP_FORMATS:
-        raise ValueError(f"backup_format must be one of {sorted(BACKUP_FORMATS)}")
-    if normalized_format == "pg_dump":
-        if bind_engine.dialect.name != "postgresql":
-            raise ValueError("pg_dump backups are only available when PostgreSQL is active")
-        tools = _pg_backup_tools_status()
-        if not (tools["pg_dump_available"] and tools["pg_restore_available"]):
-            raise ValueError("pg_dump/pg_restore are not available on this machine")
+    normalized_format = _resolve_backup_format(backup_format, bind_engine)
     interval_hours = max(1.0, float(interval_hours))
     retain_count = max(1, int(retain_count))
     session_factory = _session_factory(bind_engine)
@@ -303,17 +248,11 @@ def _count_rows(bind_engine: Engine) -> dict[str, int]:
 
 
 def _resolve_backup_format(requested_format: str | None, bind_engine: Engine) -> str:
-    normalized = (requested_format or "auto").strip().lower()
-    if normalized not in BACKUP_FORMATS:
-        raise ValueError(f"backup_format must be one of {sorted(BACKUP_FORMATS)}")
-    if normalized == "auto":
-        tools = _pg_backup_tools_status()
-        if bind_engine.dialect.name == "postgresql" and tools["pg_dump_available"] and tools["pg_restore_available"]:
-            return "pg_dump"
+    _ = bind_engine
+    normalized = (requested_format or "json").strip().lower()
+    if normalized in {"", "auto", "json"}:
         return "json"
-    if normalized == "pg_dump" and bind_engine.dialect.name != "postgresql":
-        raise ValueError("pg_dump backups are only available when PostgreSQL is active")
-    return normalized
+    raise ValueError(f"backup_format must be one of {sorted(BACKUP_FORMATS)}")
 
 
 def _prune_old_backups(
@@ -347,7 +286,7 @@ def _build_backup_manifest(
     filename: str,
     backup_format: str,
     path: Path,
-) -> dict[str, Any]:
+    ) -> dict[str, Any]:
     table_counts = _count_rows(bind_engine)
     return {
         "backup_id": backup_id,
@@ -365,133 +304,13 @@ def _build_backup_manifest(
     }
 
 
-def _pg_connection_env(bind_engine: Engine) -> tuple[list[str], dict[str, str]]:
-    url = make_url(str(bind_engine.url))
-    database = url.database
-    if not database:
-        raise ValueError("PostgreSQL database name is required for pg_dump/pg_restore")
-    args = ["-d", database]
-    if url.host:
-        args.extend(["-h", url.host])
-    if url.port:
-        args.extend(["-p", str(url.port)])
-    if url.username:
-        args.extend(["-U", url.username])
-    env = os.environ.copy()
-    if url.password:
-        env["PGPASSWORD"] = url.password
-    return args, env
-
-
-def _docker_exec_prefix() -> list[str]:
-    docker_path = shutil.which("docker")
-    if not docker_path:
-        raise RuntimeError("docker is not available on PATH")
-    return [docker_path, "exec", "-i", POSTGRES_DOCKER_CONTAINER]
-
-
-def _create_postgres_dump_backup(
-    *,
-    bind_engine: Engine,
-    target: Path,
-    created_at: datetime,
-    operator: str,
-    note: str,
-) -> dict[str, Any]:
-    backup_id = str(uuid4())
-    filename = f"bsie_backup_{created_at.strftime('%Y%m%d_%H%M%S')}_{backup_id[:8]}.dump"
-    path = target / filename
-    conn_args, env = _pg_connection_env(bind_engine)
-    pg_dump = shutil.which("pg_dump")
-    if pg_dump:
-        _run_subprocess(
-            [pg_dump, *conn_args, "--format=custom", "--no-owner", "--no-privileges", f"--file={path}"],
-            env=env,
-        )
-    else:
-        docker_prefix = _docker_exec_prefix()
-        with path.open("wb") as fh:
-            proc = subprocess.run(
-                [*docker_prefix, "pg_dump", *conn_args, "--format=custom", "--no-owner", "--no-privileges"],
-                check=True,
-                env=env,
-                stdout=fh,
-                stderr=subprocess.PIPE,
-            )
-            _ = proc
-    manifest = _build_backup_manifest(
-        bind_engine=bind_engine,
-        backup_id=backup_id,
-        created_at=created_at,
-        operator=operator,
-        note=note,
-        filename=filename,
-        backup_format="pg_dump",
-        path=path,
-    )
-    manifest_path = target / f"{filename}.manifest.json"
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    return manifest
-
-
-def _restore_postgres_dump(
-    *,
-    bind_engine: Engine,
-    backup_path: Path,
-) -> None:
-    pg_restore = shutil.which("pg_restore")
-    conn_args, env = _pg_connection_env(bind_engine)
-    if pg_restore:
-        _run_subprocess(
-            [
-                pg_restore,
-                *conn_args,
-                "--clean",
-                "--if-exists",
-                "--no-owner",
-                "--no-privileges",
-                "--exit-on-error",
-                str(backup_path),
-            ],
-            env=env,
-        )
-        return
-
-    docker_prefix = _docker_exec_prefix()
-    docker_target = f"/tmp/{backup_path.name}"
-    docker_path = shutil.which("docker")
-    assert docker_path is not None
-    subprocess.run([docker_path, "cp", str(backup_path), f"{POSTGRES_DOCKER_CONTAINER}:{docker_target}"], check=True)
-    try:
-        _run_subprocess(
-            [
-                *docker_prefix,
-                "pg_restore",
-                *conn_args,
-                "--clean",
-                "--if-exists",
-                "--no-owner",
-                "--no-privileges",
-                "--exit-on-error",
-                docker_target,
-            ],
-            env=env,
-        )
-    finally:
-        subprocess.run([*docker_prefix, "rm", "-f", docker_target], check=False, capture_output=True, text=True)
-
-
 def list_database_backups(*, backup_dir: Path | None = None) -> list[dict[str, Any]]:
     target = _safe_backup_dir(backup_dir)
     items: list[dict[str, Any]] = []
     candidate_paths = sorted(target.glob("bsie_backup_*.json"), reverse=True)
-    candidate_paths.extend(sorted(target.glob("bsie_backup_*.dump.manifest.json"), reverse=True))
     seen_filenames: set[str] = set()
     for path in candidate_paths:
-        if path.name.endswith(".dump.manifest.json"):
-            backup_filename = path.name[: -len(".manifest.json")]
-        else:
-            backup_filename = path.name
+        backup_filename = path.name
         if backup_filename in seen_filenames:
             continue
         try:
@@ -526,12 +345,10 @@ def get_database_backup_preview(
     bind_engine = bind_engine or engine
     target = _safe_backup_dir(backup_dir)
     backup_path = (target / Path(backup_filename).name).resolve()
-    manifest_path = backup_path.with_name(f"{backup_path.name}.manifest.json")
-    source_path = backup_path if backup_path.suffix == ".json" else manifest_path
-    if source_path.parent != target.resolve() or not source_path.exists():
+    if backup_path.parent != target.resolve() or backup_path.suffix != ".json" or not backup_path.exists():
         raise FileNotFoundError("Backup file not found")
 
-    payload = json.loads(source_path.read_text(encoding="utf-8"))
+    payload = json.loads(backup_path.read_text(encoding="utf-8"))
     current_counts = _count_rows(bind_engine)
     backup_counts = payload.get("table_counts", {})
     delta_counts = {
@@ -567,23 +384,8 @@ def create_database_backup(
     bind_engine = bind_engine or engine
     target = _safe_backup_dir(backup_dir)
     created_at = utcnow()
-    resolved_format = _resolve_backup_format(backup_format, bind_engine)
+    _resolve_backup_format(backup_format, bind_engine)
     settings = get_backup_settings(bind_engine=bind_engine)
-    if resolved_format == "pg_dump":
-        manifest = _create_postgres_dump_backup(
-            bind_engine=bind_engine,
-            target=target,
-            created_at=created_at,
-            operator=operator,
-            note=note,
-        )
-        pruned = _prune_old_backups(retain_count=settings["retain_count"], backup_dir=backup_dir) if settings.get("retention_enabled") else []
-        return {
-            **manifest,
-            "path": str(target / manifest["filename"]),
-            "pruned_backups": pruned,
-        }
-
     backup_id = str(uuid4())
     filename = f"bsie_backup_{created_at.strftime('%Y%m%d_%H%M%S')}_{backup_id[:8]}.json"
     path = target / filename
@@ -662,47 +464,12 @@ def maybe_run_scheduled_backup(
 
 
 def _clear_database(bind_engine: Engine) -> None:
-    table_names = [spec.name for spec in TABLE_SPECS]
     with bind_engine.begin() as conn:
-        if bind_engine.dialect.name == "postgresql":
-            joined = ", ".join(f'"{name}"' for name in table_names)
-            conn.execute(text(f"TRUNCATE TABLE {joined} RESTART IDENTITY CASCADE"))
-            return
-
         conn.execute(text("PRAGMA foreign_keys=OFF"))
         conn.execute(text("UPDATE accounts SET merged_into_account_id = NULL"))
         for spec in reversed(TABLE_SPECS):
             conn.execute(spec.table.delete())
         conn.execute(text("PRAGMA foreign_keys=ON"))
-
-
-def _sync_postgres_identity_sequences(bind_engine: Engine) -> None:
-    if bind_engine.dialect.name != "postgresql":
-        return
-    with bind_engine.begin() as conn:
-        for spec in TABLE_SPECS:
-            if "id" not in spec.table.c:
-                continue
-            column = spec.table.c.id
-            try:
-                python_type = column.type.python_type
-            except Exception:
-                python_type = None
-            if python_type is not int:
-                continue
-            conn.execute(
-                text(
-                    """
-                    SELECT setval(
-                        pg_get_serial_sequence(:table_name, 'id'),
-                        COALESCE((SELECT MAX(id) FROM %s), 1),
-                        COALESCE((SELECT MAX(id) FROM %s), 0) > 0
-                    )
-                    """
-                    % (spec.name, spec.name)
-                ),
-                {"table_name": spec.name},
-            )
 
 
 def reset_database(
@@ -751,13 +518,13 @@ def restore_database(
     bind_engine = bind_engine or engine
     target = _safe_backup_dir(backup_dir)
     backup_path = (target / Path(backup_filename).name).resolve()
-    manifest_path = backup_path.with_name(f"{backup_path.name}.manifest.json")
-    source_path = backup_path if backup_path.suffix == ".json" else manifest_path
-    if source_path.parent != target.resolve() or not source_path.exists():
+    if backup_path.parent != target.resolve() or backup_path.suffix != ".json" or not backup_path.exists():
         raise FileNotFoundError("Backup file not found")
 
-    payload = json.loads(source_path.read_text(encoding="utf-8"))
-    backup_format = payload.get("backup_format") or ("json" if backup_path.suffix == ".json" else "pg_dump")
+    payload = json.loads(backup_path.read_text(encoding="utf-8"))
+    backup_format = payload.get("backup_format", "json")
+    if backup_format != "json":
+        raise ValueError("Only JSON backups are supported by the local-only runtime")
 
     pre_backup = None
     current_counts = _count_rows(bind_engine)
@@ -769,21 +536,17 @@ def restore_database(
             backup_dir=backup_dir,
         )
 
-    if backup_format == "pg_dump":
-        _restore_postgres_dump(bind_engine=bind_engine, backup_path=backup_path)
-    else:
-        _clear_database(bind_engine)
-        with bind_engine.begin() as conn:
-            for spec in TABLE_SPECS:
-                rows = payload.get("tables", {}).get(spec.name, [])
-                if not rows:
-                    continue
-                decoded_rows = [
-                    {key: _deserialize_value(value) for key, value in row.items()}
-                    for row in rows
-                ]
-                conn.execute(spec.table.insert(), decoded_rows)
-        _sync_postgres_identity_sequences(bind_engine)
+    _clear_database(bind_engine)
+    with bind_engine.begin() as conn:
+        for spec in TABLE_SPECS:
+            rows = payload.get("tables", {}).get(spec.name, [])
+            if not rows:
+                continue
+            decoded_rows = [
+                {key: _deserialize_value(value) for key, value in row.items()}
+                for row in rows
+            ]
+            conn.execute(spec.table.insert(), decoded_rows)
 
     session_factory = _session_factory(bind_engine)
     with session_factory() as session:

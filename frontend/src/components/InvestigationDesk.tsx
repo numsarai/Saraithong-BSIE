@@ -153,7 +153,7 @@ export function InvestigationDesk() {
   const [adminNote, setAdminNote] = useState('')
   const [backupEnabled, setBackupEnabled] = useState(false)
   const [backupIntervalHours, setBackupIntervalHours] = useState('24')
-  const [backupFormat, setBackupFormat] = useState('auto')
+  const [backupFormat, setBackupFormat] = useState('json')
   const [backupRetentionEnabled, setBackupRetentionEnabled] = useState(false)
   const [backupRetainCount, setBackupRetainCount] = useState('20')
   const [resetConfirmText, setResetConfirmText] = useState('')
@@ -428,7 +428,7 @@ export function InvestigationDesk() {
       })
       setBackupEnabled(Boolean(payload.enabled))
       setBackupIntervalHours(String(payload.interval_hours))
-      setBackupFormat(String(payload.backup_format))
+      setBackupFormat(String(payload.backup_format || 'json'))
       setBackupRetentionEnabled(Boolean(payload.retention_enabled))
       setBackupRetainCount(String(payload.retain_count))
       toast.success('Backup schedule updated')
@@ -508,7 +508,7 @@ export function InvestigationDesk() {
     if (!backupSettingsQuery.data) return
     setBackupEnabled(Boolean(backupSettingsQuery.data.enabled))
     setBackupIntervalHours(String(backupSettingsQuery.data.interval_hours ?? 24))
-    setBackupFormat(String(backupSettingsQuery.data.backup_format || 'auto'))
+    setBackupFormat(String(backupSettingsQuery.data.backup_format || 'json'))
     setBackupRetentionEnabled(Boolean(backupSettingsQuery.data.retention_enabled))
     setBackupRetainCount(String(backupSettingsQuery.data.retain_count ?? 20))
   }, [backupSettingsQuery.data])
@@ -551,7 +551,7 @@ export function InvestigationDesk() {
       <Card className="space-y-4">
         <CardTitle>Database Status</CardTitle>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
-          <StatCard label="Backend" value={dbStatus?.database_backend || '—'} tone={dbStatus?.database_backend === 'postgresql' ? 'text-success' : 'text-accent'} />
+          <StatCard label="Backend" value={dbStatus?.database_backend || '—'} tone={dbStatus?.database_backend === 'sqlite' ? 'text-success' : 'text-accent'} />
           <StatCard label="Runtime Source" value={dbStatus?.database_runtime_source || '—'} />
           <StatCard label="Tables" value={dbStatus?.table_count ?? '—'} />
           <StatCard label="Files" value={dbStatus?.key_record_counts?.files ?? '—'} />
@@ -975,13 +975,13 @@ export function InvestigationDesk() {
           </div>
           <div className="rounded-xl border border-border bg-surface2 p-4 text-sm text-text2 space-y-2">
             <div>สถานะปัจจุบันของโปรเจคนี้เป็นระบบฐานข้อมูลถาวรแล้ว และตอนนี้รองรับทั้ง ingest ซ้ำ, duplicate detection, parser run history, transaction search, review, audit log, และ reproducible export jobs.</div>
-            <div>runtime ค่าเริ่มต้นของโปรเจคนี้เป็น local-only แล้ว โดยจะใช้ SQLite ในเครื่องทันทีเมื่อ `BSIE_LOCAL_ONLY=1` และจะไม่หลุดไปพึ่ง `DATABASE_URL` ที่ค้างอยู่ใน environment.</div>
+            <div>runtime ของโปรเจคนี้ถูกยุบให้เป็น local SQLite แบบถาวรแล้ว จึงไม่ต้องพึ่ง worker แยก, Redis, หรือ PostgreSQL สำหรับการใช้งานปกติในเครื่อง.</div>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
             <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
               <div className="text-sm font-semibold text-text">Backup / Reset / Restore</div>
-              <div className="grid gap-3 md:grid-cols-[auto_minmax(120px,160px)_minmax(140px,180px)_auto] md:items-end">
+              <div className="grid gap-3 md:grid-cols-[auto_minmax(120px,160px)_auto] md:items-end">
                 <label className="flex items-center gap-2 text-sm text-text">
                   <input
                     type="checkbox"
@@ -999,11 +999,6 @@ export function InvestigationDesk() {
                   onChange={(event) => setBackupIntervalHours(event.target.value)}
                   placeholder="Interval hours"
                 />
-                <SelectInput value={backupFormat} onChange={(event) => setBackupFormat(event.target.value)}>
-                  <option value="auto">auto</option>
-                  <option value="json">json</option>
-                  <option value="pg_dump" disabled={!(backupSettingsQuery.data?.pg_dump_available && backupSettingsQuery.data?.pg_restore_available)}>pg_dump</option>
-                </SelectInput>
                 <Button variant="outline" onClick={handleSaveBackupSettings}>Save Schedule</Button>
               </div>
               <div className="grid gap-3 md:grid-cols-[auto_minmax(120px,160px)] md:items-end">
@@ -1028,7 +1023,6 @@ export function InvestigationDesk() {
               <div className="text-xs text-text2">
                 Current schedule source: <span className="font-mono">{backupSettingsQuery.data?.source || backupsQuery.data?.settings?.source || '—'}</span>{' '}
                 · effective format: <span className="font-mono">{backupSettingsQuery.data?.effective_backup_format || '—'}</span>{' '}
-                · pg tools: <span className="font-mono">{backupSettingsQuery.data?.pg_dump_available && backupSettingsQuery.data?.pg_restore_available ? `ready via ${backupSettingsQuery.data?.pg_tools_source || 'host'}` : 'not installed'}</span>{' '}
                 · retention: <span className="font-mono">{backupSettingsQuery.data?.retention_enabled ? `keep ${backupSettingsQuery.data?.retain_count}` : 'off'}</span>
               </div>
               <TextInput

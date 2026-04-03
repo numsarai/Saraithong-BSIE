@@ -50,7 +50,7 @@ export function Step4Processing() {
         <div>
           <h2 className="text-lg font-bold text-text">Processing Pipeline</h2>
           <p className="text-muted text-sm capitalize">
-            {status === 'queued' ? 'Waiting for worker…' : status === 'running' ? 'Running…' : status}
+            {status === 'queued' ? 'Waiting to start…' : status === 'running' ? 'Running…' : status}
           </p>
         </div>
       </div>

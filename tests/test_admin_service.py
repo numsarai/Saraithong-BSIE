@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
 
 from sqlalchemy import create_engine, select, func
 from sqlalchemy.orm import Session
@@ -195,49 +194,32 @@ def test_backup_settings_round_trip(tmp_path: Path, monkeypatch):
         assert row.updated_by == "tester"
 
 
-def test_postgres_dump_backup_and_restore_uses_system_tools(tmp_path: Path):
+def test_legacy_auto_backup_format_is_coerced_to_json(tmp_path: Path):
     engine = _make_engine(tmp_path)
-    engine.dialect.name = "postgresql"  # type: ignore[attr-defined]
     backup_dir = tmp_path / "backups"
     _seed_sample_data(engine)
 
-    def fake_run(cmd, check, env, capture_output, text):
-        if "pg_dump" in cmd[0]:
-            output_flag = next(part for part in cmd if part.startswith("--file="))
-            Path(output_flag.split("=", 1)[1]).write_bytes(b"fake dump")
-        elif "pg_restore" in cmd[0]:
-            assert "--exit-on-error" in cmd
-        return None
+    updated = update_backup_settings(
+        enabled=True,
+        interval_hours=24,
+        backup_format="auto",
+        retention_enabled=False,
+        retain_count=5,
+        updated_by="tester",
+        bind_engine=engine,
+    )
+    assert updated["backup_format"] == "json"
+    assert updated["effective_backup_format"] == "json"
 
-    with (
-        patch("services.admin_service.shutil.which", side_effect=lambda name: f"/usr/bin/{name}"),
-        patch("services.admin_service.subprocess.run", side_effect=fake_run) as run_mock,
-    ):
-        backup = create_database_backup(
-            operator="tester",
-            note="pg dump",
-            backup_format="pg_dump",
-            bind_engine=engine,
-            backup_dir=backup_dir,
-        )
-        assert backup["backup_format"] == "pg_dump"
-        assert (backup_dir / backup["filename"]).exists()
-        manifest = backup_dir / f"{backup['filename']}.manifest.json"
-        assert manifest.exists()
-
-        restore_database(
-            backup_filename=backup["filename"],
-            confirm_text=RESTORE_CONFIRMATION_TEXT,
-            operator="tester",
-            note="pg restore",
-            create_pre_restore_backup=False,
-            bind_engine=engine,
-            backup_dir=backup_dir,
-        )
-
-        commands = [call.args[0][0] for call in run_mock.call_args_list]
-        assert "/usr/bin/pg_dump" in commands
-        assert "/usr/bin/pg_restore" in commands
+    backup = create_database_backup(
+        operator="tester",
+        note="compat backup",
+        backup_format="auto",
+        bind_engine=engine,
+        backup_dir=backup_dir,
+    )
+    assert backup["backup_format"] == "json"
+    assert backup["filename"].endswith(".json")
 
 
 def test_backup_retention_prunes_old_files(tmp_path: Path):

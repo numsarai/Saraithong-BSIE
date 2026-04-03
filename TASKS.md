@@ -36,7 +36,6 @@
 ## Immediate Engineering Backlog
 
 - add per-table restore tooling only if a strong investigation need appears
-- add production `pg_dump` runtime validation once PostgreSQL client tools or container access are guaranteed in deployment
 - add golden-case fixtures for backup retention and admin settings UI
 - add backup job history view in Investigation Admin
 
@@ -50,6 +49,6 @@
 - audit-safe review workflow
 - graph/i2 hardening
 - internal BSIE Graph Analysis Module
-- PostgreSQL runtime support
+- local-only SQLite runtime hardening
 - backup/reset/restore UI
 - scheduled backup settings persistence

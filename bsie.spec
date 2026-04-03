@@ -26,8 +26,6 @@ a = Analysis(
         ("paths.py",            "."),
         ("migrate_to_db.py",    "."),
         ("tasks.py",            "."),
-        ("celery_app.py",       "."),
-        ("worker_entry.py",     "."),
     ],
     hiddenimports=[
         # ── application modules ──────────────────────────────────────────────
@@ -100,18 +98,11 @@ a = Analysis(
         "sqlalchemy",
         "sqlalchemy.dialects.sqlite",
         "sqlalchemy.orm",
-        "celery",
-        "kombu",
-        "billiard",
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        "redis",
-        "celery.backends.redis",
-        "kombu.transport.redis",
-        "flower",
         "pytest",
         "unittest",
         "IPython",

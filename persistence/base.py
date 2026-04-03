@@ -17,41 +17,30 @@ if "pytest" not in sys.modules and not os.getenv("PYTEST_CURRENT_TEST"):
     load_dotenv()
 
 
-def _env_truthy(name: str, default: str = "") -> bool:
-    value = str(os.getenv(name, default)).strip().lower()
-    return value in {"1", "true", "yes", "on"}
-
-
 def utcnow() -> datetime:
     """Return a timezone-aware UTC timestamp."""
     return datetime.now(timezone.utc)
 
 
 def is_local_only_mode() -> bool:
-    """Return True when BSIE should stay on the local SQLite runtime."""
-    return _env_truthy("BSIE_LOCAL_ONLY", "1")
+    """Runtime compatibility helper: BSIE is permanently local-only."""
+    return True
 
 
 def get_database_url() -> tuple[str, str]:
-    """Return the configured database URL and its source."""
-    if is_local_only_mode():
-        return f"sqlite:///{DB_PATH}", "local_only_sqlite"
-    configured = os.getenv("DATABASE_URL", "").strip()
-    if configured:
-        return configured, "environment"
-    return f"sqlite:///{DB_PATH}", "sqlite_fallback"
+    """Return the fixed local SQLite runtime URL and its source."""
+    return f"sqlite:///{DB_PATH}", "local_sqlite"
 
 
 DATABASE_URL, DATABASE_RUNTIME_SOURCE = get_database_url()
-IS_SQLITE = DATABASE_URL.startswith("sqlite")
+IS_SQLITE = True
 
-_connect_args = {"check_same_thread": False} if IS_SQLITE else {}
 engine = create_engine(
     DATABASE_URL,
     future=True,
     echo=False,
-    pool_pre_ping=not IS_SQLITE,
-    connect_args=_connect_args,
+    pool_pre_ping=False,
+    connect_args={"check_same_thread": False},
 )
 
 SessionLocal = sessionmaker(

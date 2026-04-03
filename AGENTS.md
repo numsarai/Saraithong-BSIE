@@ -88,12 +88,12 @@ Use for:
 - database runtime
 - backup/reset/restore
 - scheduled backup policy
-- PostgreSQL migration
+- local desktop/runtime hardening
 
 Primary modules:
 - [`/Users/saraithong/Documents/bsie/persistence/base.py`](/Users/saraithong/Documents/bsie/persistence/base.py)
 - [`/Users/saraithong/Documents/bsie/services/admin_service.py`](/Users/saraithong/Documents/bsie/services/admin_service.py)
-- [`/Users/saraithong/Documents/bsie/docker-compose.postgres.yml`](/Users/saraithong/Documents/bsie/docker-compose.postgres.yml)
+- [`/Users/saraithong/Documents/bsie/main_launcher.py`](/Users/saraithong/Documents/bsie/main_launcher.py)
 
 Success criteria:
 - runtime backend visible

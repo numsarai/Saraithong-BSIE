@@ -64,14 +64,14 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-BSIE now starts in local-only mode by default. With `BSIE_LOCAL_ONLY=1`, the app always uses the local SQLite database at `bsie.db` and ignores any `DATABASE_URL` left in the environment.
+BSIE now runs only against the local SQLite database at `bsie.db`. No PostgreSQL, Redis, or external worker runtime is required for normal local use.
 
 Optional operational settings:
 
 - `PORT=8757`
 - `BSIE_ENABLE_AUTO_BACKUP=1`
 - `BSIE_BACKUP_INTERVAL_HOURS=24`
-- `BSIE_AUTO_BACKUP_FORMAT=auto`
+- `BSIE_AUTO_BACKUP_FORMAT=json`
 - `BSIE_BACKUP_POLL_SECONDS=60`
 
 **3. Create or upgrade the local schema**
@@ -181,7 +181,7 @@ Case summary outputs are written to `/data/output/bulk_runs/{run_id}/`:
 | `GET` | `/api/admin/backup-settings` | Read the effective scheduled backup settings |
 | `GET` | `/api/admin/backups/{backup_name}/preview` | Preview restore impact vs current DB |
 | `POST` | `/api/admin/backup-settings` | Update scheduled backup enablement, interval, and format |
-| `POST` | `/api/admin/backup` | Create a JSON or pg_dump backup of the active BSIE database |
+| `POST` | `/api/admin/backup` | Create a JSON backup of the active BSIE database |
 | `POST` | `/api/admin/reset` | Reset the active DB after explicit confirmation and automatic safety backup |
 | `POST` | `/api/admin/restore` | Restore a selected backup after explicit confirmation and automatic pre-restore backup |
 | `GET` | `/api/parser-runs` | List parser runs |
@@ -294,7 +294,7 @@ The Investigation workspace now acts as a lightweight database admin for case op
 - correct account and transaction records through audit-safe review endpoints
 - reprocess a historical parser run
 - create database backups
-- choose backup format (`json` or `pg_dump`)
+- create JSON safety backups before reset/restore work
 - enable/disable scheduled backups from the UI
 - adjust backup interval from the UI without editing `.env`
 - preview restore impact before replacing current data
@@ -469,7 +469,6 @@ bsie/
 
 - [`docs/architecture/persistence-upgrade.md`](docs/architecture/persistence-upgrade.md)
 - [`docs/architecture/graph-export.md`](docs/architecture/graph-export.md)
-- [`docs/architecture/postgresql-migration.md`](docs/architecture/postgresql-migration.md)
 - [`config_registry/README.md`](config_registry/README.md)
 
 ---

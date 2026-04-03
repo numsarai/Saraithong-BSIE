@@ -72,13 +72,11 @@ These are in [`/Users/saraithong/Documents/bsie/services`](/Users/saraithong/Doc
 
 ### Default runtime
 
-- SQLite local-only mode by default via `BSIE_LOCAL_ONLY=1`
-- `DATABASE_URL` is only used when local-only mode is explicitly disabled
+- SQLite local runtime only
+- No PostgreSQL, Redis, or external worker tier
 
 ### Backup modes
 
 - `json`
-- `pg_dump`
-- `auto`
 
-`auto` prefers PostgreSQL dump mode only when usable tools are available. Otherwise it falls back to JSON safely.
+Scheduled backups, manual backups, reset safety backups, and restore previews all use the same JSON format in the local runtime.

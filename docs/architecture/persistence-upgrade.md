@@ -15,7 +15,7 @@
 - Keep current CSV/XLSX output generation in place while new DB-backed search and export endpoints come online.
 
 ## Compatibility risks
-- The project now supports PostgreSQL through `DATABASE_URL`, but still falls back to SQLite for local/dev continuity.
+- The runtime is intentionally fixed to local SQLite so desktop operation stays reproducible and self-contained.
 - Legacy tables remain present; new investigation tables are additive.
 - Existing results can still be read from output files even before all historical runs are reprocessed into the new schema.
 

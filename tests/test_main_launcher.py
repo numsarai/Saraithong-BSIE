@@ -2,6 +2,7 @@
 """Unit tests for main_launcher helper functions."""
 import importlib
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -110,6 +111,35 @@ def test_is_safe_local_http_url_accepts_localhost_only():
     assert main_launcher._is_safe_local_http_url("https://localhost:8757/health") is True
     assert main_launcher._is_safe_local_http_url("file:///etc/passwd") is False
     assert main_launcher._is_safe_local_http_url("http://example.com/health") is False
+
+
+def test_is_windows_process_running_returns_true_for_live_process():
+    import main_launcher
+
+    class FakeKernel32:
+        def OpenProcess(self, access, inherit_handle, pid):
+            return 99
+
+        def GetExitCodeProcess(self, handle, exit_code_ptr):
+            exit_code_ptr._obj.value = main_launcher.WINDOWS_STILL_ACTIVE
+            return 1
+
+        def CloseHandle(self, handle):
+            return 1
+
+    with patch.object(main_launcher.ctypes, "windll", SimpleNamespace(kernel32=FakeKernel32()), create=True):
+        assert main_launcher._is_windows_process_running(4321) is True
+
+
+def test_is_windows_process_running_returns_false_when_process_is_missing():
+    import main_launcher
+
+    class FakeKernel32:
+        def OpenProcess(self, access, inherit_handle, pid):
+            return 0
+
+    with patch.object(main_launcher.ctypes, "windll", SimpleNamespace(kernel32=FakeKernel32()), create=True):
+        assert main_launcher._is_windows_process_running(4321) is False
 
 
 def test_register_current_instance_writes_instance_record(tmp_path):

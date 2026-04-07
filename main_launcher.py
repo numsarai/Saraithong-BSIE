@@ -26,6 +26,7 @@ import urllib.parse
 import logging
 import json
 import signal
+import ctypes
 
 # Import paths first — works in both bundle and source mode
 from paths import (
@@ -47,6 +48,8 @@ HEALTH_URL = f"{BASE_URL}/health"
 MAX_WAIT_SECONDS = 10
 INSTANCE_WAIT_SECONDS = 8
 INSTANCE_FILE_NAME = "launcher-instance.json"
+WINDOWS_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+WINDOWS_STILL_ACTIVE = 259
 
 
 def _is_safe_local_http_url(url: str) -> bool:
@@ -122,6 +125,8 @@ def _register_current_instance() -> None:
 def _is_process_running(pid: int) -> bool:
     if pid <= 0:
         return False
+    if sys.platform.startswith("win"):
+        return _is_windows_process_running(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -131,6 +136,29 @@ def _is_process_running(pid: int) -> bool:
     except OSError:
         return False
     return True
+
+
+def _is_windows_process_running(pid: int) -> bool:
+    windll = getattr(ctypes, "windll", None)
+    if windll is None:
+        return False
+    kernel32 = windll.kernel32
+
+    handle = kernel32.OpenProcess(
+        WINDOWS_PROCESS_QUERY_LIMITED_INFORMATION,
+        False,
+        pid,
+    )
+    if not handle:
+        return False
+
+    try:
+        exit_code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return True
+        return exit_code.value == WINDOWS_STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def _wait_for_process_exit(pid: int, timeout: float = INSTANCE_WAIT_SECONDS) -> bool:

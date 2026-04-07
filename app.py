@@ -408,7 +408,7 @@ async def index(request: Request):
     react_index = _REACT_DIST / "index.html"
     if react_index.exists():
         return FileResponse(str(react_index))
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/favicon.svg")

@@ -21,6 +21,27 @@ function Invoke-CheckedCommand {
     }
 }
 
+function Get-InnoSetupCompiler {
+    $isccCommand = Get-Command iscc -ErrorAction SilentlyContinue
+    if ($isccCommand) {
+        return $isccCommand.Source
+    }
+
+    $candidates = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+        (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe")
+    ) | Where-Object { $_ }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw "Inno Setup 6 (iscc) was not found in PATH or standard install locations."
+}
+
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $RepoRoot
 
@@ -39,17 +60,7 @@ if (-not (Test-Path $Python)) {
     throw "Missing virtualenv Python at $Python"
 }
 
-$IsccCommand = Get-Command iscc -ErrorAction SilentlyContinue
-if ($IsccCommand) {
-    $Iscc = $IsccCommand.Source
-}
-else {
-    $DefaultIscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
-    if (-not (Test-Path $DefaultIscc)) {
-        throw "Inno Setup 6 (iscc) was not found in PATH or at $DefaultIscc"
-    }
-    $Iscc = $DefaultIscc
-}
+$Iscc = Get-InnoSetupCompiler
 
 if (-not $SmokeUserDataDir) {
     $SmokeUserDataDir = Join-Path $env:TEMP "bsie-smoke-$Version"

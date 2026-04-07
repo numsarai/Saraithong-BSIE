@@ -35,6 +35,27 @@ function Get-BootstrapPython {
     throw "Python was not found. Install Python 3.12, then retry."
 }
 
+function Get-InnoSetupCompiler {
+    $isccCommand = Get-Command iscc -ErrorAction SilentlyContinue
+    if ($isccCommand) {
+        return $isccCommand.Source
+    }
+
+    $candidates = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+        (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe")
+    ) | Where-Object { $_ }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
 function Invoke-CheckedCommand {
     param(
         [Parameter(Mandatory = $true)]
@@ -78,9 +99,9 @@ Write-Host "Python:  $($BootstrapPython.Label)"
 Write-Host "Node:    $($Node.Source)"
 Write-Host "npm:     $($Npm.Source)"
 
-$InnoSetup = Get-Command iscc -ErrorAction SilentlyContinue
+$InnoSetup = Get-InnoSetupCompiler
 if ($InnoSetup) {
-    Write-Host "ISCC:    $($InnoSetup.Source)"
+    Write-Host "ISCC:    $InnoSetup"
 }
 else {
     Write-Host "ISCC:    not found (release builds will need Inno Setup 6)"

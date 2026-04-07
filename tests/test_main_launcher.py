@@ -110,3 +110,58 @@ def test_is_safe_local_http_url_accepts_localhost_only():
     assert main_launcher._is_safe_local_http_url("https://localhost:8757/health") is True
     assert main_launcher._is_safe_local_http_url("file:///etc/passwd") is False
     assert main_launcher._is_safe_local_http_url("http://example.com/health") is False
+
+
+def test_register_current_instance_writes_instance_record(tmp_path):
+    import paths
+    import main_launcher
+
+    with patch.object(paths, "USER_DATA_DIR", tmp_path):
+        importlib.reload(main_launcher)
+        main_launcher._register_current_instance()
+        record = main_launcher._read_instance_record()
+
+    assert record["pid"] == main_launcher.os.getpid()
+    assert record["port"] == main_launcher.PORT
+    assert record["shutdown_token"]
+    assert record["executable"]
+
+
+def test_stop_previous_instance_clears_stale_record(tmp_path):
+    import paths
+    import main_launcher
+
+    with patch.object(paths, "USER_DATA_DIR", tmp_path):
+        importlib.reload(main_launcher)
+        main_launcher._write_instance_record({"pid": 999999, "port": 8757, "shutdown_token": "stale"})
+        with patch.object(main_launcher, "_is_process_running", return_value=False):
+            main_launcher._stop_previous_instance()
+
+    assert main_launcher._read_instance_record() is None
+
+
+def test_stop_previous_instance_requests_shutdown_before_force_terminate(tmp_path):
+    import paths
+    import main_launcher
+
+    with patch.object(paths, "USER_DATA_DIR", tmp_path):
+        importlib.reload(main_launcher)
+        main_launcher._write_instance_record(
+            {
+                "pid": 4321,
+                "port": 8757,
+                "shutdown_token": "token",
+                "frozen": True,
+                "executable": main_launcher.sys.executable,
+            }
+        )
+        with (
+            patch.object(main_launcher, "_is_process_running", side_effect=[True, False]),
+            patch.object(main_launcher, "_request_instance_shutdown", return_value=True) as request_shutdown,
+            patch.object(main_launcher, "_wait_for_process_exit", return_value=True),
+            patch.object(main_launcher, "_force_terminate_process") as force_terminate,
+        ):
+            main_launcher._stop_previous_instance()
+
+    request_shutdown.assert_called_once()
+    force_terminate.assert_not_called()

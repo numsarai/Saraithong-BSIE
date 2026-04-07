@@ -204,6 +204,7 @@ def _split_pipe(value: object) -> set[str]:
 
 def _hash_id(prefix: str, *parts: object) -> str:
     raw = "|".join(str(part or "") for part in parts)
+    # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1 -- This is used only for stable graph/export identifiers, not for cryptographic integrity.
     return f"{prefix}:{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:16].upper()}"
 
 

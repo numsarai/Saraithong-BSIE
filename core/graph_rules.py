@@ -151,6 +151,7 @@ def _make_finding(
             *sorted(transaction_ids),
         ]
     )
+    # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1 -- This is used only for deterministic finding IDs, not for cryptographic security.
     finding_id = f"FINDING:{rule_type}:{hashlib.sha1(stable_raw.encode('utf-8')).hexdigest()[:16].upper()}"
     traceability = {
         "file_ids": sorted({value for value in file_ids if value}),

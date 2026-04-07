@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pandas as pd
+from defusedxml import ElementTree as ET
 
 from core.export_anx import export_anx_from_graph
 from core.graph_export import (

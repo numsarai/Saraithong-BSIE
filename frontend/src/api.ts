@@ -77,8 +77,15 @@ export async function getJobStatus(jobId: string) {
   return r.json()
 }
 
-export async function getResults(account: string, page = 1, pageSize = 100) {
-  const r = await fetch(`/api/results/${account}?page=${page}&page_size=${pageSize}`)
+export async function getResults(account: string, page = 1, pageSize = 100, parserRunId?: string | null) {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  })
+  if (parserRunId) {
+    params.set('parser_run_id', parserRunId)
+  }
+  const r = await fetch(`/api/results/${account}?${params.toString()}`)
   if (!r.ok) throw new Error(await r.text())
   const payload = await r.json()
   if (!payload.rows && Array.isArray(payload.items)) {

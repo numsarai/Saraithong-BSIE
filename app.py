@@ -72,7 +72,7 @@ from database import (
     db_create_job, db_update_job, db_get_job, db_append_log, insert_job_meta,
 )
 from migrate_to_db import migrate_json_to_db
-from tasks import run_pipeline_sync
+from tasks import get_runtime_job, run_pipeline_sync
 
 
 def _dispatch_pipeline(
@@ -842,6 +842,15 @@ async def api_bulk_analytics(run_id: str):
 
 @app.get("/api/job/{job_id}")
 async def api_job_status(job_id: str):
+    runtime_job = get_runtime_job(job_id)
+    if runtime_job:
+        return JSONResponse({
+            "status": runtime_job.get("status"),
+            "log": list(runtime_job.get("log") or [])[-200:],
+            "result": runtime_job.get("result"),
+            "error": runtime_job.get("error"),
+        })
+
     job = db_get_job(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
@@ -871,7 +880,7 @@ async def api_job_status(job_id: str):
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/results/{account}")
-async def api_results(account: str, page: int = 1, page_size: int = 100):
+async def api_results(account: str, page: int = 1, page_size: int = 100, parser_run_id: str = ""):
     """Return paginated transaction results for an account."""
     safe = "".join(c for c in account if c.isdigit())
     processed_dir = OUTPUT_DIR / safe / "processed"
@@ -884,14 +893,17 @@ async def api_results(account: str, page: int = 1, page_size: int = 100):
             select(Account).where(Account.normalized_account_number == safe).order_by(Account.last_seen_at.desc())
         ).first()
         if account_row:
+            tx_query = select(Transaction).where(Transaction.account_id == account_row.id)
+            if parser_run_id:
+                tx_query = tx_query.where(Transaction.parser_run_id == parser_run_id)
             all_rows = session.scalars(
-                select(Transaction).where(Transaction.account_id == account_row.id).order_by(Transaction.transaction_datetime.desc())
+                tx_query.order_by(Transaction.transaction_datetime.desc())
             ).all()
             total = len(all_rows)
             start = (page - 1) * page_size
             end = start + page_size
             rows = [serialize_transaction(row) for row in all_rows[start:end]]
-            latest_run = session.scalars(
+            latest_run = session.get(ParserRun, parser_run_id) if parser_run_id else session.scalars(
                 select(ParserRun).join(StatementBatch, StatementBatch.parser_run_id == ParserRun.id).where(
                     StatementBatch.account_id == account_row.id
                 ).order_by(ParserRun.started_at.desc())

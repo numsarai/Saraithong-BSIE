@@ -67,3 +67,19 @@ def test_infer_subject_identity_from_transaction_pattern():
     assert result["name"] == "สุดารัตน์ แสงทอง"
     assert result["account_source"] == "transaction_pattern"
     assert result["name_source"] == "transaction_pattern"
+
+
+def test_infer_subject_identity_from_inline_header_text():
+    preview_df = pd.DataFrame([
+        ["รายการเดินบัญชีเงินฝากออมทรัพย์", "", "", ""],
+        ["ของหมายเลขบัญชี 188-3-16739-9 ชื่อบัญชี นาย ศิระ ลิมปนันทพงศ์ สาขาโรบินสัน นครศรีธรรมราช", "", "", ""],
+        ["ตั้งแต่วันที่ 01/01/2567 - 15/10/2568", "", "", ""],
+        ["วันที่ทำรายการ", "เวลาที่ทำรายการ", "ประเภทรายการ", "ช่องทาง"],
+    ])
+
+    result = infer_subject_identity(Path("KBANK 1883167399 ใช้ทดสอบ.xlsx"), preview_df=preview_df)
+
+    assert result["account"] == "1883167399"
+    assert result["name"] == "นาย ศิระ ลิมปนันทพงศ์"
+    assert result["account_source"] in {"filename", "workbook_header"}
+    assert result["name_source"] == "workbook_header"

@@ -101,3 +101,12 @@ def test_env_enabled_defaults_and_falsey_values(monkeypatch):
 
     monkeypatch.setenv("BSIE_ENABLE_TRAY", "yes")
     assert main_launcher._env_enabled("BSIE_ENABLE_TRAY", False) is True
+
+
+def test_is_safe_local_http_url_accepts_localhost_only():
+    import main_launcher
+
+    assert main_launcher._is_safe_local_http_url("http://127.0.0.1:8757/health") is True
+    assert main_launcher._is_safe_local_http_url("https://localhost:8757/health") is True
+    assert main_launcher._is_safe_local_http_url("file:///etc/passwd") is False
+    assert main_launcher._is_safe_local_http_url("http://example.com/health") is False

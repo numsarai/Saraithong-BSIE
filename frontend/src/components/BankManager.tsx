@@ -37,6 +37,9 @@ type BankCfg = {
   has_template?: boolean
   template_badge?: string
   bank_type?: string
+  bank_name_th?: string
+  bank_name_en?: string
+  head_office_address?: string
 }
 
 type BankBrand = {
@@ -48,6 +51,9 @@ type BankBrand = {
   template_badge?: string
   bank_type?: string
   is_builtin?: boolean
+  bank_name_th?: string
+  bank_name_en?: string
+  head_office_address?: string
 }
 
 const EMPTY_CFG: BankCfg = {
@@ -136,6 +142,9 @@ export function BankManager() {
       ...EMPTY_CFG,
       key: bank.key,
       bank_name: bank.name,
+      bank_name_th: bank.bank_name_th,
+      bank_name_en: bank.bank_name_en,
+      head_office_address: bank.head_office_address,
       logo_url: bank.logo_url,
       template_source: 'custom',
       is_builtin: false,
@@ -305,6 +314,8 @@ function BankDetail({ bank, isBuiltin, onEdit, onDelete }: {
         ))}
       </div>
 
+      <ReferenceProfile bank={bank} />
+
       <Card>
         <CardTitle>Column Aliases</CardTitle>
         <div className="space-y-2">
@@ -420,6 +431,8 @@ function BankForm({ form, setForm, newAlias, setNewAlias, addAlias, removeAlias,
         </div>
       </Card>
 
+      <ReferenceProfile bank={form} />
+
       {/* Column aliases */}
       <Card>
         <CardTitle>Column Aliases</CardTitle>
@@ -466,5 +479,31 @@ function BankForm({ form, setForm, newAlias, setNewAlias, addAlias, removeAlias,
         </div>
       </Card>
     </div>
+  )
+}
+
+function ReferenceProfile({ bank }: { bank: Pick<BankCfg, 'bank_name_th' | 'bank_name_en' | 'head_office_address'> }) {
+  const referenceRows = [
+    { label: 'Thai Name', value: bank.bank_name_th },
+    { label: 'English Name', value: bank.bank_name_en },
+    { label: 'Head Office', value: bank.head_office_address },
+  ].filter((row) => row.value)
+
+  if (referenceRows.length === 0) return null
+
+  return (
+    <Card>
+      <CardTitle>Reference Profile</CardTitle>
+      <div className="space-y-2">
+        {referenceRows.map((row) => (
+          <div key={row.label} className="flex items-start gap-3 py-1.5 border-b border-border/40 last:border-0">
+            <span className="text-[11px] uppercase text-muted font-semibold w-36 shrink-0 pt-0.5">
+              {row.label}
+            </span>
+            <span className="text-sm text-text2 break-words">{row.value}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
   )
 }

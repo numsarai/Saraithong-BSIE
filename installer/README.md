@@ -1,8 +1,14 @@
 # BSIE — Installation Guide
 
+## Program Owner
+
+- Owner: ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง
+- Developer: ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง
+- Contact: ๐๙๖๗๗๖๘๗๕๗
+
 ## macOS
 
-1. Open `BSIE-vX.X.X-macos.dmg`
+1. Open `BSIE-<version>-macos.dmg`
 2. Drag **BSIE** to your **Applications** folder
 3. First launch: right-click BSIE → **Open** (bypasses Gatekeeper for unsigned apps)
 4. BSIE opens in your browser automatically at `http://127.0.0.1:8757`
@@ -15,7 +21,7 @@
 
 ## Windows
 
-1. Run `BSIE-Setup-vX.X.X-windows.exe`
+1. Run `dist/installer/BSIE-Setup-<version>-windows.exe`
 2. Click **Next** → **Install** → **Finish**
 3. BSIE launches automatically and opens in your browser
 4. A tray icon appears in the system tray — right-click → **Quit BSIE**
@@ -43,13 +49,22 @@ After building a desktop bundle, you can smoke-test it without opening a tray
 icon or browser:
 
 ```bash
-python scripts/smoke_bundle.py \
+./.venv/bin/python scripts/smoke_bundle.py \
   --target dist/BSIE.app \
   --port 8761 \
   --user-data-dir /tmp/bsie-smoke
 ```
 
 On Windows, point `--target` at `dist\BSIE\BSIE.exe` instead.
+
+For a release-oriented checklist across macOS and Windows, use
+`installer/release-checklist.md`.
+
+For a one-command Windows release build from a Windows machine, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File installer/windows/build_release.ps1
+```
 
 The smoke test verifies more than `/health`:
 - the embedded FastAPI server responds

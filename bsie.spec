@@ -6,9 +6,13 @@
 import sys
 from pathlib import Path
 
+from project_meta import APP_CONTACT_PHONE, APP_DEVELOPER_NAME, APP_OWNER_NAME, APP_VERSION
+
 _ico  = str(Path("installer/bsie.ico"))
 _icns = str(Path("installer/bsie.icns"))
 _icon = _icns if sys.platform == "darwin" else _ico
+_version = APP_VERSION
+_bundle_contact = f"Owner/Developer: {APP_OWNER_NAME or APP_DEVELOPER_NAME} | Contact: {APP_CONTACT_PHONE}"
 
 block_cipher = None
 
@@ -150,6 +154,11 @@ if sys.platform == "darwin":
         name="BSIE.app",
         icon=_icns,
         bundle_identifier="com.bsie.app",
+        info_plist={
+            "CFBundleShortVersionString": _version,
+            "CFBundleGetInfoString": _bundle_contact,
+            "NSHumanReadableCopyright": APP_OWNER_NAME or APP_DEVELOPER_NAME,
+        },
     )
 else:
     # Windows: one-dir layout — COLLECT produces dist/BSIE/ (setup.iss Source path)

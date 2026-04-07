@@ -35,6 +35,9 @@ vi.mock('@/api', () => ({
       has_template: false,
       bank_type: 'thai_bank',
       template_badge: 'Logo ready / template pending',
+      bank_name_th: 'ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร',
+      bank_name_en: 'Bank for Agriculture and Agricultural Cooperatives',
+      head_office_address: '2346 ถนนพหลโยธิน แขวงเสนานิคม เขตจตุจักร กรุงเทพฯ 10900',
     },
   ])),
   getBank: vi.fn(async () => null),
@@ -75,5 +78,8 @@ describe('BankManager prepared bank logos', () => {
     expect(await screen.findByDisplayValue('baac')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Bank for Agriculture and Agricultural Cooperatives')).toBeInTheDocument()
     expect(screen.getByText('Logo ready / template pending')).toBeInTheDocument()
+    expect(screen.getByText('Reference Profile')).toBeInTheDocument()
+    expect(screen.getByText('ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร')).toBeInTheDocument()
+    expect(screen.getByText('2346 ถนนพหลโยธิน แขวงเสนานิคม เขตจตุจักร กรุงเทพฯ 10900')).toBeInTheDocument()
   })
 })

@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 BACKEND_PORT=8757
-FRONTEND_PORT=5173
+FRONTEND_PORT=6776
 BACKEND_LOG="/tmp/bsie_backend.log"
 
 RED='\033[0;31m'

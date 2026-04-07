@@ -33,7 +33,7 @@ function getQuickDiagnosisThai(reconciliation: any, checkMode: 'file_order' | 'c
 }
 
 export function Step5Results() {
-  const { results, account, bankKey, currentTab, setCurrentTab, reset, operatorName } = useStore()
+  const { results, account, bankKey, parserRunId, currentTab, setCurrentTab, reset, operatorName } = useStore()
   const resolvedOperatorName = normalizeOperatorName(operatorName)
   const [page, setPage]       = useState(1)
   const [override, setOverride] = useState<OverrideState>(null)
@@ -41,8 +41,8 @@ export function Step5Results() {
   const [checkMode, setCheckMode] = useState<'file_order' | 'chronological'>('file_order')
 
   const { data: txnData, refetch } = useQuery({
-    queryKey: ['results', account, page],
-    queryFn: () => getResults(account, page, 100),
+    queryKey: ['results', account, parserRunId, page],
+    queryFn: () => getResults(account, page, 100, parserRunId),
     enabled: !!account,
   })
   const { data: overrideData, refetch: refetchOverrides } = useQuery({
@@ -51,12 +51,31 @@ export function Step5Results() {
     enabled: !!account,
   })
 
-  const rows       = txnData?.rows   || []
-  const total      = txnData?.total  || 0
-  const totalPages = Math.ceil(total / 100) || 1
   const meta = results?.meta || txnData?.meta || {}
+  const rows = txnData?.rows || results?.transactions || []
+  const total = Number(
+    txnData?.total
+    ?? meta.num_transactions
+    ?? results?.transactions?.length
+    ?? rows.length
+    ?? 0
+  )
+  const totalPages = Math.ceil(total / 100) || 1
+  const summaryTotal = Number(
+    txnData?.total
+    ?? meta.num_transactions
+    ?? results?.transactions?.length
+    ?? rows.length
+    ?? 0
+  )
   const entityRows = results?.entities || txnData?.entities || []
   const linkRows = results?.links || txnData?.links || []
+  const showingPreview =
+    !txnData && (
+      (results?.transactions?.length ?? 0) > 0 ||
+      (results?.entities?.length ?? 0) > 0 ||
+      (results?.links?.length ?? 0) > 0
+    )
   const overrideRows = Array.isArray(overrideData?.overrides)
     ? overrideData.overrides.filter((row: any) => String(row.account_number || '') === String(account || ''))
     : []
@@ -200,7 +219,7 @@ export function Step5Results() {
           <BankLogo bank={{ key: bankKey || String(meta.bank || '').toLowerCase(), name: meta.bank || bankKey || 'Bank' }} size="lg" />
           <div>
           <h2 className="text-lg font-bold text-text">Results</h2>
-          <p className="text-muted text-sm">{account} · {meta.bank || ''} · {total} transactions</p>
+          <p className="text-muted text-sm">{account} · {meta.bank || ''} · {summaryTotal} transactions</p>
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={reset}>
@@ -221,6 +240,15 @@ export function Step5Results() {
           </a>
         ))}
       </div>
+
+      {showingPreview ? (
+        <Card className="border-accent/20 bg-accent/[0.06] p-3">
+          <div className="flex items-center gap-2 text-sm text-text2">
+            <Badge variant="blue">Preview</Badge>
+            <span>Showing preview rows while the full results query finishes loading.</span>
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="bg-success/[0.06] border-success/20 p-4">
         <CardTitle className="mb-2 text-text">

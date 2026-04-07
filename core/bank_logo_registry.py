@@ -256,6 +256,17 @@ _RAW_BANK_BRANDS = [
         "has_template_default": False,
     },
     {
+        "key": "bot",
+        "name": "Bank of Thailand",
+        "short_name": "BOT",
+        "monogram": "BOT",
+        "primary_color": "#1E3A8A",
+        "secondary_color": "#3B82F6",
+        "text_color": "#FFFFFF",
+        "bank_type": "regulator",
+        "has_template_default": False,
+    },
+    {
         "key": "generic",
         "name": "Generic Template",
         "short_name": "Generic",
@@ -292,6 +303,74 @@ _RAW_BANK_BRANDS = [
 
 
 _BANK_BRANDS_BY_KEY = {entry["key"]: entry for entry in _RAW_BANK_BRANDS}
+
+_BANK_REFERENCE_DETAILS = {
+    "baac": {
+        "bank_name_th": "ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร",
+        "bank_name_en": "Bank for Agriculture and Agricultural Cooperatives",
+        "head_office_address": "2346 ถนนพหลโยธิน แขวงเสนานิคม เขตจตุจักร กรุงเทพฯ 10900",
+    },
+    "bay": {
+        "bank_name_th": "ธนาคารกรุงศรีอยุธยา",
+        "bank_name_en": "Bank of Ayudhya",
+        "head_office_address": "1222 ถนนพระรามที่ 3 แขวงบางโพงพาง เขตยานนาวา กรุงเทพฯ 10120",
+    },
+    "bbl": {
+        "bank_name_th": "ธนาคารกรุงเทพ",
+        "bank_name_en": "Bangkok Bank",
+        "head_office_address": "333 ถนนสีลม แขวงสีลม เขตบางรัก กรุงเทพฯ 10500",
+    },
+    "bot": {
+        "bank_name_th": "ธนาคารแห่งประเทศไทย",
+        "bank_name_en": "Bank of Thailand",
+        "head_office_address": "273 ถนนสามเสน แขวงวัดสามพระยา เขตพระนคร กรุงเทพฯ 10200",
+    },
+    "cimb_thai": {
+        "bank_name_th": "ธนาคารซีไอเอ็มบี ไทย",
+        "bank_name_en": "CIMB Thai Bank",
+        "head_office_address": "44 ถนนหลังสวน แขวงลุมพินี เขตปทุมวัน กรุงเทพมหานคร 10330",
+    },
+    "ghab": {
+        "bank_name_th": "ธนาคารอาคารสงเคราะห์",
+        "bank_name_en": "Government Housing Bank",
+        "head_office_address": "63 ถนนพระราม 9 แขวงห้วยขวาง เขตห้วยขวาง กรุงเทพมหานคร 10310",
+    },
+    "gsb": {
+        "bank_name_th": "ธนาคารออมสิน",
+        "bank_name_en": "Government Savings Bank",
+        "head_office_address": "470 ถนนพหลโยธิน แขวงสามเสนใน เขตพญาไท กรุงเทพมหานคร 10400",
+    },
+    "kbank": {
+        "bank_name_th": "ธนาคารกสิกรไทย",
+        "bank_name_en": "Kasikornbank",
+        "head_office_address": "400/22 ถนนพหลโยธิน แขวงสามเสนใน เขตพญาไท กรุงเทพฯ 10400",
+    },
+    "ktb": {
+        "bank_name_th": "ธนาคารกรุงไทย",
+        "bank_name_en": "Krung Thai Bank",
+        "head_office_address": "35 ถนนสุขุมวิท แขวงคลองเตยเหนือ เขตวัฒนา กรุงเทพฯ 10110",
+    },
+    "lh_bank": {
+        "bank_name_th": "ธนาคารแลนด์ แอนด์ เฮ้าส์",
+        "bank_name_en": "Land and Houses Bank",
+        "head_office_address": "1 อาคารคิวเฮ้าส์ ลุมพินี ถนนสาทรใต้ แขวงยานนาวา เขตสาทร กรุงเทพมหานคร 10120",
+    },
+    "scb": {
+        "bank_name_th": "ธนาคารไทยพาณิชย์",
+        "bank_name_en": "Siam Commercial Bank",
+        "head_office_address": "9 ถนนรัชดาภิเษก แขวงจตุจักร เขตจตุจักร กรุงเทพฯ 10900",
+    },
+    "ttb": {
+        "bank_name_th": "ทีทีบี",
+        "bank_name_en": "TMBThanachart Bank",
+        "head_office_address": "3000 ถนนพหลโยธิน แขวงจอมพล เขตจตุจักร กรุงเทพฯ 10900",
+    },
+    "uob_thai": {
+        "bank_name_th": "ธนาคารยูโอบี",
+        "bank_name_en": "UOB Thailand",
+        "head_office_address": "690 ถนนสุขุมวิท แขวงคลองตัน เขตคลองเตย กรุงเทพมหานคร 10110",
+    },
+}
 
 
 def _title_from_key(key: str) -> str:
@@ -368,6 +447,9 @@ def build_logo_record(
         "logo_asset_path": str(asset_path) if asset_path else "",
         "logo_source": "static_asset" if asset_path else "generated_badge",
     })
+    reference_details = deepcopy(_BANK_REFERENCE_DETAILS.get(str(base["key"]).strip().lower()) or {})
+    if reference_details:
+        base.update(reference_details)
     return base
 
 

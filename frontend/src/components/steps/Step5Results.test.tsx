@@ -104,7 +104,7 @@ vi.mock('sonner', () => ({
   }),
 }))
 
-const { deleteOverride } = await import('@/api')
+const { deleteOverride, getResults } = await import('@/api')
 
 function renderWithQueryClient() {
   const queryClient = new QueryClient({
@@ -127,6 +127,7 @@ describe('Step5Results date formatting', () => {
     useStore.setState({
       account: '1234567890',
       bankKey: 'scb',
+      parserRunId: 'RUN-STEP5',
       operatorName: 'Case Reviewer',
       currentTab: 'transactions',
       results: null,
@@ -178,5 +179,78 @@ describe('Step5Results date formatting', () => {
 
     expect(deleteOverride).toHaveBeenCalledWith('TXN-001', '1234567890', 'Case Reviewer')
     confirmSpy.mockRestore()
+  })
+
+  it('uses meta transaction count in the header before paged results total is ready', async () => {
+    useStore.setState({
+      account: '1883167399',
+      bankKey: 'kbank',
+      results: {
+        meta: {
+          bank: 'KBANK',
+          num_transactions: 1595,
+          total_in: 2316072.58,
+          total_out: -2316071.95,
+          total_circulation: 4632144.53,
+          date_range: '2024-07-07 to 2025-07-20',
+          category_counts: {},
+          reconciliation: {},
+        },
+      },
+    })
+
+    renderWithQueryClient()
+
+    expect(await screen.findByText(/1883167399 · KBANK · 1595 transactions/i)).toBeInTheDocument()
+  })
+
+  it('renders preview rows from job results before paged query data returns', async () => {
+    vi.mocked(getResults).mockImplementationOnce(() => new Promise(() => {}))
+    useStore.setState({
+      account: '1883167399',
+      bankKey: 'kbank',
+      results: {
+        meta: {
+          bank: 'KBANK',
+          num_transactions: 1595,
+          total_in: 2316072.58,
+          total_out: -2316071.95,
+          total_circulation: 4632144.53,
+          date_range: '2024-07-07 to 2025-07-20',
+          category_counts: {},
+          reconciliation: {},
+        },
+        transactions: [
+          {
+            transaction_id: 'KBANK-PREVIEW-1',
+            date: '2025-07-20',
+            amount: '2500.00',
+            direction: 'IN',
+            transaction_type: 'transfer_in',
+            confidence: '0.98',
+            counterparty_account: '9999999999',
+            counterparty_name: 'Preview Sender',
+            description: 'Preview transfer',
+            from_account: '9999999999',
+            to_account: '1883167399',
+            is_overridden: false,
+          },
+        ],
+      },
+    })
+
+    renderWithQueryClient()
+
+    expect(await screen.findByText('KBANK-PREVIEW-1')).toBeInTheDocument()
+    expect(screen.getByText(/1883167399 · KBANK · 1595 transactions/i)).toBeInTheDocument()
+    expect(screen.getByText(/Showing preview rows while the full results query finishes loading/i)).toBeInTheDocument()
+  })
+
+  it('requests full results for the active parser run', async () => {
+    renderWithQueryClient()
+
+    await screen.findByText('31 03 2026')
+
+    expect(getResults).toHaveBeenCalledWith('1234567890', 1, 100, 'RUN-STEP5')
   })
 })

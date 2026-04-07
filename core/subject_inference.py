@@ -68,6 +68,19 @@ IGNORE_NAME_TOKENS = {
     "stm",
     "bank statement",
     "e statement",
+    "ตั้งแต่วันที่",
+}
+
+NAME_TRAILING_STOP_TOKENS = {
+    "สาขา",
+    "branch",
+    "เลขที่บัญชี",
+    "หมายเลขบัญชี",
+    "account number",
+    "account no",
+    "account no.",
+    "วันที่",
+    "ตั้งแต่วันที่",
 }
 
 
@@ -101,8 +114,8 @@ def infer_subject_identity_from_frames(
         or transaction_identity["account"]
     )
     name = (
-        filename_identity["name"]
-        or workbook_identity["name"]
+        workbook_identity["name"]
+        or filename_identity["name"]
         or transaction_identity["name"]
     )
     account_source = (
@@ -111,8 +124,8 @@ def infer_subject_identity_from_frames(
         or transaction_identity.get("account_source", "")
     )
     name_source = (
-        filename_identity.get("name_source", "")
-        or workbook_identity.get("name_source", "")
+        workbook_identity.get("name_source", "")
+        or filename_identity.get("name_source", "")
         or transaction_identity.get("name_source", "")
     )
     sources = {value for value in (account_source, name_source) if value}
@@ -182,6 +195,8 @@ def _infer_from_preview(preview_df: pd.DataFrame | None) -> dict[str, str]:
                     account = _extract_neighbor_account(next_row_values, col_idx)
             if not name and any(alias in lower for alias in NAME_ALIASES):
                 name = _extract_name_from_labeled_cell(cell)
+                if not name:
+                    name = _extract_inline_labeled_name(cell)
                 if not name and alias_like_count <= 1:
                     name = _extract_neighbor_name(row_values, col_idx)
                 if not name and next_row_values and alias_like_count <= 1:
@@ -301,6 +316,24 @@ def _extract_name_from_labeled_cell(cell: str) -> str:
     return ""
 
 
+def _extract_inline_labeled_name(cell: str) -> str:
+    text = str(cell or "").strip()
+    if not text:
+        return ""
+
+    for alias in sorted(NAME_ALIASES, key=len, reverse=True):
+        pattern = rf"{re.escape(alias)}\s*[:：]?\s*(.+)"
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+        candidate = match.group(1).strip()
+        candidate = _trim_name_tail(candidate)
+        cleaned = _clean_name_fragment(candidate)
+        if cleaned and not _looks_like_alias(cleaned):
+            return cleaned
+    return ""
+
+
 def _extract_neighbor_name(row_values: list[str], anchor_idx: int) -> str:
     for candidate in row_values[anchor_idx: anchor_idx + 3]:
         cleaned = _clean_name_fragment(candidate)
@@ -326,6 +359,15 @@ def _clean_name_fragment(value: Any) -> str:
             trimmed = text[len(token):].strip(" -_")
             return trimmed
     return text
+
+
+def _trim_name_tail(text: str) -> str:
+    for token in sorted(NAME_TRAILING_STOP_TOKENS, key=len, reverse=True):
+        pattern = rf"\s+{re.escape(token)}"
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return text[:match.start()].strip(" -_/")
+    return text.strip(" -_/")
 
 
 def _looks_like_alias(value: str) -> bool:

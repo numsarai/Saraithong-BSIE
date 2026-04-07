@@ -4,6 +4,12 @@
 
 BSIE is now a persistent, investigation-grade bank statement intelligence platform. It preserves original evidence, stores normalized transactions in a database, detects duplicate uploads and transaction overlap, generates counterparty match candidates, records audit history for manual review, and still preserves the existing CSV/XLSX/i2-style output workflow for manual analysis.
 
+## Ownership
+
+- Owner: ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง
+- Developer: ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง
+- Contact: ๐๙๖๗๗๖๘๗๕๗
+
 ---
 
 ## Features

@@ -8,8 +8,27 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-VERSION=$(cat VERSION 2>/dev/null || echo "2.0.0")
-PLATFORM=$(python3 -c "import sys; print(sys.platform)")
+VERSION_FILE="$SCRIPT_DIR/VERSION"
+VENV_PYTHON="$SCRIPT_DIR/.venv/bin/python"
+
+if [[ ! -f "$VERSION_FILE" ]]; then
+  echo "✗ Missing VERSION file at $VERSION_FILE" >&2
+  exit 1
+fi
+
+VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
+if [[ -z "$VERSION" ]]; then
+  echo "✗ VERSION file is empty" >&2
+  exit 1
+fi
+
+if [[ ! -x "$VENV_PYTHON" ]]; then
+  echo "✗ Missing project virtualenv Python at $VENV_PYTHON" >&2
+  echo "  Create it first, then install requirements into .venv." >&2
+  exit 1
+fi
+
+PLATFORM="$("$VENV_PYTHON" -c "import sys; print(sys.platform)")"
 
 BUILD_DMG=false
 SKIP_FRONTEND=false
@@ -41,15 +60,14 @@ fi
 # ── Step 2: Install Python deps ─────────────────────────────────
 echo ""
 echo "▶ [2/4] Installing Python dependencies..."
-pip3 install -r requirements.txt --quiet
-pip3 install pyinstaller --quiet
+"$VENV_PYTHON" -m pip install -r requirements.txt --quiet
 echo "  ✓ Python deps installed"
 
 # ── Step 3: PyInstaller ─────────────────────────────────────────
 echo ""
 echo "▶ [3/4] Running PyInstaller..."
 rm -rf build/ dist/
-python3 -m PyInstaller bsie.spec --noconfirm
+"$VENV_PYTHON" -m PyInstaller bsie.spec --noconfirm
 echo "  ✓ PyInstaller complete"
 
 if [ "$PLATFORM" = "darwin" ] && [ -d "dist/BSIE.app" ]; then
@@ -73,7 +91,7 @@ echo "▶ [4/4] Packaging installer..."
 if [ "$PLATFORM" = "darwin" ]; then
   if [ "$BUILD_DMG" = true ]; then
     if command -v create-dmg &>/dev/null; then
-      bash installer/macos/build_dmg.sh
+      bash installer/macos/build_dmg.sh "$VERSION"
       echo "  ✓ DMG created → dist/BSIE-${VERSION}-macos.dmg"
     else
       echo "  ⚠ create-dmg not found — install with: brew install create-dmg"
@@ -85,8 +103,8 @@ if [ "$PLATFORM" = "darwin" ]; then
   fi
 elif [ "$PLATFORM" = "win32" ]; then
   if command -v iscc &>/dev/null; then
-    iscc installer/windows/setup.iss
-    echo "  ✓ Windows installer → dist/BSIE-Setup-${VERSION}-windows.exe"
+    iscc /DMyAppVersion="${VERSION}" installer/windows/setup.iss
+    echo "  ✓ Windows installer → dist/installer/BSIE-Setup-${VERSION}-windows.exe"
   else
     echo "  ⚠ Inno Setup (iscc) not found — install from https://jrsoftware.org/isinfo.php"
     echo "  ✓ App folder at: dist/BSIE/"

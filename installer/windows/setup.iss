@@ -3,8 +3,11 @@
 ; Prerequisites: Inno Setup 6 (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "BSIE"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "BSIE Project"
+#ifndef MyAppVersion
+  #define MyAppVersion "0.0.0"
+#endif
+#define MyAppPublisher "ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง"
+#define MyAppComments "Developer: ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง | Contact: ๐๙๖๗๗๖๘๗๕๗"
 #define MyAppExeName "BSIE.exe"
 
 [Setup]
@@ -12,6 +15,7 @@ AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppComments={#MyAppComments}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes

@@ -5,7 +5,14 @@
 
 set -euo pipefail
 
-VERSION="${1:-1.0.0}"
+VERSION_FILE="VERSION"
+if [[ -n "${1:-}" ]]; then
+  VERSION="$1"
+elif [[ -f "${VERSION_FILE}" ]]; then
+  VERSION="$(tr -d '[:space:]' < "${VERSION_FILE}")"
+else
+  VERSION="0.0.0"
+fi
 APP_NAME="BSIE"
 DMG_NAME="${APP_NAME}-${VERSION}-macos"
 DIST_DIR="dist"
@@ -26,7 +33,7 @@ ditto "${DIST_DIR}/${APP_NAME}.app" "${TMP_APP}"
 xattr -cr "${TMP_APP}" || true
 codesign --force --deep --sign - "${TMP_APP}" || true
 ditto "${TMP_APP}" "${DMG_STAGING}/${APP_NAME}.app"
-rmdir "${TMP_APP_DIR}" 2>/dev/null || true
+rm -rf "${TMP_APP_DIR}"
 cp "installer/macos/dmg-readme.md" "${DMG_STAGING}/README.md"
 
 mkdir -p "${DIST_DIR}"

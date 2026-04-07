@@ -21,6 +21,7 @@ import subprocess
 import webbrowser
 import urllib.request
 import urllib.error
+import urllib.parse
 import logging
 
 # Import paths first — works in both bundle and source mode
@@ -41,6 +42,17 @@ PORT = int(os.environ.get("PORT", "8757"))
 BASE_URL = f"http://127.0.0.1:{PORT}"
 HEALTH_URL = f"{BASE_URL}/health"
 MAX_WAIT_SECONDS = 10
+
+
+def _is_safe_local_http_url(url: str) -> bool:
+    """Only allow local http(s) URLs for launcher health probes."""
+    parsed = urllib.parse.urlsplit(url)
+    return (
+        parsed.scheme in {"http", "https"}
+        and parsed.hostname in {"127.0.0.1", "localhost"}
+        and not parsed.username
+        and not parsed.password
+    )
 
 
 def _env_enabled(name: str, default: bool = True) -> bool:
@@ -184,9 +196,12 @@ def _show_startup_error(message: str) -> None:
 
 def _wait_for_server() -> bool:
     """Poll /health until the server responds or MAX_WAIT_SECONDS is reached."""
+    if not _is_safe_local_http_url(HEALTH_URL):
+        return False
     deadline = time.time() + MAX_WAIT_SECONDS
     while time.time() < deadline:
         try:
+            # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- HEALTH_URL is generated from a fixed local base URL and validated by _is_safe_local_http_url().
             with urllib.request.urlopen(HEALTH_URL, timeout=1) as resp:
                 if resp.status == 200:
                     return True

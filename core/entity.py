@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 def _make_entity_id(entity_type: str, value: str) -> str:
     """Generate a stable, short entity_id from type + value."""
     raw = f"{entity_type}::{value}".encode("utf-8")
+    # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1 -- This is a deterministic short identifier, not a cryptographic signature or security boundary.
     return "E_" + hashlib.sha1(raw).hexdigest()[:10].upper()
 
 

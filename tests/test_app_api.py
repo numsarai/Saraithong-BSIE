@@ -80,6 +80,27 @@ def test_banks_endpoint_includes_logo_metadata():
     assert scb["template_status"] == "template_ready"
 
 
+def test_job_status_prefers_runtime_job_cache(monkeypatch):
+    monkeypatch.setattr(
+        app,
+        "get_runtime_job",
+        lambda job_id: {
+            "status": "done",
+            "log": ["INFO tasks — Pipeline complete"],
+            "result": {"account": "1883167399"},
+            "error": None,
+        },
+    )
+
+    response = client.get("/api/job/job-123")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "done"
+    assert payload["result"]["account"] == "1883167399"
+    assert payload["log"] == ["INFO tasks — Pipeline complete"]
+
+
 def test_bank_logo_catalog_includes_future_thai_banks():
     response = client.get("/api/bank-logo-catalog")
 
@@ -224,6 +245,66 @@ def test_results_endpoint_includes_entities_and_links(tmp_path):
     payload = response.json()
     assert payload["entities"][0]["entity_id"] == "E1"
     assert payload["links"][0]["transaction_id"] == "TXN-1"
+
+
+def test_results_endpoint_uses_parser_run_scope_for_meta(tmp_path, monkeypatch):
+    account_dir = tmp_path / "1234567890"
+    processed_dir = account_dir / "processed"
+    processed_dir.mkdir(parents=True)
+    (processed_dir / "transactions.csv").write_text("transaction_id,amount\nTXN-1,100\n", encoding="utf-8")
+    (account_dir / "meta.json").write_text(json.dumps({"bank": "SCB"}), encoding="utf-8")
+
+    class DummyScalarResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def first(self):
+            return self._rows[0] if self._rows else None
+
+        def all(self):
+            return list(self._rows)
+
+    class DummyAccount:
+        id = "ACCOUNT-1"
+
+    class DummyParserRun:
+        summary_json = {"bank": "KBANK", "num_transactions": 1595}
+
+    class DummySession:
+        def __init__(self):
+            self.get_calls = []
+            self.scalar_calls = 0
+
+        def scalars(self, query):
+            self.scalar_calls += 1
+            if self.scalar_calls == 1:
+                return DummyScalarResult([DummyAccount()])
+            return DummyScalarResult([])
+
+        def get(self, model, key):
+            self.get_calls.append((getattr(model, "__name__", str(model)), key))
+            if key == "RUN-123":
+                return DummyParserRun()
+            return None
+
+    from contextlib import contextmanager
+
+    dummy_session = DummySession()
+
+    @contextmanager
+    def _fake_session():
+        yield dummy_session
+
+    monkeypatch.setattr(app, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(app, "get_db_session", _fake_session)
+
+    response = client.get("/api/results/1234567890", params={"parser_run_id": "RUN-123"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["meta"]["bank"] == "KBANK"
+    assert payload["meta"]["num_transactions"] == 1595
+    assert ("ParserRun", "RUN-123") in dummy_session.get_calls
 
 
 def test_bulk_analytics_endpoint_returns_saved_artifact(tmp_path):
@@ -494,6 +575,56 @@ def test_upload_excel_returns_identity_guess_from_repeated_transaction_pattern(t
     assert payload["name_guess"] == "สุดารัตน์ แสงทอง"
     assert payload["identity_guess"]["account_source"] == "transaction_pattern"
     assert payload["identity_guess"]["name_source"] == "transaction_pattern"
+
+
+def test_upload_excel_returns_identity_guess_from_inline_header_text(tmp_path):
+    workbook = tmp_path / "sample_kbank_header.xlsx"
+    import pandas as pd
+
+    pd.DataFrame([
+        ["รายการเดินบัญชีเงินฝากออมทรัพย์"],
+        ["ของหมายเลขบัญชี 188-3-16739-9 ชื่อบัญชี นาย ศิระ ลิมปนันทพงศ์ สาขาโรบินสัน นครศรีธรรมราช"],
+        ["ตั้งแต่วันที่ 01/01/2567 - 15/10/2568"],
+        ["วันที่ทำรายการ", "เวลาที่ทำรายการ", "ประเภทรายการ", "ช่องทาง", "ฝากเงิน", "ถอนเงิน", "ยอดเงินคงเหลือ"],
+        ["07/07/2567", "13:08:10", "รับโอนเงิน", "Internet/Mobile KTB", "300", "0", "300"],
+    ]).to_excel(workbook, header=False, index=False)
+
+    fake_sheet_pick = {"header_row": 3, "sheet_name": "Sheet1"}
+    fake_bank = {"bank": "KBANK", "config_key": "kbank", "key": "kbank", "confidence": 1.0, "ambiguous": False}
+    fake_columns = {
+        "suggested_mapping": {
+            "date": "วันที่ทำรายการ",
+            "time": "เวลาที่ทำรายการ",
+            "description": "ประเภทรายการ",
+            "channel": "ช่องทาง",
+            "credit": "ฝากเงิน",
+            "debit": "ถอนเงิน",
+            "balance": "ยอดเงินคงเหลือ",
+        },
+        "confidence_scores": {"date": 1.0},
+        "all_columns": ["วันที่ทำรายการ", "เวลาที่ทำรายการ", "ประเภทรายการ", "ช่องทาง", "ฝากเงิน", "ถอนเงิน", "ยอดเงินคงเหลือ"],
+        "unmatched_columns": [],
+        "required_found": True,
+    }
+
+    with (
+        patch.object(app, "find_best_sheet_and_header", return_value=fake_sheet_pick),
+        patch.object(app, "detect_bank", return_value=fake_bank),
+        patch.object(app, "detect_columns", return_value=fake_columns),
+        patch.object(app, "find_matching_profile", return_value=None),
+        patch.object(app, "find_matching_bank_fingerprint", return_value=None),
+    ):
+        with workbook.open("rb") as fh:
+            response = client.post(
+                "/api/upload",
+                files={"file": ("sample_kbank_header.xlsx", fh, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["account_guess"] == "1883167399"
+    assert payload["name_guess"] == "นาย ศิระ ลิมปนันทพงศ์"
+    assert payload["identity_guess"]["name_source"] == "workbook_header"
 
 
 def test_account_remembered_name_endpoint_returns_match():

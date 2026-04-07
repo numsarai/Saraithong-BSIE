@@ -1,6 +1,13 @@
 import { useStore } from '@/store'
 import { cn } from '@/lib/utils'
-import { APP_ICON_URL, APP_NAME, APP_SUBTITLE, APP_VERSION } from '@/config/appMeta'
+import {
+  APP_CONTACT_PHONE,
+  APP_DEVELOPER_NAME,
+  APP_ICON_URL,
+  APP_NAME,
+  APP_SUBTITLE,
+  APP_VERSION,
+} from '@/config/appMeta'
 import { Upload, Search, Settings, Cpu, BarChart2, Building2, FolderTree, Database } from 'lucide-react'
 
 const STEPS = [
@@ -125,6 +132,11 @@ export function Sidebar() {
           <Building2 size={14} className="shrink-0" />
           <span>Bank Manager</span>
         </button>
+        <div className="mt-3 rounded-xl border border-border bg-surface2 px-3 py-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">Program Owner / Developer</div>
+          <div className="mt-1 text-[11px] font-medium leading-snug text-text">{APP_DEVELOPER_NAME}</div>
+          <div className="mt-1 text-[10px] text-muted">Contact {APP_CONTACT_PHONE}</div>
+        </div>
       </div>
     </aside>
   )

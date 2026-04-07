@@ -15,6 +15,16 @@ import uuid
 from pathlib import Path
 
 
+def _validate_base_url(value: str) -> str:
+    """Reject non-http(s) schemes so local files cannot be fetched via urllib."""
+    parsed = urllib.parse.urlsplit(value)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("base-url must start with http:// or https://")
+    if not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("base-url must be a plain network location without credentials")
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Submit a statement to BSIE and poll the job")
     parser.add_argument("file", help="Path to the statement file to process")
@@ -29,6 +39,12 @@ def main() -> int:
     file_path = Path(args.file).expanduser().resolve()
     if not file_path.exists():
         print(f"File not found: {file_path}", file=sys.stderr)
+        return 1
+
+    try:
+        base_url = _validate_base_url(args.base_url)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
 
     try:
@@ -61,11 +77,12 @@ def main() -> int:
         body.extend(f"--{boundary}--\r\n".encode("utf-8"))
 
         request = urllib.request.Request(
-            f"{args.base_url}/api/process",
+            f"{base_url}/api/process",
             method="POST",
             data=bytes(body),
             headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
         )
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- base_url is restricted to validated http(s) endpoints by _validate_base_url().
         with urllib.request.urlopen(request, timeout=30) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception as exc:
@@ -83,7 +100,8 @@ def main() -> int:
     while time.time() < deadline:
         time.sleep(2)
         try:
-            with urllib.request.urlopen(f"{args.base_url}/api/job/{job_id}", timeout=15) as response:
+            # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- base_url is restricted to validated http(s) endpoints by _validate_base_url().
+            with urllib.request.urlopen(f"{base_url}/api/job/{job_id}", timeout=15) as response:
                 status = json.loads(response.read().decode("utf-8"))
         except Exception as exc:
             print(f"Polling failed: {exc}", file=sys.stderr)

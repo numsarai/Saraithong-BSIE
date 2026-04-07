@@ -17,6 +17,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -35,6 +36,7 @@ def _wait_for_health(base_url: str, timeout: float) -> None:
     health_url = f"{base_url}/health"
     while time.time() < deadline:
         try:
+            # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- base_url is produced from a local smoke-test port and validated by _validate_local_base_url().
             with urllib.request.urlopen(health_url, timeout=1.0) as response:
                 if response.status == 200:
                     return
@@ -45,14 +47,27 @@ def _wait_for_health(base_url: str, timeout: float) -> None:
 
 def _http_status(url: str) -> int:
     request = urllib.request.Request(url, method="GET")
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- url is derived from a validated local smoke-test base URL.
     with urllib.request.urlopen(request, timeout=5.0) as response:
         return response.status
 
 
 def _http_json(url: str) -> object:
     request = urllib.request.Request(url, method="GET")
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- url is derived from a validated local smoke-test base URL.
     with urllib.request.urlopen(request, timeout=5.0) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def _validate_local_base_url(value: str) -> str:
+    parsed = urllib.parse.urlsplit(value)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("smoke-test base URL must use http:// or https://")
+    if parsed.hostname not in {"127.0.0.1", "localhost"}:
+        raise ValueError("smoke-test base URL must target localhost")
+    if parsed.username or parsed.password:
+        raise ValueError("smoke-test base URL must not include credentials")
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
 
 
 def _assert_runtime_dirs(user_data_dir: Path) -> None:
@@ -104,7 +119,7 @@ def main() -> int:
         stderr=subprocess.DEVNULL,
     )
 
-    base_url = f"http://127.0.0.1:{args.port}"
+    base_url = _validate_local_base_url(f"http://127.0.0.1:{args.port}")
 
     try:
         _wait_for_health(base_url, args.timeout)

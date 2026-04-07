@@ -43,7 +43,6 @@ import logging
 import os
 import sys
 import threading
-import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -54,7 +53,6 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.background import BackgroundTask
 from sqlalchemy import func, inspect, select
 
 # ── Path setup ───────────────────────────────────────────────────────────
@@ -210,7 +208,6 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("bsie.api")
-_LAUNCHER_SHUTDOWN_TOKEN_ENV = "BSIE_LAUNCHER_SHUTDOWN_TOKEN"
 
 
 def _auto_backup_poll_seconds() -> float:
@@ -401,23 +398,6 @@ if _REACT_DIST.exists():
     app.mount("/assets", StaticFiles(directory=str(_REACT_DIST / "assets")), name="assets")
 
 
-def _is_launcher_client_host(host: str | None) -> bool:
-    return host in {"127.0.0.1", "localhost", "::1"}
-
-
-def _exit_process_after_delay(delay_seconds: float = 0.2) -> None:
-    time.sleep(delay_seconds)
-    os._exit(0)
-
-
-def _schedule_process_exit(delay_seconds: float = 0.2) -> None:
-    threading.Thread(
-        target=_exit_process_after_delay,
-        args=(delay_seconds,),
-        daemon=True,
-    ).start()
-
-
 # ═══════════════════════════════════════════════════════════════════════════
 # UI routes
 # ═══════════════════════════════════════════════════════════════════════════
@@ -479,26 +459,6 @@ async def react_spa():
 @app.get("/health")
 def health():
     return JSONResponse({"status": "ok"})
-
-
-@app.post("/__bsie_internal/shutdown", include_in_schema=False)
-async def launcher_shutdown(request: Request):
-    token = os.environ.get(_LAUNCHER_SHUTDOWN_TOKEN_ENV, "").strip()
-    if not token:
-        raise HTTPException(404, "Not found")
-
-    client_host = request.client.host if request.client else ""
-    if not _is_launcher_client_host(client_host):
-        raise HTTPException(403, "Forbidden")
-
-    if request.headers.get("X-BSIE-Shutdown-Token", "").strip() != token:
-        raise HTTPException(404, "Not found")
-
-    logger.info("Received launcher shutdown request from %s", client_host)
-    return JSONResponse(
-        {"status": "shutting_down"},
-        background=BackgroundTask(_schedule_process_exit),
-    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════

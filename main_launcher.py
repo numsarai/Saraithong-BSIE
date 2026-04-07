@@ -6,7 +6,7 @@ PyInstaller entry point for the BSIE desktop application.
 Responsibilities (in order):
   1. Create user data directories if they don't exist (first-run setup)
   2. Redirect stdout/stderr to bsie.log in the user data directory
-  3. Stop any previously running BSIE launcher instance
+  3. End-task any previously running BSIE launcher instance
   4. Start uvicorn (FastAPI server) in a background thread on port 8757
   5. Poll GET /health until the server is ready (max 10 seconds)
   6. Open the user's default browser to http://127.0.0.1:8757
@@ -25,7 +25,6 @@ import urllib.error
 import urllib.parse
 import logging
 import json
-import secrets
 import signal
 
 # Import paths first — works in both bundle and source mode
@@ -47,8 +46,6 @@ BASE_URL = f"http://127.0.0.1:{PORT}"
 HEALTH_URL = f"{BASE_URL}/health"
 MAX_WAIT_SECONDS = 10
 INSTANCE_WAIT_SECONDS = 8
-SHUTDOWN_ENDPOINT_PATH = "/__bsie_internal/shutdown"
-SHUTDOWN_HEADER = "X-BSIE-Shutdown-Token"
 INSTANCE_FILE_NAME = "launcher-instance.json"
 
 
@@ -111,13 +108,11 @@ def _clear_instance_record(expected_pid: int | None = None) -> None:
 
 
 def _register_current_instance() -> None:
-    token = secrets.token_urlsafe(24)
-    os.environ["BSIE_LAUNCHER_SHUTDOWN_TOKEN"] = token
     _write_instance_record(
         {
+            "app": "BSIE",
             "pid": os.getpid(),
             "port": PORT,
-            "shutdown_token": token,
             "executable": os.path.abspath(sys.executable),
             "frozen": bool(getattr(sys, "frozen", False)),
         }
@@ -147,36 +142,12 @@ def _wait_for_process_exit(pid: int, timeout: float = INSTANCE_WAIT_SECONDS) -> 
     return not _is_process_running(pid)
 
 
-def _request_instance_shutdown(record: dict) -> bool:
-    token = str(record.get("shutdown_token") or "").strip()
-    try:
-        port = int(record.get("port", PORT))
-    except (TypeError, ValueError):
-        return False
-    shutdown_url = f"http://127.0.0.1:{port}{SHUTDOWN_ENDPOINT_PATH}"
-    if not token or not _is_safe_local_http_url(shutdown_url):
-        return False
-    request = urllib.request.Request(
-        shutdown_url,
-        data=b"{}",
-        method="POST",
-        headers={
-            SHUTDOWN_HEADER: token,
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=2.0) as response:
-            return 200 <= response.status < 300
-    except Exception:
-        return False
-
-
 def _can_force_terminate(record: dict) -> bool:
+    recorded_app = str(record.get("app") or "").strip().lower()
     recorded_executable = str(record.get("executable") or "")
     return (
-        bool(record.get("frozen"))
-        and bool(getattr(sys, "frozen", False))
+        (not recorded_app or recorded_app == "bsie")
+        and bool(recorded_executable)
         and os.path.abspath(recorded_executable) == os.path.abspath(sys.executable)
     )
 
@@ -225,13 +196,8 @@ def _stop_previous_instance() -> None:
         _clear_instance_record()
         return
 
-    logger.info("Stopping previous BSIE launcher instance pid=%s", pid)
-    if _request_instance_shutdown(record) and _wait_for_process_exit(pid):
-        _clear_instance_record()
-        return
-
     if _can_force_terminate(record):
-        logger.warning("Previous BSIE instance pid=%s did not exit cleanly; forcing shutdown", pid)
+        logger.warning("Ending previous BSIE instance pid=%s before restart", pid)
         _force_terminate_process(pid)
         if _wait_for_process_exit(pid):
             _clear_instance_record()

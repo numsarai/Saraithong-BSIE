@@ -34,35 +34,6 @@ def test_favicon_route_serves_built_asset(tmp_path, monkeypatch):
     assert response.text
 
 
-def test_internal_shutdown_endpoint_schedules_exit_for_valid_local_request(monkeypatch):
-    monkeypatch.setenv("BSIE_LAUNCHER_SHUTDOWN_TOKEN", "secret-token")
-    monkeypatch.setattr(app, "_is_launcher_client_host", lambda host: True)
-
-    with patch.object(app, "_schedule_process_exit") as schedule_exit:
-        response = client.post(
-            "/__bsie_internal/shutdown",
-            headers={"X-BSIE-Shutdown-Token": "secret-token"},
-        )
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "shutting_down"
-    schedule_exit.assert_called_once()
-
-
-def test_internal_shutdown_endpoint_rejects_invalid_token(monkeypatch):
-    monkeypatch.setenv("BSIE_LAUNCHER_SHUTDOWN_TOKEN", "secret-token")
-    monkeypatch.setattr(app, "_is_launcher_client_host", lambda host: True)
-
-    with patch.object(app, "_schedule_process_exit") as schedule_exit:
-        response = client.post(
-            "/__bsie_internal/shutdown",
-            headers={"X-BSIE-Shutdown-Token": "wrong-token"},
-        )
-
-    assert response.status_code == 404
-    schedule_exit.assert_not_called()
-
-
 def test_favicon_png_route_serves_program_icon(tmp_path, monkeypatch):
     react_dist = tmp_path / "dist"
     react_dist.mkdir()

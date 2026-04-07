@@ -66,6 +66,14 @@ For a one-command Windows release build from a Windows machine, use:
 powershell -ExecutionPolicy Bypass -File installer/windows/build_release.ps1
 ```
 
+To prepare a fresh Windows PC for continuing work on this repo, use:
+
+```powershell
+installer\windows\prepare_windows_pc.cmd
+```
+
+The Windows handoff guide is in `installer/windows/windows-handoff.md`.
+
 The smoke test verifies more than `/health`:
 - the embedded FastAPI server responds
 - root UI assets load

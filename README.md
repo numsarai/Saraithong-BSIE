@@ -111,6 +111,9 @@ On macOS this produces `dist/BSIE.app`. If `create-dmg` is installed, use:
 bash build.sh --dmg
 ```
 
+For a Windows machine handoff or fresh Windows setup, see
+[`/Users/saraithong/Documents/bsie/installer/windows/windows-handoff.md`](/Users/saraithong/Documents/bsie/installer/windows/windows-handoff.md).
+
 ---
 
 ## Documentation Map

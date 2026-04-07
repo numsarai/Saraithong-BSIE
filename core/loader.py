@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Union
 
-from paths import CONFIG_DIR
+from paths import BUILTIN_CONFIG_DIR, CONFIG_DIR
 
 import pandas as pd
 from core.column_detector import _norm, best_match_for_aliases, get_field_aliases
@@ -111,11 +111,18 @@ def load_config(bank_key: str) -> dict:
     -------
     dict – parsed JSON config
     """
-    config_path = CONFIG_DIR / f"{bank_key.lower()}.json"
-    if not config_path.exists():
-        raise FileNotFoundError(f"Bank config not found: {config_path}")
-    with config_path.open(encoding="utf-8") as f:
-        return json.load(f)
+    config_name = f"{bank_key.lower()}.json"
+    search_paths = (
+        CONFIG_DIR / config_name,
+        BUILTIN_CONFIG_DIR / config_name,
+    )
+
+    for config_path in search_paths:
+        if config_path.exists():
+            with config_path.open(encoding="utf-8") as f:
+                return json.load(f)
+
+    raise FileNotFoundError(f"Bank config not found: {search_paths[0]}")
 
 
 def load_excel(

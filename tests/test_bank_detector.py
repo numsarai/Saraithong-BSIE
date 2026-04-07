@@ -1,4 +1,5 @@
 """Regression tests for weighted bank auto-detection."""
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -87,6 +88,50 @@ def test_analyze_file_uses_weighted_bank_detection(tmp_path):
     result = analyze_file(str(workbook), configs={})
 
     assert result["detected_bank"] == "scb"
+
+
+def test_load_config_prefers_custom_override(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    builtin_dir = tmp_path / "builtin"
+    config_dir.mkdir()
+    builtin_dir.mkdir()
+
+    (config_dir / "kbank.json").write_text(
+        json.dumps({"bank_name": "KBANK CUSTOM", "header_row": 7}),
+        encoding="utf-8",
+    )
+    (builtin_dir / "kbank.json").write_text(
+        json.dumps({"bank_name": "KBANK BUILTIN", "header_row": 0}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("core.loader.CONFIG_DIR", config_dir)
+    monkeypatch.setattr("core.loader.BUILTIN_CONFIG_DIR", builtin_dir)
+
+    cfg = load_config("kbank")
+
+    assert cfg["bank_name"] == "KBANK CUSTOM"
+    assert cfg["header_row"] == 7
+
+
+def test_load_config_falls_back_to_builtin_when_user_config_missing(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    builtin_dir = tmp_path / "builtin"
+    config_dir.mkdir()
+    builtin_dir.mkdir()
+
+    (builtin_dir / "kbank.json").write_text(
+        json.dumps({"bank_name": "KBANK BUILTIN", "header_row": 1}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("core.loader.CONFIG_DIR", config_dir)
+    monkeypatch.setattr("core.loader.BUILTIN_CONFIG_DIR", builtin_dir)
+
+    cfg = load_config("kbank")
+
+    assert cfg["bank_name"] == "KBANK BUILTIN"
+    assert cfg["header_row"] == 1
 
 
 def test_detect_bank_matches_real_sample_workbooks():

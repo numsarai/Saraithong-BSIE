@@ -189,6 +189,63 @@ export async function generateCaseReport(accounts: string[], analyst = 'analyst'
   URL.revokeObjectURL(url)
 }
 
+export async function getAccountProfile(accountId: string) {
+  const r = await fetch(`/api/accounts/${accountId}/profile`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAnnotations(nodeId?: string) {
+  const qs = nodeId ? `?node_id=${nodeId}` : ''
+  const r = await fetch(`/api/annotations${qs}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function createAnnotation(nodeId: string, content: string, tag = '', createdBy = 'analyst') {
+  const r = await fetch('/api/annotations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ node_id: nodeId, content, tag, type: tag ? 'tag' : 'note', created_by: createdBy }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function deleteAnnotation(annotationId: string) {
+  const r = await fetch(`/api/annotations/${annotationId}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function listWorkspaces() {
+  const r = await fetch('/api/workspaces')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function saveWorkspace(data: Record<string, any>) {
+  const r = await fetch('/api/workspaces', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function loadWorkspace(workspaceId: string) {
+  const r = await fetch(`/api/workspaces/${workspaceId}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function deleteWorkspace(workspaceId: string) {
+  const r = await fetch(`/api/workspaces/${workspaceId}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function getAccountFlows(account: string) {
   const r = await fetch(`/api/fund-flow/${account}`)
   if (!r.ok) throw new Error(await r.text())

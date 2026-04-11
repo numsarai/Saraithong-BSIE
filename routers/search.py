@@ -67,6 +67,59 @@ async def api_account_detail(account_id: str):
     return JSONResponse(payload)
 
 
+@router.get("/accounts/{account_id}/profile")
+async def api_account_profile(account_id: str):
+    """Unified entity profile — all data about an account in one response."""
+    from persistence.models import Account, Alert, GraphAnnotation
+    from sqlalchemy import func, select as sa_select
+    from services.fund_flow_service import get_account_flows
+
+    with get_db_session() as session:
+        acct = session.get(Account, account_id)
+        if not acct:
+            raise HTTPException(404, "Account not found")
+        norm = acct.normalized_account_number or ""
+
+        # Stats
+        txn_count = session.scalar(
+            sa_select(func.count(Transaction.id)).where(Transaction.account_id == account_id)
+        ) or 0
+        total_in = float(session.scalar(
+            sa_select(func.sum(func.abs(Transaction.amount)))
+            .where(Transaction.account_id == account_id, Transaction.direction == "IN")
+        ) or 0)
+        total_out = float(session.scalar(
+            sa_select(func.sum(func.abs(Transaction.amount)))
+            .where(Transaction.account_id == account_id, Transaction.direction == "OUT")
+        ) or 0)
+
+        # Flows
+        flows = get_account_flows(session, norm)
+
+        # Alerts
+        alerts = session.scalars(
+            sa_select(Alert).where(Alert.account_id == account_id).order_by(Alert.created_at.desc()).limit(20)
+        ).all()
+        alert_items = [{"id": a.id, "severity": a.severity, "rule_type": a.rule_type, "summary": a.summary, "status": a.status} for a in alerts]
+
+        # Annotations
+        anns = session.scalars(
+            sa_select(GraphAnnotation).where(GraphAnnotation.node_id == norm).order_by(GraphAnnotation.created_at.desc())
+        ).all()
+        ann_items = [{"id": a.id, "type": a.annotation_type, "content": a.content, "tag": a.tag, "created_by": a.created_by, "created_at": str(a.created_at)} for a in anns]
+
+    return JSONResponse({
+        "account": {
+            "id": acct.id, "account_number": norm, "holder_name": acct.account_holder_name or "",
+            "bank": acct.bank_name or "", "status": acct.status,
+        },
+        "stats": {"txn_count": txn_count, "total_in": round(total_in, 2), "total_out": round(total_out, 2), "circulation": round(total_in + total_out, 2)},
+        "flows": {"inbound": flows.get("inbound", [])[:20], "outbound": flows.get("outbound", [])[:20]},
+        "alerts": alert_items,
+        "annotations": ann_items,
+    })
+
+
 @router.get("/transactions/search")
 async def api_search_transactions(
     q: str = "",

@@ -310,6 +310,21 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class GraphAnnotation(Base):
+    __tablename__ = "graph_annotations"
+    __table_args__ = (
+        Index("ix_graph_annotations_node_id", "node_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    node_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    annotation_type: Mapped[str] = mapped_column(String(32), default="note", nullable=False)
+    content: Mapped[str | None] = mapped_column(Text)
+    tag: Mapped[str | None] = mapped_column(String(64))
+    created_by: Mapped[str] = mapped_column(String(255), default="analyst", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class Alert(Base):
     __tablename__ = "alerts"
     __table_args__ = (

@@ -42,7 +42,9 @@ from routers.admin import router as admin_router
 from routers.case_tags import router as case_tags_router
 from routers.overrides import router as overrides_router
 from routers.banks import router as banks_router
+from routers.annotations import router as annotations_router
 from routers.auth import router as auth_router
+from routers.workspace import router as workspace_router
 from routers.alerts import router as alerts_router
 from routers.analytics import router as analytics_router
 from routers.dashboard import router as dashboard_router
@@ -138,6 +140,8 @@ app.include_router(alerts_router)
 app.include_router(analytics_router)
 app.include_router(fund_flow_router)
 app.include_router(reports_router)
+app.include_router(annotations_router)
+app.include_router(workspace_router)
 app.include_router(banks_router)
 app.include_router(exports_router)
 app.include_router(ui_router)  # UI catch-all routes last

@@ -398,6 +398,7 @@
       "timeline": "Timeline",
       "alerts": "Alerts",
       "crossAccount": "Cross-Account",
+      "linkChart": "Link Chart",
       "exports": "Exports"
     },
     "timelineEmpty": "No transaction data available for the selected filters. Try adjusting date range or account.",
@@ -452,6 +453,16 @@
     "confirm": "Confirm",
     "close": "Close",
     "required": "*"
+  },
+  "linkChart": {
+    "title": "Link Chart",
+    "startAccount": "Account number",
+    "explore": "Explore",
+    "minAmount": "Min amount",
+    "selected": "Selected",
+    "expanded": "Expanded",
+    "clickToExpand": "Click to expand neighbors",
+    "hint": "Enter an account number and click Explore to start building the link chart"
   },
   "dashboard": {
     "title": "BSIE Dashboard",

@@ -46,11 +46,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { GraphExplorer } from '@/components/GraphExplorer'
 import { TimelineChart } from '@/components/TimelineChart'
+import { LinkChart } from '@/components/LinkChart'
 import { toast } from 'sonner'
 import { fmt, fmtDate } from '@/lib/utils'
 import { normalizeOperatorName, useStore } from '@/store'
 
-const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'timeline', 'duplicates', 'matches', 'audit', 'graph', 'exports'] as const
+const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'link-chart', 'timeline', 'duplicates', 'matches', 'audit', 'graph', 'exports'] as const
 
 type TabId = (typeof TAB_IDS)[number]
 
@@ -161,6 +162,7 @@ export function InvestigationDesk() {
     { id: 'search' as const, label: t('investigation.tabs.search') },
     { id: 'alerts' as const, label: t('investigation.tabs.alerts') },
     { id: 'cross-account' as const, label: t('investigation.tabs.crossAccount') },
+    { id: 'link-chart' as const, label: t('investigation.tabs.linkChart') },
     { id: 'timeline' as const, label: t('investigation.tabs.timeline') },
     { id: 'duplicates' as const, label: t('investigation.tabs.duplicates') },
     { id: 'matches' as const, label: t('investigation.tabs.matches') },
@@ -1109,6 +1111,10 @@ export function InvestigationDesk() {
             )}
           </Card>
         </div>
+      )}
+
+      {tab === 'link-chart' && (
+        <LinkChart />
       )}
 
       {tab === 'timeline' && (

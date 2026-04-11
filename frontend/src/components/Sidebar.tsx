@@ -9,7 +9,7 @@ import {
   APP_SUBTITLE,
   APP_VERSION,
 } from '@/config/appMeta'
-import { Upload, Search, Settings, Cpu, BarChart2, Building2, FolderTree, Database, Globe } from 'lucide-react'
+import { Upload, Search, Settings, Cpu, BarChart2, Building2, FolderTree, Database, Globe, LayoutDashboard } from 'lucide-react'
 
 export function Sidebar() {
   const { t } = useTranslation()
@@ -119,6 +119,16 @@ export function Sidebar() {
           </div>
         </div>
 
+        <button
+          onClick={() => setPage('dashboard')}
+          className={cn(
+            'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-[13px] text-muted hover:text-accent hover:bg-accent/[0.08] cursor-pointer',
+            page === 'dashboard' && 'bg-accent/[0.13] text-accent font-semibold',
+          )}
+        >
+          <LayoutDashboard size={14} className="shrink-0" />
+          <span>{t('sidebar.nav.dashboard')}</span>
+        </button>
         <label className="mb-3 block px-2">
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">{t('sidebar.operatorLabel')}</div>
           <input

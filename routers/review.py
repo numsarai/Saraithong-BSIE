@@ -4,10 +4,12 @@ routers/review.py
 Review-related API routes extracted from app.py.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from persistence.base import get_db_session
+from persistence.models import Transaction
+from services.audit_service import log_audit
 from persistence.schemas import (
     AccountCorrectionRequest,
     ReviewRequest,
@@ -86,6 +88,35 @@ async def api_review_transaction(transaction_id: str, body: TransactionCorrectio
             raise HTTPException(404, "Transaction not found")
         session.commit()
         return JSONResponse({"status": "ok", "transaction_id": transaction.id, "review_status": transaction.review_status})
+
+
+@router.post("/transactions/{transaction_id}/annotate")
+async def api_annotate_transaction(transaction_id: str, request: Request):
+    """Add or update an analyst note on a transaction."""
+    payload = await request.json()
+    note = str(payload.get("note", ""))
+    reviewer = str(payload.get("reviewer", "analyst"))
+
+    with get_db_session() as session:
+        txn = session.get(Transaction, transaction_id)
+        if not txn:
+            raise HTTPException(404, "Transaction not found")
+        old_note = txn.analyst_note or ""
+        txn.analyst_note = note
+        session.add(txn)
+        log_audit(
+            session,
+            object_type="transaction",
+            object_id=transaction_id,
+            action_type="annotate",
+            field_name="analyst_note",
+            old_value=old_note,
+            new_value=note,
+            changed_by=reviewer,
+            reason="Analyst annotation",
+        )
+        session.commit()
+        return JSONResponse({"status": "ok", "transaction_id": txn.id, "analyst_note": note})
 
 
 @router.get("/accounts/{account_id}/review")

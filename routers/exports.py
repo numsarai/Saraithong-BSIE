@@ -115,6 +115,14 @@ async def api_audit_logs(object_type: str = "", object_id: str = "", limit: int 
         return JSONResponse({"items": list_audit_logs(session, object_type=object_type, object_id=object_id, limit=limit, offset=offset)})
 
 
+@router.get("/audit-trail/{object_type}/{object_id}")
+async def api_audit_trail(object_type: str, object_id: str):
+    """Get full chain of custody / audit trail for a specific object."""
+    with get_db_session() as session:
+        items = list_audit_logs(session, object_type=object_type, object_id=object_id, limit=500, offset=0)
+    return JSONResponse({"object_type": object_type, "object_id": object_id, "items": items, "total": len(items)})
+
+
 @router.get("/learning-feedback")
 async def api_learning_feedback(object_id: str = "", limit: int = 200, offset: int = 0):
     with get_db_session() as session:

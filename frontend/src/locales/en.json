@@ -11,6 +11,7 @@
     "operatorPlaceholder": "Case Analyst",
     "operatorHint": "Used for upload, review, export, and admin audit logs.",
     "nav": {
+      "dashboard": "Dashboard",
       "investigation": "Investigation",
       "bulkIntake": "Bulk Intake",
       "bankManager": "Bank Manager"
@@ -445,5 +446,34 @@
     "confirm": "Confirm",
     "close": "Close",
     "required": "*"
+  },
+  "dashboard": {
+    "title": "BSIE Dashboard",
+    "stats": {
+      "files": "Files",
+      "accounts": "Accounts",
+      "transactions": "Transactions",
+      "alerts": "Alerts"
+    },
+    "flow": {
+      "totalIn": "Total IN",
+      "totalOut": "Total OUT",
+      "circulation": "Circulation"
+    },
+    "recentActivity": {
+      "title": "Recent Activity",
+      "status": "Status",
+      "bank": "Bank",
+      "account": "Account",
+      "date": "Date"
+    },
+    "topAccounts": {
+      "title": "Top 10 Accounts",
+      "account": "Account",
+      "name": "Name",
+      "bank": "Bank",
+      "txnCount": "Transactions"
+    },
+    "noData": "No data available"
   }
 }

@@ -3,7 +3,7 @@ import { evaluateReviewGate } from '@/lib/reviewGate'
 import i18n from '@/i18n'
 
 export type Tab = 'transactions' | 'entities' | 'links'
-export type Page = 'main' | 'bank-manager' | 'bulk-intake' | 'investigation'
+export type Page = 'main' | 'dashboard' | 'bank-manager' | 'bulk-intake' | 'investigation'
 export type Locale = 'th' | 'en'
 export const DEFAULT_OPERATOR_NAME = 'analyst'
 

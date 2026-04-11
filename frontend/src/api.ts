@@ -207,6 +207,28 @@ export async function traceFundPath(from: string, to: string, maxHops = 4) {
   return r.json()
 }
 
+export async function getDashboard() {
+  const r = await fetch('/api/dashboard')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function annotateTransaction(transactionId: string, note: string, reviewer = 'analyst') {
+  const r = await fetch(`/api/transactions/${transactionId}/annotate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note, reviewer }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAuditTrail(objectType: string, objectId: string) {
+  const r = await fetch(`/api/audit-trail/${objectType}/${objectId}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function getFiles() {
   const r = await fetch('/api/files')
   if (!r.ok) throw new Error(await r.text())

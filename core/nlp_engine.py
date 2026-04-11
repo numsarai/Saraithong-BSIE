@@ -44,6 +44,11 @@ _PROMPTPAY_RE = re.compile(
     re.IGNORECASE | re.UNICODE,
 )
 
+# Thai National ID: 13 digits, optionally formatted as X-XXXX-XXXXX-XX-X
+_NATIONAL_ID_RE = re.compile(
+    r'\b\d{1}[-\s]?\d{4}[-\s]?\d{5}[-\s]?\d{2}[-\s]?\d{1}\b'
+)
+
 # Account numbers embedded in text
 _ACCT_GROUPED_RE = re.compile(r'\b\d{3}[-\s]\d{3}[-\s]\d{4}\b')
 _ACCT_PLAIN_RE   = re.compile(r'\b\d{10,12}\b')
@@ -118,6 +123,13 @@ def extract_counterparty(text: str) -> Dict:
     phones = _PHONE_RE.findall(text)
     is_promptpay = bool(_PROMPTPAY_RE.search(text))
 
+    # Detect Thai National IDs (13 digits)
+    national_ids: List[str] = []
+    for m in _NATIONAL_ID_RE.finditer(text):
+        digits = re.sub(r'\D', '', m.group())
+        if len(digits) == 13 and digits not in national_ids:
+            national_ids.append(digits)
+
     # Collect account numbers from text
     accounts: List[str] = []
     for m in _ACCT_GROUPED_RE.finditer(text):
@@ -135,6 +147,7 @@ def extract_counterparty(text: str) -> Dict:
         "thai_names":    thai_names,
         "english_names": en_names,
         "phone_numbers": phones,
+        "national_ids":  national_ids,
         "promptpay":     is_promptpay,
         "accounts":      accounts,
         "best_name":     best_name,
@@ -197,4 +210,5 @@ def enrich_transaction_row(row: dict) -> dict:
     row["nlp_confidence"] = conf
     row["nlp_promptpay"]  = cp["promptpay"]
     row["nlp_accounts"]   = ",".join(cp["accounts"])
+    row["nlp_national_ids"] = ",".join(cp.get("national_ids", []))
     return row

@@ -43,6 +43,7 @@ from routers.case_tags import router as case_tags_router
 from routers.overrides import router as overrides_router
 from routers.banks import router as banks_router
 from routers.alerts import router as alerts_router
+from routers.dashboard import router as dashboard_router
 from routers.reports import router as reports_router
 from routers.fund_flow import router as fund_flow_router
 from routers.exports import router as exports_router
@@ -110,6 +111,7 @@ if _REACT_DIST.exists():
 
 # ── Register routers ─────────────────────────────────────────────────────
 # Order matters: specific paths before parameterized paths.
+app.include_router(dashboard_router)
 app.include_router(ingestion_router)
 app.include_router(bulk_router)
 app.include_router(jobs_router)

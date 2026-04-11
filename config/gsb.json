@@ -1,22 +1,23 @@
 {
   "bank_name": "GSB",
   "sheet_index": 0,
-  "header_row": 3,
+  "header_row": 0,
   "format_type": "standard",
   "currency": "THB",
   "amount_mode": "debit_credit",
   "detection": {
-    "keywords": ["gsb", "government savings", "ออมสิน"],
-    "strong_headers": [],
-    "weak_headers": ["ถอนเงิน", "ฝากเงิน", "รายละเอียด"],
+    "keywords": ["gsb", "government savings", "ออมสิน", "MyMo", "mymo"],
+    "strong_headers": ["ACCOUNT_ID", "TRANSDESC", "END_BAL", "TERMINAL_ID"],
+    "weak_headers": ["ถอนเงิน", "ฝากเงิน", "รายละเอียด", "WITHDRAW", "DEPOSIT"],
+    "body_keywords": ["MyMo", "Smart device deposit", "Transfer SAV", "MyMo Transfer from SAV", "MyMo SAV Deposit", "MyMo Payment from SAV", "ATM CASH DEPOSIT S/A"],
     "negative_headers": ["บัญชีผู้โอน", "หมายเลขบัญชีต้นทาง", "เลขที่บัญชีผู้โอน"]
   },
   "column_mapping": {
     "date":        ["วันที่", "Date", "date", "DATE", "วันที่ทำรายการ", "Transaction Date"],
     "time":        ["เวลา", "Time", "time", "TIME"],
-    "description": ["รายการ", "Description", "description", "DESC", "รายละเอียด", "Narration"],
-    "debit":       ["ถอน", "ถอนเงิน", "เดบิต", "Debit", "debit", "DEBIT", "Withdrawal"],
-    "credit":      ["ฝาก", "ฝากเงิน", "เครดิต", "Credit", "credit", "CREDIT", "Deposit"],
-    "balance":     ["ยอดคงเหลือ", "Balance", "balance", "BALANCE", "จำนวนเงินคงเหลือ"]
+    "description": ["รายการ", "Description", "description", "DESC", "รายละเอียด", "Narration", "TRANSDESC"],
+    "debit":       ["ถอน", "ถอนเงิน", "เดบิต", "Debit", "debit", "DEBIT", "Withdrawal", "WITHDRAW"],
+    "credit":      ["ฝาก", "ฝากเงิน", "เครดิต", "Credit", "credit", "CREDIT", "Deposit", "DEPOSIT"],
+    "balance":     ["ยอดคงเหลือ", "Balance", "balance", "BALANCE", "จำนวนเงินคงเหลือ", "END_BAL"]
   }
 }

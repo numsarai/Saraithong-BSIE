@@ -11,6 +11,11 @@ export function Step1Upload() {
   const [uploading, setUploading] = useState(false)
   const setUploadResult = useStore(s => s.setUploadResult)
   const setStep = useStore(s => s.setStep)
+  const setResults = useStore(s => s.setResults)
+  const setBankKey = useStore(s => s.setBankKey)
+  const setAccount = useStore(s => s.setAccount)
+  const setName = useStore(s => s.setName)
+  const setParserRunId = useStore(s => s.setParserRunId)
   const operatorName = useStore(s => s.operatorName)
 
   const onDrop = useCallback(async (accepted: File[]) => {
@@ -24,6 +29,20 @@ export function Step1Upload() {
     setUploading(true)
     try {
       const data = await uploadFile(file, normalizeOperatorName(operatorName))
+
+      // If file was already processed, skip directly to Step 5 (Results)
+      if (data.already_processed && data.prior_result) {
+        const prior = data.prior_result
+        setBankKey(prior.bank_key || '')
+        setAccount(prior.account || '')
+        setName(prior.subject_name || '')
+        setParserRunId(prior.parser_run_id || null)
+        setResults({ account: prior.account, meta: prior })
+        setStep(5)
+        toast.success(t('step1.alreadyProcessed'))
+        return
+      }
+
       setUploadResult(data, file.name)
       setStep(2)
       toast.success(t('step1.uploadSuccess'))
@@ -32,7 +51,7 @@ export function Step1Upload() {
     } finally {
       setUploading(false)
     }
-  }, [operatorName, setUploadResult, setStep, t])
+  }, [operatorName, setUploadResult, setStep, setBankKey, setAccount, setName, setParserRunId, setResults, t])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

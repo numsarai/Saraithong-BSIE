@@ -71,8 +71,39 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
     save_path = Path(persisted["stored_path"])
     job_id = str(uuid.uuid4())
 
-    # If file was reused (exact duplicate), still allow re-analysis
+    # If file was reused and already processed, offer to skip to results
     is_reused = persisted.get("reused", False)
+    if is_reused:
+        with get_db_session() as session:
+            from persistence.models import ParserRun, StatementBatch
+            from sqlalchemy import select as sa_select
+            # Find completed parser run for this file
+            completed_run = session.scalars(
+                sa_select(ParserRun).where(
+                    ParserRun.file_id == persisted["file_id"],
+                    ParserRun.status == "done",
+                ).order_by(ParserRun.finished_at.desc())
+            ).first()
+            if completed_run and completed_run.summary_json:
+                summary = completed_run.summary_json
+                return JSONResponse({
+                    "job_id": "",
+                    "file_id": persisted["file_id"],
+                    "temp_file_path": str(save_path),
+                    "file_name": file.filename,
+                    "duplicate_file_status": "exact_duplicate",
+                    "prior_ingestions": persisted.get("prior_ingestions", []),
+                    "already_processed": True,
+                    "prior_result": {
+                        "parser_run_id": completed_run.id,
+                        "account": summary.get("subject_account", ""),
+                        "bank_key": summary.get("bank_key", ""),
+                        "bank_name": summary.get("bank_name", ""),
+                        "subject_name": summary.get("subject_name", ""),
+                        "transaction_count": summary.get("transaction_count", 0),
+                        "output_dir": summary.get("output_dir", ""),
+                    },
+                })
 
     try:
         if save_path.suffix.lower() == ".ofx":

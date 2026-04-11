@@ -29,7 +29,8 @@
     "toSelect": "to select",
     "fileTypes": ".xlsx / .xls / .ofx / .pdf / .jpg / .png \u00b7 Investigation-ready import",
     "fileTypeError": "Only .xlsx, .xls, .ofx, .pdf, .jpg, .jpeg, .png, or .bmp files are accepted",
-    "uploadSuccess": "File uploaded and analysed"
+    "uploadSuccess": "File uploaded and analysed",
+    "alreadyProcessed": "This file was already processed — showing previous results"
   },
   "step2": {
     "title": "Detect & Map Columns",

@@ -295,6 +295,21 @@ class AdminSetting(Base):
     updated_by: Mapped[str] = mapped_column(String(255), default="system", nullable=False)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    username: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True)
+    hashed_password: Mapped[str | None] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(32), default="analyst", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    oauth_provider: Mapped[str | None] = mapped_column(String(64))
+    oauth_id: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Alert(Base):
     __tablename__ = "alerts"
     __table_args__ = (

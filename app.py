@@ -42,7 +42,9 @@ from routers.admin import router as admin_router
 from routers.case_tags import router as case_tags_router
 from routers.overrides import router as overrides_router
 from routers.banks import router as banks_router
+from routers.auth import router as auth_router
 from routers.alerts import router as alerts_router
+from routers.analytics import router as analytics_router
 from routers.dashboard import router as dashboard_router
 from routers.reports import router as reports_router
 from routers.fund_flow import router as fund_flow_router
@@ -75,6 +77,15 @@ async def lifespan(app: FastAPI):
         migrate_json_to_db()
     except Exception as e:
         logger.warning(f"Migration step encountered an issue (non-fatal): {e}")
+    # Ensure default admin user exists
+    try:
+        from services.auth_service import ensure_default_admin
+        from persistence.base import get_db_session as _get_session
+        with _get_session() as _session:
+            ensure_default_admin(_session)
+    except Exception:
+        pass
+
     auto_backup_stop = threading.Event()
     auto_backup_thread = threading.Thread(
         target=run_auto_backup_loop,
@@ -111,6 +122,7 @@ if _REACT_DIST.exists():
 
 # ── Register routers ─────────────────────────────────────────────────────
 # Order matters: specific paths before parameterized paths.
+app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(ingestion_router)
 app.include_router(bulk_router)
@@ -123,6 +135,7 @@ app.include_router(admin_router)
 app.include_router(case_tags_router)
 app.include_router(overrides_router)
 app.include_router(alerts_router)
+app.include_router(analytics_router)
 app.include_router(fund_flow_router)
 app.include_router(reports_router)
 app.include_router(banks_router)

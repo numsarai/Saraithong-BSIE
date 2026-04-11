@@ -1,0 +1,145 @@
+"""
+auth_service.py
+---------------
+User authentication — JWT tokens, password hashing, user management.
+OAuth support via provider/id fields (callback handling separate).
+"""
+from __future__ import annotations
+
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+import hashlib
+import secrets
+
+from jose import jwt, JWTError
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from persistence.base import utcnow
+from persistence.models import User
+
+SECRET_KEY = os.getenv("BSIE_JWT_SECRET", "bsie-dev-secret-change-in-production")
+ALGORITHM = "HS256"
+TOKEN_EXPIRE_MINUTES = int(os.getenv("BSIE_TOKEN_EXPIRE_MINUTES", "480"))  # 8 hours default
+
+
+def hash_password(password: str) -> str:
+    """Hash password with salted SHA-256."""
+    salt = secrets.token_hex(16)
+    h = hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
+    return f"{salt}${h}"
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    """Verify a salted SHA-256 password hash."""
+    if "$" not in hashed:
+        return False
+    salt, expected = hashed.split("$", 1)
+    h = hashlib.sha256(f"{salt}:{plain}".encode()).hexdigest()
+    return h == expected
+
+
+def create_token(data: dict[str, Any], expires_minutes: int = TOKEN_EXPIRE_MINUTES) -> str:
+    payload = {**data, "exp": datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_token(token: str) -> dict[str, Any] | None:
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+
+
+def create_user(
+    session: Session,
+    *,
+    username: str,
+    password: str = "",
+    email: str = "",
+    role: str = "analyst",
+    oauth_provider: str = "",
+    oauth_id: str = "",
+) -> User:
+    """Create a new user account."""
+    user = User(
+        username=username,
+        email=email or None,
+        hashed_password=hash_password(password) if password else None,
+        role=role,
+        is_active=True,
+        oauth_provider=oauth_provider or None,
+        oauth_id=oauth_id or None,
+        created_at=utcnow(),
+    )
+    session.add(user)
+    session.commit()
+    return user
+
+
+def authenticate_user(session: Session, username: str, password: str) -> User | None:
+    """Verify username/password and return user if valid."""
+    user = session.scalars(select(User).where(User.username == username)).first()
+    if not user or not user.hashed_password:
+        return None
+    if not verify_password(password, user.hashed_password):
+        return None
+    user.last_login_at = utcnow()
+    session.add(user)
+    session.commit()
+    return user
+
+
+def get_user_by_token(session: Session, token: str) -> User | None:
+    """Decode JWT token and return the corresponding user."""
+    payload = decode_token(token)
+    if not payload:
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    return session.get(User, user_id)
+
+
+def list_users(session: Session) -> list[dict[str, Any]]:
+    """List all users (admin function)."""
+    users = session.scalars(select(User).order_by(User.created_at.asc())).all()
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email or "",
+            "role": u.role,
+            "is_active": u.is_active,
+            "oauth_provider": u.oauth_provider or "",
+            "created_at": str(u.created_at),
+            "last_login_at": str(u.last_login_at) if u.last_login_at else None,
+        }
+        for u in users
+    ]
+
+
+def ensure_default_admin(session: Session) -> None:
+    """Create a default admin user if no users exist."""
+    count = session.scalar(select(User.id).limit(1))
+    if count:
+        return
+    create_user(
+        session,
+        username="admin",
+        password="admin",
+        email="admin@bsie.local",
+        role="admin",
+    )
+
+
+def serialize_user(user: User) -> dict[str, Any]:
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email or "",
+        "role": user.role,
+        "is_active": user.is_active,
+    }

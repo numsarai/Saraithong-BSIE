@@ -143,3 +143,32 @@ def serialize_user(user: User) -> dict[str, Any]:
         "role": user.role,
         "is_active": user.is_active,
     }
+
+
+# ── FastAPI Dependency for protected routes ──────────────────────────────
+
+AUTH_REQUIRED = os.getenv("BSIE_AUTH_REQUIRED", "").strip().lower() in ("1", "true", "yes")
+
+
+async def get_current_user_optional(request: Any) -> User | None:
+    """Extract current user from JWT if present. Returns None if auth disabled or no token."""
+    if not AUTH_REQUIRED:
+        return None
+    auth = getattr(request, "headers", {}).get("authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth[7:]
+    from persistence.base import get_db_session
+    with get_db_session() as session:
+        return get_user_by_token(session, token)
+
+
+async def require_auth(request: Any) -> User | None:
+    """Dependency that enforces authentication when BSIE_AUTH_REQUIRED=true."""
+    if not AUTH_REQUIRED:
+        return None  # Auth disabled — allow all
+    user = await get_current_user_optional(request)
+    if not user:
+        from fastapi import HTTPException
+        raise HTTPException(401, "Authentication required. Set BSIE_AUTH_REQUIRED=false to disable.")
+    return user

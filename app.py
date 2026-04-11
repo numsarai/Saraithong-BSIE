@@ -14,8 +14,12 @@ import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+import time as _time
+
+from fastapi import FastAPI, Request as _Request, Response as _Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # ── Path setup ───────────────────────────────────────────────────────────
 _BASE = Path(__file__).parent
@@ -108,6 +112,28 @@ app = FastAPI(
     version="3.0.1",
     root_path="",
     lifespan=lifespan,
+)
+
+# Request timing middleware
+class TimingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: _Request, call_next):
+        start = _time.time()
+        response: _Response = await call_next(request)
+        duration_ms = round((_time.time() - start) * 1000, 1)
+        response.headers["X-Process-Time-Ms"] = str(duration_ms)
+        if duration_ms > 1000:
+            logger.warning("Slow request: %s %s took %.0fms", request.method, request.url.path, duration_ms)
+        return response
+
+app.add_middleware(TimingMiddleware)
+
+# CORS — allow frontend dev server and same-origin production
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:6776", "http://127.0.0.1:6776", "http://localhost:8757"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Ensure the compatibility and investigation schemas exist even when the app

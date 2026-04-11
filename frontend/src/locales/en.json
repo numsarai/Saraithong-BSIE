@@ -30,7 +30,12 @@
     "fileTypes": ".xlsx / .xls / .ofx / .pdf / .jpg / .png \u00b7 Investigation-ready import",
     "fileTypeError": "Only .xlsx, .xls, .ofx, .pdf, .jpg, .jpeg, .png, or .bmp files are accepted",
     "uploadSuccess": "File uploaded and analysed",
-    "alreadyProcessed": "This file was already processed — showing previous results"
+    "alreadyProcessed": "This file was already processed — showing previous results",
+    "reprocessing": "Proceeding with re-analysis of this file",
+    "duplicateFound": "This file was already processed",
+    "duplicateDescription": "This file has been uploaded and processed before. You can view the previous results or re-process with new column mapping.",
+    "viewPriorResults": "View Previous Results",
+    "reprocessFile": "Re-process (new mapping)"
   },
   "step2": {
     "title": "Detect & Map Columns",

@@ -1,14 +1,25 @@
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { FileSpreadsheet } from 'lucide-react'
+import { FileSpreadsheet, RotateCcw, FastForward } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { uploadFile } from '@/api'
 import { normalizeOperatorName, useStore } from '@/store'
+import { Button } from '@/components/ui/button'
+
+interface PriorResult {
+  parser_run_id: string
+  account: string
+  bank_key: string
+  bank_name: string
+  subject_name: string
+  transaction_count: number
+}
 
 export function Step1Upload() {
   const { t } = useTranslation()
   const [uploading, setUploading] = useState(false)
+  const [priorChoice, setPriorChoice] = useState<{ data: any; prior: PriorResult; fileName: string } | null>(null)
   const setUploadResult = useStore(s => s.setUploadResult)
   const setStep = useStore(s => s.setStep)
   const setResults = useStore(s => s.setResults)
@@ -30,16 +41,10 @@ export function Step1Upload() {
     try {
       const data = await uploadFile(file, normalizeOperatorName(operatorName))
 
-      // If file was already processed, skip directly to Step 5 (Results)
+      // If file was already processed, let user choose
       if (data.already_processed && data.prior_result) {
-        const prior = data.prior_result
-        setBankKey(prior.bank_key || '')
-        setAccount(prior.account || '')
-        setName(prior.subject_name || '')
-        setParserRunId(prior.parser_run_id || null)
-        setResults({ account: prior.account, meta: prior })
-        setStep(5)
-        toast.success(t('step1.alreadyProcessed'))
+        setPriorChoice({ data, prior: data.prior_result, fileName: file.name })
+        setUploading(false)
         return
       }
 
@@ -51,7 +56,29 @@ export function Step1Upload() {
     } finally {
       setUploading(false)
     }
-  }, [operatorName, setUploadResult, setStep, setBankKey, setAccount, setName, setParserRunId, setResults, t])
+  }, [operatorName, setUploadResult, setStep, t])
+
+  const handleViewPrior = () => {
+    if (!priorChoice) return
+    const prior = priorChoice.prior
+    setBankKey(prior.bank_key || '')
+    setAccount(prior.account || '')
+    setName(prior.subject_name || '')
+    setParserRunId(prior.parser_run_id || null)
+    setResults({ account: prior.account, meta: prior })
+    setStep(5)
+    setPriorChoice(null)
+    toast.success(t('step1.alreadyProcessed'))
+  }
+
+  const handleReprocess = () => {
+    if (!priorChoice) return
+    // Use existing upload data but proceed to Step 2 for re-mapping and re-processing
+    setUploadResult(priorChoice.data, priorChoice.fileName)
+    setStep(2)
+    setPriorChoice(null)
+    toast.success(t('step1.reprocessing'))
+  }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -100,6 +127,32 @@ export function Step1Upload() {
           </div>
         )}
       </div>
+
+      {/* Prior result choice dialog */}
+      {priorChoice && (
+        <div className="mt-6 rounded-xl border border-accent/30 bg-accent/[0.06] p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-bold text-text">{t('step1.duplicateFound')}</h3>
+            <p className="text-xs text-muted mt-1">{t('step1.duplicateDescription')}</p>
+          </div>
+          <div className="rounded-lg bg-surface2 p-3 text-xs space-y-1">
+            <div className="flex gap-2"><span className="text-muted w-16">{t('step3.account')}:</span><span className="text-text font-mono">{priorChoice.prior.account}</span></div>
+            <div className="flex gap-2"><span className="text-muted w-16">{t('step3.name')}:</span><span className="text-text">{priorChoice.prior.subject_name}</span></div>
+            <div className="flex gap-2"><span className="text-muted w-16">{t('step3.bank')}:</span><span className="text-text">{priorChoice.prior.bank_name}</span></div>
+            <div className="flex gap-2"><span className="text-muted w-16">{t('results.stats.totalTxn')}:</span><span className="text-text">{priorChoice.prior.transaction_count?.toLocaleString()}</span></div>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="success" onClick={handleViewPrior}>
+              <FastForward size={14} />
+              {t('step1.viewPriorResults')}
+            </Button>
+            <Button variant="ghost" onClick={handleReprocess}>
+              <RotateCcw size={14} />
+              {t('step1.reprocessFile')}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -73,7 +73,7 @@ describe('Step2Map analyst gate', () => {
 
     render(<Step2Map />)
 
-    const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
+    const continueButton = await screen.findByRole('button', { name: /^confirm mapping$/i })
     expect(continueButton).toBeDisabled()
     expect(screen.getByText(/analyst review required before step 3/i)).toBeInTheDocument()
     expect(screen.getAllByAltText('SCB logo').length).toBeGreaterThan(0)
@@ -102,7 +102,7 @@ describe('Step2Map analyst gate', () => {
 
     render(<Step2Map />)
 
-    const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
+    const continueButton = await screen.findByRole('button', { name: /^confirm mapping$/i })
     const mappingConfirmButton = screen.getByRole('button', { name: /confirm mapping readiness/i })
     const selects = screen.getAllByRole('combobox')
 
@@ -134,7 +134,7 @@ describe('Step2Map analyst gate', () => {
 
     render(<Step2Map />)
 
-    const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
+    const continueButton = await screen.findByRole('button', { name: /^confirm mapping$/i })
     fireEvent.click(screen.getByRole('button', { name: /confirm selected bank/i }))
 
     await waitFor(() => expect(continueButton).toBeEnabled())
@@ -142,7 +142,7 @@ describe('Step2Map analyst gate', () => {
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'ktb' } })
 
     await waitFor(() => expect(continueButton).toBeDisabled())
-    expect(screen.getByText('Required')).toBeInTheDocument()
+    expect(screen.getAllByText('Required').length).toBeGreaterThan(0)
   })
 
   it('clears mapping review when a critical mapping changes after confirmation', async () => {
@@ -168,7 +168,7 @@ describe('Step2Map analyst gate', () => {
 
     render(<Step2Map />)
 
-    const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
+    const continueButton = await screen.findByRole('button', { name: /^confirm mapping$/i })
     expect(continueButton).toBeEnabled()
     expect(screen.getByRole('button', { name: /mapping confirmed/i })).toBeInTheDocument()
 
@@ -188,7 +188,7 @@ describe('Step2Map analyst gate', () => {
     seedUpload()
     render(<Step2Map />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /continue to configure/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm mapping$/i }))
 
     await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
     expect(confirmMapping).toHaveBeenCalledWith(

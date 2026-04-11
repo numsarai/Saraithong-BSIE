@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { normalizeOperatorName, useStore } from '@/store'
 import { confirmMapping, getBanks, learnBank } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -9,20 +10,21 @@ import { evaluateReviewGate } from '@/lib/reviewGate'
 import { toast } from 'sonner'
 import { ChevronLeft, ChevronRight, Wand2, X, BookPlus, ArrowRight, ArrowLeftRight, Building2, Wallet, CircleDashed, FileSearch, BrainCircuit, DatabaseZap, ShieldAlert, ShieldCheck } from 'lucide-react'
 
-const FIELDS = [
-  { key: 'date',                 label: 'Date',                required: true  },
-  { key: 'time',                 label: 'Time',                required: false },
-  { key: 'description',          label: 'Description',         required: true  },
-  { key: 'amount',               label: 'Amount (signed)',      required: false },
-  { key: 'debit',                label: 'Debit / Withdraw',     required: false },
-  { key: 'credit',               label: 'Credit / Deposit',     required: false },
-  { key: 'balance',              label: 'Balance',              required: false },
-  { key: 'channel',              label: 'Channel',              required: false },
-  { key: 'counterparty_account', label: 'Counterparty Account', required: false },
-  { key: 'counterparty_name',    label: 'Counterparty Name',    required: false },
-]
-
 export function Step2Map() {
+  const { t } = useTranslation()
+
+  const FIELDS = [
+    { key: 'date',                 label: t('step2.fields.date'),               required: true  },
+    { key: 'time',                 label: t('step2.fields.time'),               required: false },
+    { key: 'description',          label: t('step2.fields.description'),        required: true  },
+    { key: 'amount',               label: t('step2.fields.amount'),             required: false },
+    { key: 'debit',                label: t('step2.fields.debit'),              required: false },
+    { key: 'credit',               label: t('step2.fields.credit'),             required: false },
+    { key: 'balance',              label: t('step2.fields.balance'),            required: false },
+    { key: 'channel',              label: t('step2.fields.channel'),            required: false },
+    { key: 'counterparty_account', label: t('step2.fields.counterpartyAccount'), required: false },
+    { key: 'counterparty_name',    label: t('step2.fields.counterpartyName'),   required: false },
+  ]
   const {
     detectedBank, allColumns, suggestedMapping, confirmedMapping,
     setConfirmedMapping, sampleRows, bankKey, setBankKey, setStep, confidenceScores,
@@ -168,19 +170,19 @@ export function Step2Map() {
   return (
     <div className="space-y-5 max-w-4xl">
       <div>
-        <h2 className="text-lg font-bold mb-1 text-text">Detect & Map Columns</h2>
-        <p className="text-muted text-sm">Review auto-detected mappings and correct if needed.</p>
+        <h2 className="text-lg font-bold mb-1 text-text">{t('step2.title')}</h2>
+        <p className="text-muted text-sm">{t('step2.description')}</p>
       </div>
 
       {/* Detection summary + Manual Bank Select */}
       <div className="grid grid-cols-3 gap-3">
         <Card className="!p-4 col-span-1">
-          <div className="text-[11px] uppercase text-muted mb-2 font-semibold">Bank</div>
+          <div className="text-[11px] uppercase text-muted mb-2 font-semibold">{t('step2.bank')}</div>
           <div className="mb-3 flex items-center gap-3 rounded-xl border border-border/70 bg-surface2/50 px-3 py-2">
             <BankLogo bank={selectedBank || { key: bankKey, name: detectedBank?.bank || bankKey }} size="md" />
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-text">{selectedBank?.name || detectedBank?.bank || bankKey || 'Unknown bank'}</div>
-              <div className="text-xs text-muted">Selected template for this run</div>
+              <div className="text-xs text-muted">{t('step2.selectedTemplate')}</div>
             </div>
           </div>
           <select
@@ -198,20 +200,20 @@ export function Step2Map() {
           </div>
         </Card>
         <Card className="!p-4">
-          <div className="text-[11px] uppercase text-muted mb-1 font-semibold">Columns Found</div>
+          <div className="text-[11px] uppercase text-muted mb-1 font-semibold">{t('step2.columnsFound')}</div>
           <div className="text-lg font-bold text-text">{allColumns.length}</div>
-          <div className="text-xs text-muted mt-1">{mappedCount} of {FIELDS.length} fields mapped</div>
+          <div className="text-xs text-muted mt-1">{mappedCount} of {FIELDS.length} {t('step2.fieldsMapped')}</div>
         </Card>
         <Card className="!p-4 flex flex-col justify-between">
           <div>
-            <div className="text-[11px] uppercase text-muted mb-1 font-semibold">New Bank?</div>
-            <div className="text-xs text-muted">Map columns then save as a template for future auto-detection.</div>
+            <div className="text-[11px] uppercase text-muted mb-1 font-semibold">{t('step2.newBank')}</div>
+            <div className="text-xs text-muted">{t('step2.newBankHint')}</div>
           </div>
           <Button size="sm" variant="outline" className="mt-3" onClick={() => {
             setLearnForm({ key: '', bank_name: '', format_type: 'standard', amount_mode: 'signed' })
             setLearnOpen(true)
           }}>
-            <BookPlus size={13} />Learn New Bank
+            <BookPlus size={13} />{t('step2.learnNewBank')}
           </Button>
         </Card>
       </div>
@@ -219,16 +221,16 @@ export function Step2Map() {
       <Card>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <CardTitle className="!mb-1">Detection Review</CardTitle>
+            <CardTitle className="!mb-1">{t('step2.detectionReview')}</CardTitle>
             <p className="text-sm text-muted">
               Analyst view of the sheet/header chosen, ranked bank candidates, and the evidence used for auto-detection.
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5 justify-end">
-            <Badge variant="gray">Sheet: {sheetName || 'Unknown'}</Badge>
-            <Badge variant="gray">Header Row: {headerRow + 1}</Badge>
+            <Badge variant="gray">{t('step2.sheet')}: {sheetName || t('step2.unknown')}</Badge>
+            <Badge variant="gray">{t('step2.headerRow')}: {headerRow + 1}</Badge>
             <Badge variant={detectedBank?.ambiguous ? 'red' : confidence >= 75 ? 'green' : 'blue'}>
-              {detectedBank?.ambiguous ? 'Analyst Review Needed' : 'Detection Stable'}
+              {detectedBank?.ambiguous ? t('step2.analystReviewNeeded') : t('step2.detectionStable')}
             </Badge>
           </div>
         </div>
@@ -237,22 +239,22 @@ export function Step2Map() {
           <div className="rounded-xl border border-border bg-surface2/50 p-4">
             <div className="flex items-center gap-2 mb-3 text-text2">
               <FileSearch size={14} className="text-accent" />
-              <span className="text-sm font-semibold">Workbook Context</span>
+              <span className="text-sm font-semibold">{t('step2.workbookContext')}</span>
             </div>
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-muted">Detected Bank</span>
+                <span className="text-muted">{t('step2.detectedBank')}</span>
                 <span className="flex items-center gap-2 font-medium text-text">
                   <BankLogo bank={detectedBankEntry || { key: detectedBankKey, name: detectedBank?.bank || 'UNKNOWN' }} size="sm" />
                   <span>{detectedBank?.bank || 'UNKNOWN'}</span>
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-muted">Confidence</span>
+                <span className="text-muted">{t('step2.confidence')}</span>
                 <span className="font-medium text-text">{confidence}%</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-muted">Observed Layout</span>
+                <span className="text-muted">{t('step2.observedLayout')}</span>
                 <span className="font-medium text-text">{formatEvidenceItem(detectedBank?.evidence?.layout || 'unknown')}</span>
               </div>
             </div>
@@ -261,7 +263,7 @@ export function Step2Map() {
                 <div className="rounded-lg border border-success/25 bg-success/[0.06] p-3">
                   <div className="flex items-center gap-2 text-xs font-semibold text-text2">
                     <BrainCircuit size={13} className="text-success" />
-                    <span>Bank fingerprint matched</span>
+                    <span>{t('step2.bankFingerprintMatched')}</span>
                   </div>
                   <div className="mt-1 text-xs text-muted">
                     {bankMemoryMatch.bank_key} via {formatEvidenceItem(bankMemoryMatch.match_type || 'memory')} ({Math.round(Number(bankMemoryMatch.match_score || 0) * 100)}%)
@@ -272,7 +274,7 @@ export function Step2Map() {
                 <div className="rounded-lg border border-accent/25 bg-accent/[0.06] p-3">
                   <div className="flex items-center gap-2 text-xs font-semibold text-text2">
                     <DatabaseZap size={13} className="text-accent" />
-                    <span>Column mapping memory matched</span>
+                    <span>{t('step2.columnMappingMemoryMatched')}</span>
                   </div>
                   <div className="mt-1 text-xs text-muted">
                     Profile {memoryMatch.profile_id} reused from {memoryMatch.bank} ({memoryMatch.usage_count} prior uses)
@@ -281,7 +283,7 @@ export function Step2Map() {
               )}
               {!bankMemoryMatch && !memoryMatch && (
                 <div className="rounded-lg border border-border/70 bg-surface p-3 text-xs text-muted">
-                  No prior memory hit. Detection is based on workbook structure and bank signatures only.
+                  {t('step2.noMemoryHit')}
                 </div>
               )}
             </div>
@@ -290,7 +292,7 @@ export function Step2Map() {
           <div className="rounded-xl border border-border bg-surface2/50 p-4">
             <div className="flex items-center gap-2 mb-3 text-text2">
               <ArrowLeftRight size={14} className="text-accent" />
-              <span className="text-sm font-semibold">Top Candidates</span>
+              <span className="text-sm font-semibold">{t('step2.topCandidates')}</span>
             </div>
             <div className="space-y-2">
               {rankedCandidates.map((candidate: { key: string; name: string; logo_url: string; score: number; selected: boolean }) => (
@@ -533,7 +535,7 @@ export function Step2Map() {
                 return (
                   <tr key={key} className="border-b border-border/50 hover:bg-surface2/50 transition-colors">
                     <td className="py-2.5 px-3 font-medium text-text2">
-                      {label}{required && <span className="text-danger ml-1">*</span>}
+                      {label}{required && <span className="text-danger ml-1">{t('step2.required')}</span>}
                     </td>
                     <td className="py-2.5 px-3">
                       <select
@@ -541,7 +543,7 @@ export function Step2Map() {
                         onChange={e => update(key, e.target.value)}
                         className="bg-surface2 border border-border rounded-lg px-2 py-1 text-sm text-text w-full max-w-[220px] focus:border-accent outline-none cursor-pointer"
                       >
-                        <option value="">— None —</option>
+                        <option value="">{t('step2.unmapped')}</option>
                         {allColumns.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </td>
@@ -600,7 +602,7 @@ export function Step2Map() {
           <ChevronLeft size={14} />Back
         </Button>
         <Button onClick={handleConfirm} disabled={saving || !canProceedToConfig}>
-          {saving ? 'Saving…' : <><ChevronRight size={14} />Continue to Configure</>}
+          {saving ? t('step2.confirming') : <><ChevronRight size={14} />{t('step2.confirmMapping')}</>}
         </Button>
       </div>
 

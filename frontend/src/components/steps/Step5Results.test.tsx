@@ -150,18 +150,18 @@ describe('Step5Results date formatting', () => {
     expect(screen.getAllByText('FAILED').length).toBeGreaterThan(0)
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'entities' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Entities' }))
     })
     expect(await screen.findByText('01 03 2026')).toBeInTheDocument()
     expect(screen.getByText('11 03 2026')).toBeInTheDocument()
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'links' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Links' }))
     })
     expect(await screen.findByText('05 03 2026')).toBeInTheDocument()
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'transactions' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Transactions' }))
     })
     expect(screen.getByText(/analyst · 31 03 2026/i)).toBeInTheDocument()
   })

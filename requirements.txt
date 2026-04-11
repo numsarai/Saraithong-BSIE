@@ -15,6 +15,10 @@ aiofiles>=23.0.0
 # Fuzzy matching for column detection
 rapidfuzz>=3.0.0
 
+# PDF / OCR
+pdfplumber>=0.10.0
+easyocr>=1.7.0
+
 # Desktop packaging
 pystray>=0.19
 Pillow>=10.0

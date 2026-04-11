@@ -1,6 +1,7 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   createDatabaseBackup,
   createExportJob,
@@ -32,29 +33,26 @@ import {
   reviewMatch,
   reviewTransaction,
   searchTransactionRecords,
+  getTimelineAggregate,
+  getAlerts,
+  getAlertSummary,
+  reviewAlert as reviewAlertApi,
+  getAccountFlows,
+  getMatchedTransactions,
+  traceFundPath,
 } from '@/api'
 import { Card, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { GraphExplorer } from '@/components/GraphExplorer'
+import { TimelineChart } from '@/components/TimelineChart'
 import { toast } from 'sonner'
 import { fmt, fmtDate } from '@/lib/utils'
 import { normalizeOperatorName, useStore } from '@/store'
 
-const TABS = [
-  { id: 'database', label: 'Database' },
-  { id: 'files', label: 'Files' },
-  { id: 'runs', label: 'Parser Runs' },
-  { id: 'accounts', label: 'Accounts' },
-  { id: 'search', label: 'Transactions' },
-  { id: 'duplicates', label: 'Duplicates' },
-  { id: 'matches', label: 'Matches' },
-  { id: 'audit', label: 'Audit' },
-  { id: 'graph', label: 'Graph Analysis' },
-  { id: 'exports', label: 'Exports' },
-] as const
+const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'timeline', 'duplicates', 'matches', 'audit', 'graph', 'exports'] as const
 
-type TabId = (typeof TABS)[number]['id']
+type TabId = (typeof TAB_IDS)[number]
 
 type TransactionFilters = {
   q: string
@@ -83,13 +81,6 @@ const INITIAL_FILTERS: TransactionFilters = {
   file_id: '',
   parser_run_id: '',
 }
-
-const AUDIT_QUICK_FILTERS = [
-  { value: '', label: 'All Audit' },
-  { value: 'learning_feedback', label: 'Learning Feedback' },
-  { value: 'account', label: 'Account Reviews' },
-  { value: 'transaction', label: 'Transaction Reviews' },
-] as const
 
 function formatValue(value: any) {
   if (value === null || value === undefined || value === '') return '—'
@@ -160,6 +151,31 @@ function SelectInput(props: SelectHTMLAttributes<HTMLSelectElement>) {
 }
 
 export function InvestigationDesk() {
+  const { t } = useTranslation()
+
+  const TABS = [
+    { id: 'database' as const, label: t('investigation.tabs.database') },
+    { id: 'files' as const, label: t('investigation.tabs.files') },
+    { id: 'runs' as const, label: t('investigation.tabs.runs') },
+    { id: 'accounts' as const, label: t('investigation.tabs.accounts') },
+    { id: 'search' as const, label: t('investigation.tabs.search') },
+    { id: 'alerts' as const, label: t('investigation.tabs.alerts') },
+    { id: 'cross-account' as const, label: t('investigation.tabs.crossAccount') },
+    { id: 'timeline' as const, label: t('investigation.tabs.timeline') },
+    { id: 'duplicates' as const, label: t('investigation.tabs.duplicates') },
+    { id: 'matches' as const, label: t('investigation.tabs.matches') },
+    { id: 'audit' as const, label: t('investigation.tabs.audit') },
+    { id: 'graph' as const, label: t('investigation.tabs.graph') },
+    { id: 'exports' as const, label: t('investigation.tabs.exports') },
+  ]
+
+  const AUDIT_QUICK_FILTERS = [
+    { value: '', label: t('investigation.auditFilters.all') },
+    { value: 'learning_feedback', label: t('investigation.auditFilters.learningFeedback') },
+    { value: 'account', label: t('investigation.auditFilters.accountReviews') },
+    { value: 'transaction', label: t('investigation.auditFilters.transactionReviews') },
+  ]
+
   const operatorName = useStore(s => s.operatorName)
   const resolvedOperatorName = normalizeOperatorName(operatorName)
   const defaultCorrectionReason = `${resolvedOperatorName} correction`
@@ -178,6 +194,10 @@ export function InvestigationDesk() {
   const [selectedTransactionId, setSelectedTransactionId] = useState('')
   const [selectedBackupFilename, setSelectedBackupFilename] = useState('')
   const [adminNote, setAdminNote] = useState('')
+  const [crossAccountSelected, setCrossAccountSelected] = useState('')
+  const [crossAccountTarget, setCrossAccountTarget] = useState('')
+  const [pathFrom, setPathFrom] = useState('')
+  const [pathTo, setPathTo] = useState('')
   const [backupEnabled, setBackupEnabled] = useState(false)
   const [backupIntervalHours, setBackupIntervalHours] = useState('24')
   const [backupFormat, setBackupFormat] = useState('json')
@@ -281,6 +301,54 @@ export function InvestigationDesk() {
     queryFn: () => getGraphNeo4jStatus(),
     enabled: tab === 'graph',
   })
+  const alertsQuery = useQuery({
+    queryKey: ['investigation', 'alerts'],
+    queryFn: () => getAlerts({ limit: 500 }),
+    enabled: tab === 'alerts',
+    staleTime: 15_000,
+  })
+  const alertSummaryQuery = useQuery({
+    queryKey: ['investigation', 'alert-summary'],
+    queryFn: () => getAlertSummary(),
+    enabled: tab === 'alerts',
+    staleTime: 15_000,
+  })
+  const alertItems = alertsQuery.data?.items || []
+  const alertSummary = alertSummaryQuery.data || {}
+
+  const crossFlowQuery = useQuery({
+    queryKey: ['investigation', 'cross-account-flows', crossAccountSelected],
+    queryFn: () => getAccountFlows(crossAccountSelected),
+    enabled: tab === 'cross-account' && !!crossAccountSelected,
+    staleTime: 30_000,
+  })
+  const crossMatchQuery = useQuery({
+    queryKey: ['investigation', 'cross-account-match', crossAccountSelected, crossAccountTarget],
+    queryFn: () => getMatchedTransactions(crossAccountSelected, crossAccountTarget),
+    enabled: tab === 'cross-account' && !!crossAccountSelected && !!crossAccountTarget,
+  })
+  const pathTraceQuery = useQuery({
+    queryKey: ['investigation', 'path-trace', pathFrom, pathTo],
+    queryFn: () => traceFundPath(pathFrom, pathTo),
+    enabled: false, // Manual trigger only
+  })
+
+  const timelineAggQuery = useQuery({
+    queryKey: ['investigation', 'timeline-aggregate', deferredTransactionFilters],
+    queryFn: () => getTimelineAggregate(deferredTransactionFilters),
+    enabled: tab === 'timeline',
+    staleTime: 30_000,
+  })
+  const timelineAggItems = useMemo(() => {
+    const items = timelineAggQuery.data?.items || []
+    // Convert aggregated data to transaction-like rows for TimelineChart
+    return items.flatMap((d: any) => {
+      const rows: any[] = []
+      if (d.in_count > 0) rows.push({ date: d.date, amount: d.in_total, direction: 'IN' })
+      if (d.out_count > 0) rows.push({ date: d.date, amount: -d.out_total, direction: 'OUT' })
+      return rows
+    })
+  }, [timelineAggQuery.data])
 
   const currentRows = useMemo(() => {
     switch (tab) {
@@ -701,7 +769,7 @@ export function InvestigationDesk() {
         </Card>
       )}
 
-      {(tab === 'search' || tab === 'graph') && (
+      {(tab === 'search' || tab === 'graph' || tab === 'timeline') && (
         <Card className="space-y-3">
           <CardTitle>{tab === 'graph' ? 'Graph Analysis Filters' : 'Transaction Query Builder'}</CardTitle>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -754,6 +822,308 @@ export function InvestigationDesk() {
             ))}
           </div>
         </Card>
+      )}
+
+      {tab === 'alerts' && (
+        <div className="space-y-4">
+          {/* Summary cards */}
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3">
+            <StatCard label={t('investigation.alerts.total')} value={alertSummary.total ?? 0} />
+            <div className="rounded-xl border border-red-800/40 bg-red-900/20 px-3 py-2 text-center">
+              <div className="text-lg font-bold text-red-400">{alertSummary.critical_count ?? 0}</div>
+              <div className="text-[10px] text-red-400/70 uppercase font-semibold">{t('investigation.alerts.critical')}</div>
+            </div>
+            <div className="rounded-xl border border-orange-800/40 bg-orange-900/20 px-3 py-2 text-center">
+              <div className="text-lg font-bold text-orange-400">{alertSummary.high_count ?? 0}</div>
+              <div className="text-[10px] text-orange-400/70 uppercase font-semibold">{t('investigation.alerts.high')}</div>
+            </div>
+            <StatCard label={t('investigation.alerts.newAlerts')} value={alertSummary.new_count ?? 0} />
+          </div>
+
+          {/* Alert list */}
+          {alertItems.length > 0 ? (
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border text-muted text-left">
+                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.severity')}</th>
+                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.ruleType')}</th>
+                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.summary')}</th>
+                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.confidence')}</th>
+                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.status')}</th>
+                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alertItems.map((alert: any) => {
+                      const sevColor = alert.severity === 'critical' ? 'text-red-400 bg-red-900/30'
+                        : alert.severity === 'high' ? 'text-orange-400 bg-orange-900/30'
+                        : alert.severity === 'medium' ? 'text-yellow-400 bg-yellow-900/30'
+                        : 'text-blue-400 bg-blue-900/30'
+                      const statusColor = alert.status === 'new' ? 'text-red-400'
+                        : alert.status === 'acknowledged' ? 'text-yellow-400'
+                        : 'text-green-400'
+                      return (
+                        <tr key={alert.id} className="border-b border-border/50 hover:bg-accent/5">
+                          <td className="px-2 py-1.5">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${sevColor}`}>
+                              {alert.severity}
+                            </span>
+                          </td>
+                          <td className="px-2 py-1.5 text-text2 font-mono">{alert.rule_type}</td>
+                          <td className="px-2 py-1.5 text-text2 max-w-[300px] truncate">{alert.summary}</td>
+                          <td className="px-2 py-1.5 text-muted">{(alert.confidence * 100).toFixed(0)}%</td>
+                          <td className="px-2 py-1.5">
+                            <span className={`font-semibold ${statusColor}`}>{alert.status}</span>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {alert.status === 'new' && (
+                              <Button
+                                variant="ghost"
+                                onClick={async () => {
+                                  await reviewAlertApi(alert.id, 'acknowledged', operatorName)
+                                  alertsQuery.refetch()
+                                  alertSummaryQuery.refetch()
+                                }}
+                              >
+                                {t('investigation.alerts.acknowledge')}
+                              </Button>
+                            )}
+                            {alert.status === 'acknowledged' && (
+                              <Button
+                                variant="ghost"
+                                onClick={async () => {
+                                  await reviewAlertApi(alert.id, 'resolved', operatorName)
+                                  alertsQuery.refetch()
+                                  alertSummaryQuery.refetch()
+                                }}
+                              >
+                                {t('investigation.alerts.resolve')}
+                              </Button>
+                            )}
+                            {alert.status === 'resolved' && (
+                              <span className="text-green-400 text-[10px]">{t('investigation.alerts.resolved')}</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : (
+            <Card className="p-8 text-center text-muted text-sm">
+              {alertsQuery.isLoading ? t('common.loading') : t('investigation.alerts.noAlerts')}
+            </Card>
+          )}
+        </div>
+      )}
+
+      {tab === 'cross-account' && (
+        <div className="space-y-4">
+          {/* Account selector */}
+          <Card className="space-y-3">
+            <CardTitle>{t('investigation.crossAccount.selectAccount')}</CardTitle>
+            <div className="flex gap-3 items-end flex-wrap">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase text-muted font-semibold">{t('investigation.crossAccount.account')}</label>
+                <input
+                  value={crossAccountSelected}
+                  onChange={e => { setCrossAccountSelected(e.target.value.replace(/\D/g, '')); setCrossAccountTarget('') }}
+                  placeholder="1234567890"
+                  className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none w-40"
+                />
+              </div>
+              {crossAccountSelected && crossFlowQuery.data && (
+                <div className="text-xs text-muted">
+                  <span className="text-text font-semibold">{crossFlowQuery.data.name || crossFlowQuery.data.account}</span>
+                  {crossFlowQuery.data.bank && <span className="ml-1">({crossFlowQuery.data.bank})</span>}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Flow summary */}
+          {crossFlowQuery.data && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Inbound */}
+              <Card className="border-green-800/30">
+                <CardTitle className="text-green-400 text-sm mb-2">
+                  {t('investigation.crossAccount.inbound')} ({crossFlowQuery.data.inbound_count}) — {t('results.flowGraph.totalIn')}: {Number(crossFlowQuery.data.total_in).toLocaleString('th-TH', {minimumFractionDigits: 2})}
+                </CardTitle>
+                <div className="max-h-60 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <tbody>
+                      {(crossFlowQuery.data.inbound || []).map((f: any) => (
+                        <tr
+                          key={f.account}
+                          className={`border-b border-border/30 hover:bg-green-900/10 cursor-pointer ${crossAccountTarget === f.account ? 'bg-green-900/20' : ''}`}
+                          onClick={() => setCrossAccountTarget(f.account)}
+                        >
+                          <td className="px-2 py-1 font-mono text-green-400">{f.account}</td>
+                          <td className="px-2 py-1 text-text2 truncate max-w-[120px]">{f.name}</td>
+                          <td className="px-2 py-1 text-green-400 font-semibold text-right">{Number(f.total).toLocaleString('th-TH')}</td>
+                          <td className="px-2 py-1 text-muted text-right">{f.count}x</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+
+              {/* Outbound */}
+              <Card className="border-red-800/30">
+                <CardTitle className="text-red-400 text-sm mb-2">
+                  {t('investigation.crossAccount.outbound')} ({crossFlowQuery.data.outbound_count}) — {t('results.flowGraph.totalOut')}: {Number(crossFlowQuery.data.total_out).toLocaleString('th-TH', {minimumFractionDigits: 2})}
+                </CardTitle>
+                <div className="max-h-60 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <tbody>
+                      {(crossFlowQuery.data.outbound || []).map((f: any) => (
+                        <tr
+                          key={f.account}
+                          className={`border-b border-border/30 hover:bg-red-900/10 cursor-pointer ${crossAccountTarget === f.account ? 'bg-red-900/20' : ''}`}
+                          onClick={() => setCrossAccountTarget(f.account)}
+                        >
+                          <td className="px-2 py-1 font-mono text-red-400">{f.account}</td>
+                          <td className="px-2 py-1 text-text2 truncate max-w-[120px]">{f.name}</td>
+                          <td className="px-2 py-1 text-red-400 font-semibold text-right">{Number(f.total).toLocaleString('th-TH')}</td>
+                          <td className="px-2 py-1 text-muted text-right">{f.count}x</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* Pairwise transactions */}
+          {crossAccountTarget && crossMatchQuery.data?.items?.length > 0 && (
+            <Card>
+              <CardTitle className="text-sm mb-2">
+                {t('investigation.crossAccount.pairwise')}: {crossAccountSelected} ↔ {crossAccountTarget}
+              </CardTitle>
+              <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-surface2">
+                    <tr className="border-b border-border text-muted">
+                      <th className="px-2 py-1.5 text-left">{t('results.flowGraph.colDate')}</th>
+                      <th className="px-2 py-1.5 text-right">{t('results.flowGraph.colAmount')}</th>
+                      <th className="px-2 py-1.5 text-left">{t('results.flowGraph.colDir')}</th>
+                      <th className="px-2 py-1.5 text-left">{t('results.flowGraph.colType')}</th>
+                      <th className="px-2 py-1.5 text-left">{t('results.flowGraph.colDesc')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {crossMatchQuery.data.items.map((txn: any, i: number) => {
+                      const isIn = txn.direction === 'IN'
+                      return (
+                        <tr key={i} className="border-b border-border/50 hover:bg-accent/5">
+                          <td className="px-2 py-1 text-text2">{txn.date}</td>
+                          <td className={`px-2 py-1 text-right font-mono font-medium ${isIn ? 'text-green-400' : 'text-red-400'}`}>
+                            {isIn ? '+' : '-'}{Math.abs(txn.amount).toLocaleString('th-TH', {minimumFractionDigits: 2})}
+                          </td>
+                          <td className="px-2 py-1">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${isIn ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>
+                              {txn.direction}
+                            </span>
+                          </td>
+                          <td className="px-2 py-1 text-muted">{txn.transaction_type}</td>
+                          <td className="px-2 py-1 text-text2 truncate max-w-[200px]">{txn.description}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {/* Path Finder */}
+          <Card className="space-y-3">
+            <CardTitle className="text-sm">{t('investigation.crossAccount.pathFinder')}</CardTitle>
+            <div className="flex gap-3 items-end flex-wrap">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase text-muted font-semibold">{t('investigation.crossAccount.from')}</label>
+                <input
+                  value={pathFrom}
+                  onChange={e => setPathFrom(e.target.value.replace(/\D/g, ''))}
+                  placeholder="1234567890"
+                  className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none w-36"
+                />
+              </div>
+              <span className="text-muted text-lg pb-2">→</span>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase text-muted font-semibold">{t('investigation.crossAccount.to')}</label>
+                <input
+                  value={pathTo}
+                  onChange={e => setPathTo(e.target.value.replace(/\D/g, ''))}
+                  placeholder="9876543210"
+                  className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none w-36"
+                />
+              </div>
+              <Button
+                variant="success"
+                onClick={() => pathTraceQuery.refetch()}
+                disabled={!pathFrom || !pathTo || pathTraceQuery.isFetching}
+              >
+                {pathTraceQuery.isFetching ? t('common.loading') : t('investigation.crossAccount.trace')}
+              </Button>
+            </div>
+
+            {pathTraceQuery.data && (
+              <div className="mt-3">
+                {pathTraceQuery.data.found ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-green-400 font-semibold">
+                      {t('investigation.crossAccount.pathsFound')}: {pathTraceQuery.data.path_count}
+                    </p>
+                    {pathTraceQuery.data.paths.map((path: any, pi: number) => (
+                      <div key={pi} className="rounded-lg border border-border bg-surface2/50 p-3">
+                        <div className="flex items-center gap-1 flex-wrap text-xs mb-2">
+                          {path.hops.map((hop: string, hi: number) => (
+                            <span key={hi} className="flex items-center gap-1">
+                              <span className="px-2 py-0.5 rounded-full bg-accent/20 text-accent font-mono font-semibold">{hop}</span>
+                              {hi < path.hops.length - 1 && <span className="text-red-400">→</span>}
+                            </span>
+                          ))}
+                          <span className="ml-2 text-muted">({path.hop_count} {t('investigation.crossAccount.hops')})</span>
+                        </div>
+                        <div className="flex gap-3 text-[10px] text-muted">
+                          {path.amounts.map((a: any, ai: number) => (
+                            <span key={ai}>
+                              {a.from.slice(-4)}→{a.to.slice(-4)}: <strong className="text-text">{Number(a.total).toLocaleString('th-TH')}</strong> ({a.count}x)
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted">{t('investigation.crossAccount.noPath')}</p>
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {tab === 'timeline' && (
+        <div className="space-y-4">
+          {timelineAggItems.length > 0 ? (
+            <TimelineChart
+              transactions={timelineAggItems}
+              title={t('investigation.tabs.timeline')}
+            />
+          ) : (
+            <Card className="p-8 text-center text-muted text-sm">
+              {timelineAggQuery.isLoading ? t('common.loading') : t('investigation.timelineEmpty')}
+            </Card>
+          )}
+        </div>
       )}
 
       {tab === 'graph' && (
@@ -1056,7 +1426,11 @@ export function InvestigationDesk() {
                               )}
                               {row.extra_context_json?.feedback_status && (
                                 <Badge variant={auditFeedbackBadgeVariant(row.extra_context_json.feedback_status)}>
-                                  {row.extra_context_json.feedback_status}
+                                  {row.extra_context_json.feedback_status === 'corrected'
+                                    ? t('investigation.badge.corrected')
+                                    : row.extra_context_json.feedback_status === 'confirmed'
+                                      ? t('investigation.badge.confirmed')
+                                      : t('investigation.badge.unknown')}
                                 </Badge>
                               )}
                             </div>

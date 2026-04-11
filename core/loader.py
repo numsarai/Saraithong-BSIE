@@ -19,6 +19,39 @@ from core.column_detector import _norm, best_match_for_aliases, get_field_aliase
 logger = logging.getLogger(__name__)
 
 
+# ── Shared header-detection helpers ──────────────────────────────────────
+
+def _header_keyword_sets() -> tuple[set[str], set[str], set[str]]:
+    """Return normalized keyword sets used for header-row scoring."""
+    date_kw = {_norm(alias) for alias in get_field_aliases("date")}
+    desc_kw = {_norm(alias) for alias in get_field_aliases("description")}
+    amount_kw = {
+        _norm(alias)
+        for field in ("amount", "debit", "credit", "balance", "counterparty_account", "counterparty_name")
+        for alias in get_field_aliases(field)
+    }
+    return date_kw, desc_kw, amount_kw
+
+
+def score_header_row(row_values: list[str]) -> float:
+    """Score a single row as a potential table header.
+
+    Higher scores indicate more header-like content (date/description/amount
+    keywords). This function is shared by Excel and PDF loaders.
+    """
+    date_kw, desc_kw, amount_kw = _header_keyword_sets()
+    normed = [_norm(v) for v in row_values if _norm(v)]
+    if not normed:
+        return -1.0
+    row_set = set(normed)
+    return (
+        (len(row_set & date_kw) * 3.0)
+        + (len(row_set & desc_kw) * 2.0)
+        + (len(row_set & amount_kw) * 1.5)
+        + min(len(normed), 20) * 0.05
+    )
+
+
 def find_best_sheet_and_header(
     file_path: Union[str, Path],
     preview_rows: int = 40,
@@ -38,14 +71,6 @@ def find_best_sheet_and_header(
     """
     file_path = Path(file_path)
     xf = pd.ExcelFile(file_path, engine="openpyxl")
-
-    date_kw = {_norm(alias) for alias in get_field_aliases("date")}
-    desc_kw = {_norm(alias) for alias in get_field_aliases("description")}
-    amount_kw = {
-        _norm(alias)
-        for field in ("amount", "debit", "credit", "balance", "counterparty_account", "counterparty_name")
-        for alias in get_field_aliases(field)
-    }
 
     best_result = {
         "sheet_name": xf.sheet_names[0],
@@ -71,16 +96,8 @@ def find_best_sheet_and_header(
         sheet_best_row = 0
         sheet_best_score = -1.0
         for idx in range(min(scan_rows, len(preview_df))):
-            row_vals = [_norm(v) for v in preview_df.iloc[idx].values if _norm(v)]
-            if not row_vals:
-                continue
-            row_set = set(row_vals)
-            header_score = (
-                (len(row_set & date_kw) * 3.0)
-                + (len(row_set & desc_kw) * 2.0)
-                + (len(row_set & amount_kw) * 1.5)
-                + min(len(row_vals), 20) * 0.05
-            )
+            row_vals = [str(v) for v in preview_df.iloc[idx].values]
+            header_score = score_header_row(row_vals)
             if header_score > sheet_best_score:
                 sheet_best_score = header_score
                 sheet_best_row = idx

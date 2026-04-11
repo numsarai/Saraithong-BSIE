@@ -132,7 +132,7 @@ describe('App workflow', () => {
     await uploadSample(container, 'ambiguous.xlsx')
     expect(uploadFile).toHaveBeenCalledWith(expect.any(File), 'Case Reviewer')
 
-    const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
+    const continueButton = await screen.findByRole('button', { name: /^confirm mapping$/i })
     expect(continueButton).toBeDisabled()
 
     await act(async () => {
@@ -159,7 +159,7 @@ describe('App workflow', () => {
     await uploadSample(container, 'strong.xlsx')
     expect(uploadFile).toHaveBeenCalledWith(expect.any(File), 'Case Reviewer')
 
-    const continueButton = await screen.findByRole('button', { name: /continue to configure/i })
+    const continueButton = await screen.findByRole('button', { name: /^confirm mapping$/i })
     expect(continueButton).toBeEnabled()
 
     await act(async () => {

@@ -97,6 +97,116 @@ export async function getResults(account: string, page = 1, pageSize = 100, pars
   return payload
 }
 
+export async function getResultsTimeline(account: string, parserRunId?: string | null) {
+  const params = new URLSearchParams()
+  if (parserRunId) params.set('parser_run_id', parserRunId)
+  const r = await fetch(`/api/results/${account}/timeline?${params.toString()}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getTimelineAggregate(params: Record<string, string | number | undefined>) {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') qs.set(k, String(v))
+  }
+  const r = await fetch(`/api/transactions/timeline-aggregate?${qs.toString()}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAlerts(params: Record<string, string | number | undefined> = {}) {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') qs.set(k, String(v))
+  }
+  const r = await fetch(`/api/alerts?${qs.toString()}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAlertSummary() {
+  const r = await fetch('/api/alerts/summary')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAlertConfig() {
+  const r = await fetch('/api/alerts/config')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function updateAlertConfig(config: Record<string, any>) {
+  const r = await fetch('/api/alerts/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function reviewAlert(alertId: string, status: string, reviewer: string = 'analyst', note: string = '') {
+  const r = await fetch(`/api/alerts/${alertId}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, reviewer, note }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function generateAccountReport(account: string, parserRunId?: string, analyst = 'analyst') {
+  const r = await fetch('/api/reports/account', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account, parser_run_id: parserRunId || '', analyst }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  const blob = await r.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `report_${account}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function generateCaseReport(accounts: string[], analyst = 'analyst') {
+  const r = await fetch('/api/reports/case', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accounts, analyst }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  const blob = await r.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'case_report.pdf'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function getAccountFlows(account: string) {
+  const r = await fetch(`/api/fund-flow/${account}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getMatchedTransactions(accountA: string, accountB: string) {
+  const r = await fetch(`/api/fund-flow/${accountA}/to/${accountB}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function traceFundPath(from: string, to: string, maxHops = 4) {
+  const r = await fetch(`/api/fund-flow/trace?from_account=${from}&to_account=${to}&max_hops=${maxHops}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function getFiles() {
   const r = await fetch('/api/files')
   if (!r.ok) throw new Error(await r.text())

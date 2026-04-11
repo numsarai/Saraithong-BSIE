@@ -89,6 +89,11 @@ def init_database() -> None:
         with engine.connect() as conn:
             conn.execute(text("PRAGMA journal_mode=WAL"))
             conn.execute(text("PRAGMA foreign_keys=ON"))
+            conn.execute(text("PRAGMA synchronous=NORMAL"))
+            conn.execute(text("PRAGMA cache_size=100000"))
+            conn.execute(text("PRAGMA temp_store=MEMORY"))
+            conn.execute(text("PRAGMA busy_timeout=5000"))
+            conn.execute(text("PRAGMA mmap_size=268435456"))
             conn.commit()
 
     Base.metadata.create_all(engine)

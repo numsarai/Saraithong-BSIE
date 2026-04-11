@@ -288,7 +288,7 @@ describe('InvestigationDesk date formatting', () => {
     expect(await screen.findByText('Learning Feedback Summary')).toBeInTheDocument()
     expect(await screen.findByText('mapping_memory (1) · account_identity (1)')).toBeInTheDocument()
     expect(await screen.findByText('source mapping_profile:PROFILE-1')).toBeInTheDocument()
-    expect((await screen.findAllByText('corrected')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('Corrected')).length).toBeGreaterThan(0)
   })
 
   it('renders graph analysis tab from persisted normalized transaction analytics', async () => {

@@ -95,20 +95,20 @@ def build_entities(df: pd.DataFrame) -> pd.DataFrame:
         if date:
             rec["dates"].append(str(date))
 
-    for _, row in df.iterrows():
-        tid  = str(row.get("transaction_id", ""))
-        date = str(row.get("date", "") or "")
+    for row in df.itertuples(index=False):
+        tid  = str(getattr(row, "transaction_id", ""))
+        date = str(getattr(row, "date", "") or "")
 
         # Subject
         upsert(
-            str(row.get("subject_account", "") or ""),
-            str(row.get("subject_name", "") or ""),
+            str(getattr(row, "subject_account", "") or ""),
+            str(getattr(row, "subject_name", "") or ""),
             tid, date,
         )
         # Counterparty
-        cp_acc  = str(row.get("counterparty_account", "") or "")
-        partial = str(row.get("partial_account", "") or "")
-        cp_name = str(row.get("counterparty_name", "") or "")
+        cp_acc  = str(getattr(row, "counterparty_account", "") or "")
+        partial = str(getattr(row, "partial_account", "") or "")
+        cp_name = str(getattr(row, "counterparty_name", "") or "")
 
         if cp_acc:
             upsert(cp_acc, cp_name, tid, date)

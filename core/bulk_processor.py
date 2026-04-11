@@ -74,7 +74,7 @@ def process_folder(folder_path: str | Path, recursive: bool = False, operator: s
 
 
 def _collect_input_files(folder: Path, recursive: bool) -> list[Path]:
-    patterns = ("*.xlsx", "*.xls", "*.ofx")
+    patterns = ("*.xlsx", "*.xls", "*.ofx", "*.pdf", "*.png", "*.jpg", "*.jpeg", "*.bmp")
     files: list[Path] = []
     for pattern in patterns:
         if recursive:
@@ -115,6 +115,55 @@ def _process_single_file(file_path: Path, operator: str = "bulk-intake") -> dict
                 "ambiguous": False,
             }
             confirmed_mapping = {}
+        elif file_path.suffix.lower() == ".pdf":
+            from core.pdf_loader import parse_pdf_file
+            from core.image_loader import parse_image_file
+
+            pdf_result = parse_pdf_file(file_path)
+            if pdf_result["tables_found"] == 0 or len(pdf_result["df"]) < 3:
+                pdf_result = parse_image_file(file_path)
+            data_df = pdf_result["df"]
+            if data_df.empty:
+                record["status"] = "skipped"
+                record["job_error"] = "Could not extract a transaction table from this PDF."
+                return record
+            data_df.columns = [str(c).strip() for c in data_df.columns]
+            identity = infer_subject_identity(file_path, preview_df=data_df.head(15))
+            record["account"] = identity["account"]
+            record["name"] = identity["name"]
+            record["sheet_name"] = pdf_result["source_format"]
+            record["header_row"] = int(pdf_result.get("header_row", 0))
+            if not record["account"]:
+                record["status"] = "skipped"
+                record["job_error"] = "Could not infer subject account from PDF content."
+                return record
+            detection = detect_bank(data_df, extra_text=file_path.stem, sheet_name=record["sheet_name"])
+            column_detection = detect_columns(data_df)
+            mapping_profile = find_matching_profile(list(data_df.columns), bank=detection.get("config_key", ""))
+            confirmed_mapping = mapping_profile["mapping"] if mapping_profile else column_detection["suggested_mapping"]
+        elif file_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".bmp"):
+            from core.image_loader import parse_image_file
+
+            img_result = parse_image_file(file_path)
+            data_df = img_result["df"]
+            if data_df.empty:
+                record["status"] = "skipped"
+                record["job_error"] = "Could not extract a transaction table from this image."
+                return record
+            data_df.columns = [str(c).strip() for c in data_df.columns]
+            identity = infer_subject_identity(file_path, preview_df=data_df.head(15))
+            record["account"] = identity["account"]
+            record["name"] = identity["name"]
+            record["sheet_name"] = "IMAGE"
+            record["header_row"] = int(img_result.get("header_row", 0))
+            if not record["account"]:
+                record["status"] = "skipped"
+                record["job_error"] = "Could not infer subject account from image."
+                return record
+            detection = detect_bank(data_df, extra_text=file_path.stem, sheet_name="IMAGE")
+            column_detection = detect_columns(data_df)
+            mapping_profile = find_matching_profile(list(data_df.columns), bank=detection.get("config_key", ""))
+            confirmed_mapping = mapping_profile["mapping"] if mapping_profile else column_detection["suggested_mapping"]
         else:
             sheet_pick = find_best_sheet_and_header(file_path)
             preview_df = sheet_pick["preview_df"]

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Download, FolderSearch, RefreshCcw } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 
 import { processFolder } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -34,33 +35,34 @@ function getReconciliationSignals(row: any) {
   }
 }
 
-function getBulkReviewHint(row: any) {
+function getBulkReviewHint(row: any, t: (key: string) => string) {
   const signals = getReconciliationSignals(row)
-  if (signals.material) return 'ควรตรวจยอดคงเหลือช่วงที่ผิดโดยตรง'
-  if (signals.chronology) return 'ควรดูผลแบบเรียงตามเวลา'
-  if (signals.drift) return 'มีส่วนต่างเล็กน้อยระดับเศษสตางค์'
-  if (signals.missingTime) return 'บางแถวไม่มีเวลา'
-  if (signals.duplicateTimestamps) return 'มีหลายรายการเวลาเดียวกัน'
-  if (row.bank_ambiguous) return 'ควรยืนยันธนาคารและรูปแบบไฟล์'
-  if (Number(row.bank_confidence || 0) < 0.75) return 'ความมั่นใจของ bank detect ต่ำ'
+  if (signals.material) return t('bulk.reviewHint.balanceMismatch')
+  if (signals.chronology) return t('bulk.reviewHint.timeOrder')
+  if (signals.drift) return t('bulk.reviewHint.minorDrift')
+  if (signals.missingTime) return t('bulk.reviewHint.noTime')
+  if (signals.duplicateTimestamps) return t('bulk.reviewHint.duplicateTime')
+  if (row.bank_ambiguous) return t('bulk.reviewHint.confirmBank')
+  if (Number(row.bank_confidence || 0) < 0.75) return t('bulk.reviewHint.lowConfidence')
   return ''
 }
 
-function getQuickCaseGuidance(summary: any) {
+function getQuickCaseGuidance(summary: any, t: (key: string) => string) {
   if (!summary) return ''
   if (Number(summary.material_mismatch_files || 0) > 0) {
-    return 'มีบางไฟล์ที่ยอดคงเหลือผิดอย่างมีนัยสำคัญ ควรตรวจช่วงที่ผิดก่อนใช้อ้างอิงเชิงพิสูจน์'
+    return t('bulk.guidance.materialMismatch')
   }
   if (Number(summary.chronology_issue_files || 0) > 0) {
-    return 'มีไฟล์ที่น่าจะไม่เรียงตามเวลา ควรเปิดดูแบบ chronological ก่อนตัดสินว่า balance ผิดจริง'
+    return t('bulk.guidance.timeOrderIssue')
   }
   if (Number(summary.drift_issue_files || 0) > 0) {
-    return 'มีไฟล์ที่ต่างกันเพียงเล็กน้อยระดับเศษสตางค์ อาจเป็น rounding หรือ adjustment'
+    return t('bulk.guidance.minorDrift')
   }
-  return 'ไม่พบสัญญาณความเสี่ยงเด่นจาก balance check ในระดับ bulk run'
+  return t('bulk.guidance.normal')
 }
 
 export function BulkIntake() {
+  const { t } = useTranslation()
   const bulkSummary = useStore(s => s.bulkSummary)
   const setBulkSummary = useStore(s => s.setBulkSummary)
   const setAccount = useStore(s => s.setAccount)
@@ -144,34 +146,34 @@ export function BulkIntake() {
     <div className="max-w-6xl space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-text">Bulk Folder Intake</h2>
+          <h2 className="text-lg font-bold text-text">{t('bulk.title')}</h2>
           <p className="text-muted text-sm">
-            Process a whole case folder of statement files and review which files were processed, skipped, or failed.
+            {t('bulk.description')}
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={() => setBulkSummary(null)}>
           <RefreshCcw size={13} />
-          Clear Summary
+          {t('bulk.clearSummary')}
         </Button>
       </div>
 
       <Card className="space-y-4">
         <CardTitle>
           <FolderSearch size={16} />
-          Case Folder
+          {t('bulk.caseFolder')}
         </CardTitle>
         <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
           <label className="block">
-            <div className="mb-1 text-xs font-semibold uppercase text-muted">Folder Path</div>
+            <div className="mb-1 text-xs font-semibold uppercase text-muted">{t('bulk.folderPath')}</div>
             <input
               value={folderPath}
               onChange={(event) => setFolderPath(event.target.value)}
-              placeholder="/absolute/path/to/case-folder"
+              placeholder={t('bulk.folderPlaceholder')}
               className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm text-text outline-none transition-colors focus:border-accent"
             />
           </label>
           <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? 'Processing…' : 'Run Bulk Intake'}
+            {loading ? t('bulk.processing') : t('bulk.runBulkIntake')}
           </Button>
         </div>
         <label className="flex items-center gap-2 text-sm text-text2">
@@ -181,7 +183,7 @@ export function BulkIntake() {
             onChange={(event) => setRecursive(event.target.checked)}
             className="h-4 w-4 rounded border-border bg-surface2"
           />
-          Scan subfolders recursively
+          {t('bulk.scanSubfolders')}
         </label>
       </Card>
 
@@ -189,23 +191,23 @@ export function BulkIntake() {
         <>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Run ID</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.runId')}</div>
               <div className="mt-1 font-mono text-sm text-text">{bulkSummary.run_id}</div>
             </Card>
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Processed</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.processed')}</div>
               <div className="mt-1 text-xl font-bold text-success">{bulkSummary.processed_files}</div>
             </Card>
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Skipped</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.skipped')}</div>
               <div className="mt-1 text-xl font-bold text-accent">{bulkSummary.skipped_files}</div>
             </Card>
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Errors</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.errors')}</div>
               <div className="mt-1 text-xl font-bold text-danger">{bulkSummary.error_files}</div>
             </Card>
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Accounts</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.accounts')}</div>
               <div className="mt-1 text-sm font-semibold text-text">
                 {Array.isArray(bulkSummary.accounts) && bulkSummary.accounts.length > 0
                   ? bulkSummary.accounts.join(', ')
@@ -213,39 +215,39 @@ export function BulkIntake() {
               </div>
             </Card>
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Needs Review</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.needsReview')}</div>
               <div className="mt-1 text-xl font-bold text-warning">{bulkSummary.review_required_files ?? 0}</div>
             </Card>
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Transactions</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.txnCount')}</div>
               <div className="mt-1 text-xl font-bold text-text">{bulkSummary.total_transactions ?? 0}</div>
             </Card>
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Balance Mismatches</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.balanceMismatches')}</div>
               <div className="mt-1 text-xl font-bold text-danger">{bulkSummary.total_reconciliation_mismatches ?? 0}</div>
             </Card>
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Time Order Issues</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.timeOrderIssues')}</div>
               <div className="mt-1 text-xl font-bold text-warning">{bulkSummary.chronology_issue_files ?? 0}</div>
             </Card>
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Drift Files</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.driftFiles')}</div>
               <div className="mt-1 text-xl font-bold text-accent">{bulkSummary.drift_issue_files ?? 0}</div>
             </Card>
             <Card>
-              <div className="text-[11px] uppercase text-muted font-semibold">Material Mismatch Files</div>
+              <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.materialMismatchFiles')}</div>
               <div className="mt-1 text-xl font-bold text-danger">{bulkSummary.material_mismatch_files ?? 0}</div>
             </Card>
           </div>
 
           <Card className="space-y-2">
-            <CardTitle className="mb-0">คำแนะนำสั้นสำหรับเคสนี้</CardTitle>
-            <p className="text-sm text-text2">{getQuickCaseGuidance(bulkSummary)}</p>
+            <CardTitle className="mb-0">{t('bulk.caseGuidance')}</CardTitle>
+            <p className="text-sm text-text2">{getQuickCaseGuidance(bulkSummary, t)}</p>
           </Card>
 
           <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
             <Card className="space-y-3">
-              <CardTitle className="mb-0">Bank Distribution</CardTitle>
+              <CardTitle className="mb-0">{t('bulk.bankDistribution')}</CardTitle>
               <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
                 {Object.entries(bulkSummary.bank_counts || {}).map(([bank, count]) => (
                   <div key={bank} className="rounded-lg border border-border bg-surface2 px-3 py-2">
@@ -254,13 +256,13 @@ export function BulkIntake() {
                   </div>
                 ))}
                 {Object.keys(bulkSummary.bank_counts || {}).length === 0 && (
-                  <div className="text-sm text-muted">No processed bank counts yet.</div>
+                  <div className="text-sm text-muted">{t('bulk.noBankCounts')}</div>
                 )}
               </div>
             </Card>
 
             <Card className="space-y-3">
-              <CardTitle className="mb-0">Reconciliation Status</CardTitle>
+              <CardTitle className="mb-0">{t('bulk.reconciliationStatus')}</CardTitle>
               <div className="grid grid-cols-2 gap-3">
                 {Object.entries(bulkSummary.reconciliation_counts || {}).map(([status, count]) => (
                   <div key={status} className="rounded-lg border border-border bg-surface2 px-3 py-2">
@@ -282,7 +284,7 @@ export function BulkIntake() {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-accent transition-colors hover:border-accent"
                 >
                   <Download size={13} />
-                  Manifest
+                  {t('bulk.manifest')}
                 </a>
                 <a
                   href={bulkDl(bulkSummary.bundle_filename || 'case_bundle.zip', `bsie_case_bundle_${runId}.zip`)}
@@ -290,7 +292,7 @@ export function BulkIntake() {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-accent transition-colors hover:border-accent"
                 >
                   <Download size={13} />
-                  Case Bundle
+                  {t('bulk.caseBundle')}
                 </a>
                 <a
                   href={bulkDl(bulkSummary.analytics_filename || 'case_analytics.json', `bsie_case_analytics_${runId}.json`)}
@@ -298,7 +300,7 @@ export function BulkIntake() {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-accent transition-colors hover:border-accent"
                 >
                   <Download size={13} />
-                  Analytics JSON
+                  {t('bulk.analyticsJson')}
                 </a>
                 <a
                   href={bulkDl(bulkSummary.analytics_workbook_filename || 'case_analytics.xlsx', `bsie_case_analytics_${runId}.xlsx`)}
@@ -306,7 +308,7 @@ export function BulkIntake() {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-accent transition-colors hover:border-accent"
                 >
                   <Download size={13} />
-                  Analytics Excel
+                  {t('bulk.analyticsXlsx')}
                 </a>
                 <a
                   href={bulkDl('bulk_summary.csv', `bsie_bulk_${runId}.csv`)}
@@ -314,7 +316,7 @@ export function BulkIntake() {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-accent transition-colors hover:border-accent"
                 >
                   <Download size={13} />
-                  CSV
+                  {t('bulk.csv')}
                 </a>
                 <a
                   href={bulkDl('bulk_summary.xlsx', `bsie_bulk_${runId}.xlsx`)}
@@ -322,7 +324,7 @@ export function BulkIntake() {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-accent transition-colors hover:border-accent"
                 >
                   <Download size={13} />
-                  Excel
+                  {t('bulk.excel')}
                 </a>
                 <a
                   href={bulkDl('bulk_summary.json', `bsie_bulk_${runId}.json`)}
@@ -330,7 +332,7 @@ export function BulkIntake() {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-accent transition-colors hover:border-accent"
                 >
                   <Download size={13} />
-                  JSON
+                  {t('bulk.json')}
                 </a>
               </div>
             </div>
@@ -345,35 +347,35 @@ export function BulkIntake() {
                 <CardTitle className="mb-0">Case Risk Dashboard</CardTitle>
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
                   <div className="rounded-lg border border-border bg-surface2 px-3 py-2">
-                    <div className="text-[11px] uppercase text-muted font-semibold">Flagged Accounts</div>
+                    <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.flaggedAccounts')}</div>
                     <div className="mt-1 text-lg font-bold text-warning">{analytics.overview?.flagged_accounts ?? 0}</div>
                   </div>
                   <div className="rounded-lg border border-border bg-surface2 px-3 py-2">
-                    <div className="text-[11px] uppercase text-muted font-semibold">Connected Groups</div>
+                    <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.connectedGroups')}</div>
                     <div className="mt-1 text-lg font-bold text-text">{analytics.overview?.connected_groups ?? 0}</div>
                   </div>
                   <div className="rounded-lg border border-border bg-surface2 px-3 py-2">
-                    <div className="text-[11px] uppercase text-muted font-semibold">Bridge Accounts</div>
+                    <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.bridgeAccounts')}</div>
                     <div className="mt-1 text-lg font-bold text-accent">{analytics.overview?.bridge_accounts ?? 0}</div>
                   </div>
                   <div className="rounded-lg border border-border bg-surface2 px-3 py-2">
-                    <div className="text-[11px] uppercase text-muted font-semibold">Processed Accounts</div>
+                    <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.processedAccounts')}</div>
                     <div className="mt-1 text-lg font-bold text-text">{analytics.overview?.processed_accounts ?? 0}</div>
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm">
-                  <div className="text-[11px] uppercase text-muted font-semibold">Largest Counterparty By Count</div>
+                  <div className="text-[11px] uppercase text-muted font-semibold">{t('bulk.largestCPByCount')}</div>
                   <div className="mt-1 font-semibold text-text">
                     {analytics.overview?.largest_counterparty_by_count?.counterparty_label || '—'}
                   </div>
                   <div className="text-xs text-muted">
-                    {analytics.overview?.largest_counterparty_by_count?.transaction_count ?? 0} transactions
+                    {analytics.overview?.largest_counterparty_by_count?.transaction_count ?? 0} {t('bulk.transactionsUnit')}
                   </div>
                 </div>
               </Card>
 
               <Card className="space-y-3">
-                <CardTitle className="mb-0">Flagged Accounts</CardTitle>
+                <CardTitle className="mb-0">{t('bulk.flaggedAccounts')}</CardTitle>
                 <div className="space-y-2">
                   {(analytics.flagged_accounts || []).slice(0, 6).map((row: any) => (
                     <div key={row.account} className="rounded-lg border border-border bg-surface2 px-3 py-2">
@@ -398,7 +400,7 @@ export function BulkIntake() {
           {analytics && (
             <div className="grid gap-3 lg:grid-cols-2">
               <Card className="space-y-3">
-                <CardTitle className="mb-0">Top Counterparties By Count</CardTitle>
+                <CardTitle className="mb-0">{t('bulk.topCPByCount')}</CardTitle>
                 <div className="space-y-2">
                   {(analytics.top_counterparties_by_count || []).slice(0, 8).map((row: any) => (
                     <div key={row.counterparty_id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface2 px-3 py-2 text-sm">
@@ -416,19 +418,19 @@ export function BulkIntake() {
               </Card>
 
               <Card className="space-y-3">
-                <CardTitle className="mb-0">Bridge Accounts</CardTitle>
+                <CardTitle className="mb-0">{t('bulk.bridgeAccounts')}</CardTitle>
                 <div className="space-y-2">
                   {(analytics.bridge_accounts || []).slice(0, 8).map((row: any) => (
                     <div key={row.counterparty_id} className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm">
                       <div className="font-semibold text-text">{row.counterparty_label}</div>
                       <div className="text-xs text-muted">{row.subject_accounts?.join(', ') || '—'}</div>
                       <div className="mt-1 text-xs text-text2">
-                        Connected to {row.subject_account_count} subject accounts · {row.transaction_count} transactions
+                        Connected to {row.subject_account_count} subject accounts · {row.transaction_count} {t('bulk.transactionsUnit')}
                       </div>
                     </div>
                   ))}
                   {(!analytics.bridge_accounts || analytics.bridge_accounts.length === 0) && (
-                    <div className="text-sm text-muted">No bridge accounts detected yet.</div>
+                    <div className="text-sm text-muted">{t('bulk.noBridgeAccounts')}</div>
                   )}
                 </div>
               </Card>
@@ -438,46 +440,46 @@ export function BulkIntake() {
           <Card className="space-y-4">
             <div className="flex flex-wrap items-end gap-3">
               <label className="block">
-                <div className="mb-1 text-xs font-semibold uppercase text-muted">Status Filter</div>
+                <div className="mb-1 text-xs font-semibold uppercase text-muted">{t('bulk.statusFilter')}</div>
                 <select
-                  aria-label="Status Filter"
+                  aria-label={t('bulk.statusFilter')}
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value)}
                   className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm text-text outline-none focus:border-accent"
                 >
-                  <option value="all">All</option>
-                  <option value="processed">Processed</option>
-                  <option value="skipped">Skipped</option>
-                  <option value="error">Error</option>
+                  <option value="all">{t('bulk.all')}</option>
+                  <option value="processed">{t('bulk.processed')}</option>
+                  <option value="skipped">{t('bulk.skipped')}</option>
+                  <option value="error">{t('bulk.error')}</option>
                 </select>
               </label>
 
               <label className="block">
-                <div className="mb-1 text-xs font-semibold uppercase text-muted">Review Filter</div>
+                <div className="mb-1 text-xs font-semibold uppercase text-muted">{t('bulk.reviewFilter')}</div>
                 <select
-                  aria-label="Review Filter"
+                  aria-label={t('bulk.reviewFilter')}
                   value={reviewFilter}
                   onChange={(event) => setReviewFilter(event.target.value)}
                   className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm text-text outline-none focus:border-accent"
                 >
-                  <option value="all">All Files</option>
-                  <option value="needs-review">Needs Analyst Review</option>
+                  <option value="all">{t('bulk.allFiles')}</option>
+                  <option value="needs-review">{t('bulk.needsAnalystReview')}</option>
                 </select>
               </label>
 
               <label className="min-w-[240px] flex-1">
-                <div className="mb-1 text-xs font-semibold uppercase text-muted">Search</div>
+                <div className="mb-1 text-xs font-semibold uppercase text-muted">{t('bulk.search')}</div>
                 <input
                   aria-label="Search Bulk Files"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search file, account, name, or bank"
+                  placeholder={t('bulk.searchPlaceholder')}
                   className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm text-text outline-none transition-colors focus:border-accent"
                 />
               </label>
             </div>
             <p className="text-xs text-muted">
-              Showing {filteredFiles.length} of {files.length} files.
+              {t('bulk.showing')} {filteredFiles.length} {t('bulk.of')} {files.length} {t('bulk.files')}
             </p>
           </Card>
 
@@ -486,7 +488,7 @@ export function BulkIntake() {
               <table className="w-full text-xs border-collapse" style={{ minWidth: 1100 }}>
                 <thead>
                   <tr className="bg-surface2">
-                    {['File', 'Status', 'Account', 'Name', 'Bank', 'Reconciliation', 'Transactions', 'Date Range', 'Error', ''].map((heading) => (
+                    {[t('bulk.file'), t('bulk.status'), t('bulk.account'), t('bulk.name'), t('bulk.bank'), t('bulk.reconciliation'), t('bulk.txnCount'), t('bulk.dateRange'), t('bulk.error'), ''].map((heading) => (
                       <th key={heading} className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted border-b border-border">
                         {heading}
                       </th>
@@ -505,20 +507,20 @@ export function BulkIntake() {
                       <td className="px-3 py-2 text-text2">
                         {row.bank_name || row.bank_key || '—'}
                         {needsAnalystReview(row) ? (
-                          <div className="mt-1 text-[10px] text-warning">Needs review</div>
+                          <div className="mt-1 text-[10px] text-warning">{t('bulk.needsReviewBadge')}</div>
                         ) : null}
                       </td>
                       <td className="px-3 py-2 text-text2">
                         <div>{row.reconciliation_status || '—'}</div>
                         {row.status === 'processed' && (
                           <div className="mt-1 flex flex-wrap gap-1">
-                            {getReconciliationSignals(row).chronology && <Badge variant="yellow">Time Order</Badge>}
-                            {getReconciliationSignals(row).drift && <Badge variant="blue">Drift</Badge>}
-                            {getReconciliationSignals(row).material && <Badge variant="red">Material</Badge>}
+                            {getReconciliationSignals(row).chronology && <Badge variant="yellow">{t('bulk.timeOrder')}</Badge>}
+                            {getReconciliationSignals(row).drift && <Badge variant="blue">{t('bulk.drift')}</Badge>}
+                            {getReconciliationSignals(row).material && <Badge variant="red">{t('bulk.material')}</Badge>}
                           </div>
                         )}
-                        {getBulkReviewHint(row) ? (
-                          <div className="mt-1 text-[10px] text-muted">{getBulkReviewHint(row)}</div>
+                        {getBulkReviewHint(row, t) ? (
+                          <div className="mt-1 text-[10px] text-muted">{getBulkReviewHint(row, t)}</div>
                         ) : null}
                       </td>
                       <td className="px-3 py-2 text-text2">{row.num_transactions ?? '—'}</td>
@@ -527,7 +529,7 @@ export function BulkIntake() {
                       <td className="px-3 py-2">
                         {row.status === 'processed' && row.account ? (
                           <Button size="sm" variant="ghost" onClick={() => openResults(row)}>
-                            Open Results
+                            {t('bulk.openResults')}
                           </Button>
                         ) : (
                           <span className="text-muted">—</span>

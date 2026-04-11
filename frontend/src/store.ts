@@ -1,11 +1,14 @@
 import { create } from 'zustand'
 import { evaluateReviewGate } from '@/lib/reviewGate'
+import i18n from '@/i18n'
 
 export type Tab = 'transactions' | 'entities' | 'links'
 export type Page = 'main' | 'bank-manager' | 'bulk-intake' | 'investigation'
+export type Locale = 'th' | 'en'
 export const DEFAULT_OPERATOR_NAME = 'analyst'
 
 const OPERATOR_STORAGE_KEY = 'bsie.operator_name'
+const LOCALE_STORAGE_KEY = 'bsie.language'
 
 function getBrowserStorage(): Storage | null {
   if (typeof window === 'undefined') return null
@@ -21,6 +24,19 @@ function readStoredOperatorName() {
   if (!storage) return DEFAULT_OPERATOR_NAME
   const stored = storage.getItem(OPERATOR_STORAGE_KEY)
   return stored?.trim() || DEFAULT_OPERATOR_NAME
+}
+
+function readStoredLocale(): Locale {
+  const storage = getBrowserStorage()
+  if (!storage) return 'th'
+  const stored = storage.getItem(LOCALE_STORAGE_KEY)
+  return stored === 'en' ? 'en' : 'th'
+}
+
+function persistLocale(locale: Locale) {
+  const storage = getBrowserStorage()
+  if (!storage) return
+  storage.setItem(LOCALE_STORAGE_KEY, locale)
 }
 
 function persistOperatorName(value: string) {
@@ -41,6 +57,7 @@ export function normalizeOperatorName(value: string | null | undefined) {
 export interface AppState {
   page: Page
   step: number
+  locale: Locale
   operatorName: string
   jobId: string | null
   fileId: string | null
@@ -72,6 +89,7 @@ export interface AppState {
   banks: any[]
   bulkSummary: any | null
   setStep: (step: number) => void
+  setLocale: (locale: Locale) => void
   setOperatorName: (operatorName: string) => void
   setUploadResult: (data: any, filename: string) => void
   setConfirmedMapping: (mapping: Record<string, string | null>) => void
@@ -128,8 +146,14 @@ const workflowInitialState = {
 
 export const useStore = create<AppState>((set) => ({
   ...workflowInitialState,
+  locale: readStoredLocale(),
   operatorName: readStoredOperatorName(),
   setStep: (step) => set({ step }),
+  setLocale: (locale) => set(() => {
+    persistLocale(locale)
+    i18n.changeLanguage(locale)
+    return { locale }
+  }),
   setOperatorName: (operatorName) => set(() => {
     const nextOperatorName = String(operatorName || '').slice(0, 80)
     persistOperatorName(nextOperatorName)

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+
+from openpyxl.styles import Font, PatternFill
 from pathlib import Path
 from typing import Any
 
@@ -282,3 +284,17 @@ def write_case_analytics(run_dir: Path, analytics: dict[str, Any]) -> None:
         pd.DataFrame(analytics.get("bridge_accounts", [])).to_excel(writer, sheet_name="Bridge_Accounts", index=False)
         pd.DataFrame(analytics.get("connected_groups", [])).to_excel(writer, sheet_name="Connected_Groups", index=False)
         pd.DataFrame(analytics.get("flagged_accounts", [])).to_excel(writer, sheet_name="Flagged_Accounts", index=False)
+
+        # Apply TH Sarabun New font to all sheets
+        from core.exporter import REPORT_FONT_NAME, REPORT_FONT_SIZE
+        data_font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE)
+        hdr_font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="FFFFFF")
+        hdr_fill = PatternFill(fill_type="solid", fgColor="1E293B")
+        for ws in writer.book.worksheets:
+            for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=ws.max_column):
+                for cell in row:
+                    if cell.row == 1:
+                        cell.font = hdr_font
+                        cell.fill = hdr_fill
+                    else:
+                        cell.font = data_font

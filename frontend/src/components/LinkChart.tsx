@@ -3,7 +3,11 @@ import { useTranslation } from 'react-i18next'
 import cytoscape from 'cytoscape'
 import { Card, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Expand, RotateCcw, Download, Filter, Maximize2, Pin, Star, Circle, Minimize2, Maximize } from 'lucide-react'
+import {
+  Expand, RotateCcw, Download, Filter, Maximize2, Pin, Star,
+  Circle, Minimize2, Maximize, GitBranch, Sun, Tag, 
+  MousePointer, Eye, EyeOff, Paintbrush,
+} from 'lucide-react'
 import { getAccountFlows } from '@/api'
 
 interface LinkChartProps {
@@ -11,12 +15,16 @@ interface LinkChartProps {
   onNodeDoubleClick?: (account: string) => void
 }
 
-type LayoutMode = 'circle' | 'spread' | 'compact'
+type LayoutMode = 'circle' | 'spread' | 'compact' | 'hierarchy' | 'peacock'
 
 function formatAmount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`
   return n.toFixed(0)
+}
+
+function computeConditionalSize(flowTotal: number): number {
+  return Math.max(25, Math.min(70, 25 + Math.log10(Math.max(flowTotal, 1)) * 8))
 }
 
 const chartStyle: cytoscape.StylesheetStyle[] = [
@@ -81,6 +89,15 @@ const chartStyle: cytoscape.StylesheetStyle[] = [
       'background-image-containment': 'over',
     } as any,
   },
+  {
+    selector: 'node:selected',
+    style: {
+      'border-color': '#38bdf8',
+      'border-width': 3,
+      'overlay-opacity': 0.1,
+      'overlay-color': '#38bdf8',
+    },
+  },
   { selector: 'node:active', style: { 'overlay-opacity': 0.15, 'overlay-color': '#38bdf8' } },
   { selector: 'node:grabbed', style: { 'border-color': '#38bdf8', 'border-width': 3 } },
   {
@@ -106,6 +123,8 @@ const chartStyle: cytoscape.StylesheetStyle[] = [
 ]
 
 const FOCUS_HISTORY_MAX = 10
+const DEFAULT_EXPANDED_SIZE = 50
+const DEFAULT_LEAF_SIZE = 32
 
 export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps) {
   const { t } = useTranslation()
@@ -121,6 +140,109 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
   const [pinnedNodes, setPinnedNodes] = useState<Set<string>>(new Set())
   const [focusHistory, setFocusHistory] = useState<string[]>([])
   const [activeLayout, setActiveLayout] = useState<LayoutMode>('spread')
+
+  // --- New feature state ---
+  const [conditionalFormatting, setConditionalFormatting] = useState(false)
+  const [edgeLabelsVisible, setEdgeLabelsVisible] = useState(true)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedCount, setSelectedCount] = useState(0)
+  const removedElementsRef = useRef<cytoscape.CollectionReturnValue | null>(null)
+
+  // Apply conditional formatting (node size by flow total, border by alerts)
+  const applyConditionalFormatting = useCallback((enabled: boolean) => {
+    const cy = cyRef.current
+    if (!cy) return
+
+    cy.nodes().forEach((node) => {
+      if (enabled) {
+        const flowTotal = node.data('flowTotal') as number | undefined
+        const hasAlerts = node.data('hasAlerts') as boolean | undefined
+        const size = computeConditionalSize(flowTotal ?? 0)
+        node.style('width', size)
+        node.style('height', size)
+        if (hasAlerts) {
+          node.style('border-color', '#ef4444')
+          node.style('border-width', 3)
+        }
+      } else {
+        const isExpanded = node.data('nodeType') === 'expanded'
+        const defaultSize = isExpanded ? DEFAULT_EXPANDED_SIZE : DEFAULT_LEAF_SIZE
+        node.style('width', defaultSize)
+        node.style('height', defaultSize)
+        // Restore default border (let stylesheet handle it)
+        node.removeStyle('border-color')
+        node.removeStyle('border-width')
+      }
+    })
+  }, [])
+
+  // Toggle conditional formatting
+  const handleToggleConditionalFormatting = useCallback(() => {
+    const next = !conditionalFormatting
+    setConditionalFormatting(next)
+    applyConditionalFormatting(next)
+  }, [conditionalFormatting, applyConditionalFormatting])
+
+  // Toggle edge labels
+  const handleToggleEdgeLabels = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const next = !edgeLabelsVisible
+    setEdgeLabelsVisible(next)
+    cy.edges().style('label', next ? 'data(label)' : '')
+  }, [edgeLabelsVisible])
+
+  // Toggle select mode
+  const handleToggleSelectMode = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const next = !selectMode
+    setSelectMode(next)
+    if (!next) {
+      // Exiting select mode: deselect all
+      cy.nodes().unselect()
+      setSelectedCount(0)
+    }
+    cy.boxSelectionEnabled(next)
+  }, [selectMode])
+
+  // Hide selected nodes
+  const handleHideSelected = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const selected = cy.nodes(':selected')
+    if (selected.length === 0) return
+    // Collect nodes and their connected edges
+    const toRemove = selected.union(selected.connectedEdges())
+    const removed = cy.remove(toRemove)
+    // Accumulate removed elements
+    if (removedElementsRef.current) {
+      removedElementsRef.current = removedElementsRef.current.union(removed)
+    } else {
+      removedElementsRef.current = removed
+    }
+    setSelectedCount(0)
+    setNodeCount(cy.nodes().length)
+    setEdgeCount(cy.edges().length)
+  }, [])
+
+  // Show all hidden nodes
+  const handleShowAll = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy || !removedElementsRef.current) return
+    removedElementsRef.current.restore()
+    removedElementsRef.current = null
+    setNodeCount(cy.nodes().length)
+    setEdgeCount(cy.edges().length)
+    // Re-apply conditional formatting if active
+    if (conditionalFormatting) {
+      applyConditionalFormatting(true)
+    }
+    // Re-apply edge label visibility
+    if (!edgeLabelsVisible) {
+      cy.edges().style('label', '')
+    }
+  }, [conditionalFormatting, applyConditionalFormatting, edgeLabelsVisible])
 
   // Apply a layout mode to all existing nodes
   const applyLayout = useCallback((mode: LayoutMode) => {
@@ -171,6 +293,28 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
           gravity: 0.8,
           numIter: 300,
           padding: 20,
+          nodeDimensionsIncludeLabels: true,
+        } as any).run()
+        break
+      case 'hierarchy':
+        cy.layout({
+          name: 'breadthfirst',
+          directed: true,
+          spacingFactor: 1.2,
+          animate: true,
+          animationDuration: 400,
+          padding: 40,
+          nodeDimensionsIncludeLabels: true,
+        } as any).run()
+        break
+      case 'peacock':
+        cy.layout({
+          name: 'concentric',
+          concentric: (node: cytoscape.NodeSingular) => node.degree(false),
+          levelWidth: () => 2,
+          animate: true,
+          animationDuration: 400,
+          padding: 40,
           nodeDimensionsIncludeLabels: true,
         } as any).run()
         break
@@ -245,10 +389,14 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
       maxZoom: 5,
     })
 
-    // Single click -> select + expand
+    // Single click -> select node (or multi-select in select mode)
     cy.on('tap', 'node', async (evt) => {
       const nodeId = evt.target.id()
       setSelectedNode(nodeId)
+      // Update selected count for select mode
+      setTimeout(() => {
+        setSelectedCount(cy.nodes(':selected').length)
+      }, 0)
     })
 
     // Double click -> entity profile
@@ -258,12 +406,30 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
     })
 
     cy.on('tap', (evt) => {
-      if (evt.target === cy) setSelectedNode(null)
+      if (evt.target === cy) {
+        setSelectedNode(null)
+        setTimeout(() => {
+          setSelectedCount(cy.nodes(':selected').length)
+        }, 0)
+      }
+    })
+
+    // Track selection changes for select mode
+    cy.on('select unselect', 'node', () => {
+      setSelectedCount(cy.nodes(':selected').length)
     })
 
     cyRef.current = cy
     return () => { cy.destroy(); cyRef.current = null }
   }, [onNodeDoubleClick])
+
+  // Update box selection when selectMode changes
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    cy.boxSelectionEnabled(selectMode)
+    cy.userPanningEnabled(!selectMode)
+  }, [selectMode])
 
   // Expand a node -- load its neighbors
   const expandNode = useCallback(async (account: string) => {
@@ -279,11 +445,17 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
       // Ensure center node exists
       if (!cy.getElementById(account).length) {
         newNodes.push({
-          data: { id: account, label: account, nodeType: 'expanded' },
+          data: { id: account, label: account, nodeType: 'expanded', flowTotal: 0 },
         })
       } else {
         cy.getElementById(account).data('nodeType', 'expanded')
       }
+
+      // Compute total flow for the center node
+      const inboundTotal = (data.inbound || []).reduce((sum: number, f: any) => sum + (f.total || 0), 0)
+      const outboundTotal = (data.outbound || []).reduce((sum: number, f: any) => sum + (f.total || 0), 0)
+      const centerFlowTotal = inboundTotal + outboundTotal
+      cy.getElementById(account).data('flowTotal', centerFlowTotal)
 
       // Add inbound sources
       for (const flow of (data.inbound || [])) {
@@ -291,7 +463,11 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
         if (!cy.getElementById(flow.account).length) {
           const lbl = flow.name?.length > 18 ? flow.name.slice(0, 18) + '\u2026' : (flow.name || flow.account)
           newNodes.push({
-            data: { id: flow.account, label: lbl, fullLabel: flow.name, nodeType: 'leaf' },
+            data: {
+              id: flow.account, label: lbl, fullLabel: flow.name, nodeType: 'leaf',
+              flowTotal: flow.total || 0,
+              hasAlerts: flow.alerts != null && flow.alerts > 0,
+            },
           })
         }
         const edgeId = `${flow.account}::${account}::IN`
@@ -313,7 +489,11 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
         if (!cy.getElementById(flow.account).length) {
           const lbl = flow.name?.length > 18 ? flow.name.slice(0, 18) + '\u2026' : (flow.name || flow.account)
           newNodes.push({
-            data: { id: flow.account, label: lbl, fullLabel: flow.name, nodeType: 'leaf' },
+            data: {
+              id: flow.account, label: lbl, fullLabel: flow.name, nodeType: 'leaf',
+              flowTotal: flow.total || 0,
+              hasAlerts: flow.alerts != null && flow.alerts > 0,
+            },
           })
         }
         const edgeId = `${account}::${flow.account}::OUT`
@@ -345,6 +525,16 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
         } as any).run()
       }
 
+      // Apply conditional formatting to newly added nodes if enabled
+      if (conditionalFormatting) {
+        applyConditionalFormatting(true)
+      }
+
+      // Apply edge label visibility to new edges
+      if (!edgeLabelsVisible) {
+        cy.edges().style('label', '')
+      }
+
       setExpandedNodes(prev => new Set([...prev, account]))
       addToFocusHistory(account)
       setNodeCount(cy.nodes().length)
@@ -352,7 +542,7 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
     } finally {
       setLoading(false)
     }
-  }, [expandedNodes, minAmount, addToFocusHistory])
+  }, [expandedNodes, minAmount, addToFocusHistory, conditionalFormatting, applyConditionalFormatting, edgeLabelsVisible])
 
   // Start / expand from selected node
   useEffect(() => {
@@ -371,6 +561,7 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
       setExpandedNodes(new Set())
       setPinnedNodes(new Set())
       setFocusHistory([])
+      removedElementsRef.current = null
     }
     setSelectedNode(acct)
   }
@@ -385,6 +576,11 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
       setSelectedNode(null)
       setPinnedNodes(new Set())
       setFocusHistory([])
+      removedElementsRef.current = null
+      setSelectedCount(0)
+      setSelectMode(false)
+      setConditionalFormatting(false)
+      setEdgeLabelsVisible(true)
     }
   }
 
@@ -408,12 +604,15 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
           <span>{nodeCount} nodes</span>
           <span>{edgeCount} edges</span>
           {pinnedNodes.size > 0 && <span className="text-yellow-400">{pinnedNodes.size} pinned</span>}
+          {selectMode && selectedCount > 0 && (
+            <span className="text-sky-400">{selectedCount} selected</span>
+          )}
           {loading && <span className="text-accent animate-pulse">loading...</span>}
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
+      {/* Toolbar Row 1: Search, actions, filter */}
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         <input
           value={searchAccount}
           onChange={e => setSearchAccount(e.target.value.replace(/\D/g, ''))}
@@ -442,6 +641,22 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
         </div>
         <div className="border-l border-border h-6 mx-1" />
 
+        {/* Pin button */}
+        <Button
+          variant={selectedNode && pinnedNodes.has(selectedNode) ? 'outline' : 'ghost'}
+          onClick={() => selectedNode && togglePin(selectedNode)}
+          disabled={!selectedNode}
+          title={selectedNode && pinnedNodes.has(selectedNode) ? 'Unpin node' : 'Pin node in place'}
+        >
+          {selectedNode && pinnedNodes.has(selectedNode)
+            ? <><Star size={14} className="text-yellow-400" />Unpin</>
+            : <><Pin size={14} />Pin</>
+          }
+        </Button>
+      </div>
+
+      {/* Toolbar Row 2: Layouts, display toggles, grouping */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         {/* Layout switcher */}
         <div className="flex items-center gap-1">
           <Button
@@ -468,21 +683,80 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
           >
             <Minimize2 size={14} />Compact
           </Button>
+          <Button
+            variant={activeLayout === 'hierarchy' ? 'outline' : 'ghost'}
+            onClick={() => applyLayout('hierarchy')}
+            disabled={nodeCount === 0}
+            title="Hierarchy layout (top-down tree)"
+          >
+            <GitBranch size={14} />Hierarchy
+          </Button>
+          <Button
+            variant={activeLayout === 'peacock' ? 'outline' : 'ghost'}
+            onClick={() => applyLayout('peacock')}
+            disabled={nodeCount === 0}
+            title="Peacock layout (high-degree nodes at center)"
+          >
+            <Sun size={14} />Peacock
+          </Button>
         </div>
+
         <div className="border-l border-border h-6 mx-1" />
 
-        {/* Pin button */}
+        {/* Display toggles */}
         <Button
-          variant={selectedNode && pinnedNodes.has(selectedNode) ? 'outline' : 'ghost'}
-          onClick={() => selectedNode && togglePin(selectedNode)}
-          disabled={!selectedNode}
-          title={selectedNode && pinnedNodes.has(selectedNode) ? 'Unpin node' : 'Pin node in place'}
+          variant={edgeLabelsVisible ? 'outline' : 'ghost'}
+          onClick={handleToggleEdgeLabels}
+          disabled={nodeCount === 0}
+          title={edgeLabelsVisible ? 'Hide edge labels' : 'Show edge labels'}
         >
-          {selectedNode && pinnedNodes.has(selectedNode)
-            ? <><Star size={14} className="text-yellow-400" />Unpin</>
-            : <><Pin size={14} />Pin</>
+          {edgeLabelsVisible
+            ? <><Tag size={14} />Labels</>
+            : <><EyeOff size={14} />Labels</>
           }
         </Button>
+
+        <Button
+          variant={conditionalFormatting ? 'outline' : 'ghost'}
+          onClick={handleToggleConditionalFormatting}
+          disabled={nodeCount === 0}
+          title="Toggle conditional formatting (size by flow, red border for alerts)"
+        >
+          <Paintbrush size={14} />Formatting
+        </Button>
+
+        <div className="border-l border-border h-6 mx-1" />
+
+        {/* Node grouping / selection */}
+        <Button
+          variant={selectMode ? 'outline' : 'ghost'}
+          onClick={handleToggleSelectMode}
+          disabled={nodeCount === 0}
+          title={selectMode ? 'Exit multi-select mode' : 'Enter multi-select mode'}
+        >
+          <MousePointer size={14} />Select
+        </Button>
+
+        {selectMode && (
+          <>
+            <Button
+              variant="ghost"
+              onClick={handleHideSelected}
+              disabled={selectedCount === 0}
+              title="Hide selected nodes"
+            >
+              <EyeOff size={14} />Hide
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={handleShowAll}
+              disabled={removedElementsRef.current == null}
+              title="Restore all hidden nodes"
+            >
+              <Eye size={14} />Show All
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Focus history chips */}

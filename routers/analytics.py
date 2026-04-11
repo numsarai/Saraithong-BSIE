@@ -11,6 +11,7 @@ from persistence.base import get_db_session
 from services.anomaly_detection_service import detect_anomalies
 from services.period_comparison_service import compare_periods
 from services.bulk_matching_service import bulk_cross_match
+from services.sna_service import compute_sna_metrics
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -43,6 +44,14 @@ async def api_compare_periods(
         return JSONResponse({"error": "account, a_from, a_to, b_from, b_to required"}, status_code=400)
     with get_db_session() as session:
         result = compare_periods(session, account, a_from, a_to, b_from, b_to)
+    return JSONResponse(result)
+
+
+@router.get("/sna")
+async def api_sna_metrics():
+    """Compute Social Network Analysis centrality metrics for the account network."""
+    with get_db_session() as session:
+        result = compute_sna_metrics(session)
     return JSONResponse(result)
 
 

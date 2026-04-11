@@ -454,6 +454,11 @@
     "close": "Close",
     "required": "*"
   },
+  "timeWheel": {
+    "title": "Activity Heatmap (Hour x Day)",
+    "byHour": "Total by Hour",
+    "byDay": "Total by Day of Week"
+  },
   "linkChart": {
     "title": "Link Chart",
     "startAccount": "Account number",

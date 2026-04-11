@@ -189,6 +189,12 @@ export async function generateCaseReport(accounts: string[], analyst = 'analyst'
   URL.revokeObjectURL(url)
 }
 
+export async function getSnaMetrics() {
+  const r = await fetch('/api/analytics/sna')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function getAccountProfile(accountId: string) {
   const r = await fetch(`/api/accounts/${accountId}/profile`)
   if (!r.ok) throw new Error(await r.text())

@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { Download, RotateCcw, ShieldCheck, History, Trash2 } from 'lucide-react'
 import { AccountFlowGraph } from '@/components/AccountFlowGraph'
 import { TimelineChart } from '@/components/TimelineChart'
+import { TimeWheel } from '@/components/TimeWheel'
 
 type OverrideState = { tid: string; from: string; to: string } | null
 
@@ -339,6 +340,10 @@ export function Step5Results() {
 
       {timelineItems.length > 0 && (
         <TimelineChart transactions={timelineItems} />
+      )}
+
+      {timelineItems.length > 0 && (
+        <TimeWheel transactions={timelineItems} />
       )}
 
       <Card className="border-accent/20 bg-accent/[0.06] p-4">

@@ -65,10 +65,13 @@ def test_persist_upload_creates_file_record_and_duplicate_hint():
 
     assert first["duplicate_file_status"] == "unique"
     assert second["duplicate_file_status"] == "exact_duplicate"
+    # Reuse policy: second upload returns the same file_id
+    assert second["file_id"] == first["file_id"]
+    assert second.get("reused") is True
 
     with get_db_session() as session:
         rows = session.query(FileRecord).filter(FileRecord.file_hash_sha256 == first["file_hash_sha256"]).all()
-        assert len(rows) >= 2
+        assert len(rows) == 1  # Only one record for duplicate files
 
 
 def test_ofx_pipeline_persists_parser_run_batch_and_transactions(tmp_path: Path):

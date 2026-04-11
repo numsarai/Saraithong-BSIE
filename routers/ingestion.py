@@ -71,6 +71,9 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
     save_path = Path(persisted["stored_path"])
     job_id = str(uuid.uuid4())
 
+    # If file was reused (exact duplicate), still allow re-analysis
+    is_reused = persisted.get("reused", False)
+
     try:
         if save_path.suffix.lower() == ".ofx":
             data_df = parse_ofx_file(save_path)

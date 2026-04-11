@@ -51,6 +51,19 @@ def _row_to_json(row: pd.Series) -> dict[str, Any]:
     return payload
 
 
+def _legacy_account_package_files(output_dir: Path) -> list[str]:
+    files = ["meta.json"]
+    processed_dir = output_dir / "processed"
+    if not processed_dir.exists():
+        return files
+    files.extend(
+        f"processed/{path.name}"
+        for path in sorted(processed_dir.iterdir(), key=lambda item: item.name.lower())
+        if path.is_file()
+    )
+    return files
+
+
 def _sync_mapping_profile(session, *, bank_key: str, confirmed_mapping: dict | None) -> tuple[str | None, str | None]:
     if not confirmed_mapping:
         return None, None
@@ -411,24 +424,7 @@ def persist_pipeline_run(
         export_job.completed_at = utcnow()
         export_job.output_path = str(output_dir)
         export_job.summary_json = {
-            "files": [
-                "meta.json",
-                "processed/transactions.csv",
-                "processed/entities.csv",
-                "processed/links.csv",
-                "processed/nodes.csv",
-                "processed/nodes.json",
-                "processed/edges.csv",
-                "processed/edges.json",
-                "processed/aggregated_edges.csv",
-                "processed/aggregated_edges.json",
-                "processed/derived_account_edges.csv",
-                "processed/derived_account_edges.json",
-                "processed/graph_manifest.json",
-                "processed/suspicious_findings.csv",
-                "processed/suspicious_findings.json",
-                "processed/i2_chart.anx",
-            ]
+            "files": _legacy_account_package_files(output_dir)
         }
 
         session.commit()

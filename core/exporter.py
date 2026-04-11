@@ -28,6 +28,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from core.account_parser import parse_account
 from utils.date_utils import format_date_range
 from core.export_anx import export_anx_from_graph
+from core.export_i2_import import write_i2_import_package
 from core.graph_analysis import build_graph_analysis, write_graph_analysis_exports
 from core.graph_export import write_graph_exports
 from core.bank_logo_registry import build_bank_logo_catalog, find_bank_logo_record, render_bank_logo_png_bytes
@@ -664,6 +665,19 @@ def export_package(
     except Exception as e:
         logger.warning(f"  ANX export failed (non-fatal): {e}")
 
+    # 4c. Export i2 import package (.ximp + companion CSV)
+    i2_import_paths = write_i2_import_package(
+        graph_bundle["nodes_df"],
+        graph_bundle["edges_df"],
+        processed_dir,
+        subject=f"BSIE import for {subject_name or account_number or 'statement'}",
+        comments=(
+            f"Generated from BSIE account package for {subject_name or account_number or 'statement'} "
+            "using the shared graph export bundle."
+        ),
+        author="BSIE",
+    )
+
     # 5. Multi-sheet report Excel (all sheets in one file)
     #    Filename: {subject_name}_{bank}_report.xlsx  (or report.xlsx if no name)
     if subject_name:
@@ -741,6 +755,8 @@ def export_package(
         "reconciliation": "reconciliation.csv",
         "ofx": "account.ofx",
         "anx": "i2_chart.anx",
+        "i2_import_csv": i2_import_paths["csv_path"].name,
+        "i2_import_spec": i2_import_paths["spec_path"].name,
     }
     meta["category_counts"] = {
         "transfer_in": len(transaction_categories["transfer_in"]),

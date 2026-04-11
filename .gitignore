@@ -17,9 +17,12 @@ env/
 *.log
 server.log
 
-# Data / output files
+# Data / runtime files
+data/input/
+data/evidence/
 data/output/
-data/uploads/
+data/exports/
+data/backups/
 *.xlsx
 *.xls
 !generate_example_input.py
@@ -31,6 +34,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.pytest_cache/
 
 # Local settings
 .env
@@ -56,3 +60,8 @@ static/dist/
 # Node
 frontend/node_modules/
 frontend/dist/
+
+# Generated review/install artifacts
+artifacts/
+tmp_screens/
+tmp_i2/

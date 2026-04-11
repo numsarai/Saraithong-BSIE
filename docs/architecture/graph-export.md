@@ -102,13 +102,32 @@ agree on the same graph shape.
 
 ## i2 Export Strategy
 
-The ANX exporter in [`core/export_anx.py`](../../core/export_anx.py) intentionally exports a simplified subgraph:
+BSIE now emits two i2-facing outputs from the same graph bundle:
+
+1. direct chart export via [`core/export_anx.py`](../../core/export_anx.py)
+2. import-package export via [`core/export_i2_import.py`](../../core/export_i2_import.py)
+
+The ANX exporter intentionally exports a simplified subgraph:
 
 - includes `OWNS`, `SENT_TO`, `RECEIVED_FROM`, `MATCHED_TO`, `POSSIBLE_SAME_AS`
 - excludes aggregate rows
 - excludes bookkeeping-only lineage edges such as `APPEARS_IN`
 
 This keeps the chart readable while preserving the richer CSV graph layer for downstream tools and secondary processing.
+
+The i2 import package uses a more import-friendly transaction surface:
+
+- writes `i2_import_transactions.csv`
+- writes `i2_import_spec.ximp`
+- only includes transaction-flow edges (`SENT_TO`, `RECEIVED_FROM`)
+- maps transaction lineage fields into import attributes so analysts can inspect file, parser-run, batch, sheet, and row provenance after import
+
+This gives analysts two stable workflows:
+
+- open `i2_chart.anx` when they want a ready-made chart immediately
+- import `i2_import_spec.ximp` when they want i2 to build cards and layout from the companion CSV inside the Analyst's Notebook import flow
+
+During implementation the generated `.anx` and `.ximp` outputs were validated with the Windows .NET XML parser against the real i2 schema files bundled with Analyst's Notebook 9. That check matters because the legacy macOS XML tooling does not fully understand every regex/import construct in those older XSD files.
 
 ## Graph Analysis Module
 
@@ -161,5 +180,5 @@ To extend the graph safely:
 1. add new node/edge types in the shared graph builder first
 2. update `graph_manifest.json` metadata
 3. keep `edges.csv` backward compatible by adding columns rather than renaming existing ones
-4. decide whether the new edge belongs in ANX or only in CSV
+4. decide whether the new edge belongs in direct ANX, the import package, or only in CSV
 5. add regression tests for schema, direction, lineage, and assertion status

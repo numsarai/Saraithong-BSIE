@@ -228,6 +228,8 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
         "reconciliation.csv",
         "reconciliation.xlsx",
         "i2_chart.anx",
+        "i2_import_transactions.csv",
+        "i2_import_spec.ximp",
         "Subject_SCB_report.xlsx",
     ]
 
@@ -352,6 +354,8 @@ def test_export_package_writes_i2_split_outputs(tmp_path):
     assert meta["category_files"]["graph_analysis_workbook"] == "graph_analysis.xlsx"
     assert meta["category_files"]["suspicious_findings"] == "suspicious_findings.csv"
     assert meta["category_files"]["suspicious_findings_json"] == "suspicious_findings.json"
+    assert meta["category_files"]["i2_import_csv"] == "i2_import_transactions.csv"
+    assert meta["category_files"]["i2_import_spec"] == "i2_import_spec.ximp"
     assert meta["graph_analysis"]["overview"]["transaction_rows"] == 4
     assert meta["original_filename"] == "input.xlsx"
 

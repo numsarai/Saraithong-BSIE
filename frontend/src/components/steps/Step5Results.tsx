@@ -117,6 +117,8 @@ export function Step5Results() {
     { label: 'Reconciliation (.xlsx)', file: 'processed/reconciliation.xlsx', downloadName: `${filePrefix}_reconciliation.xlsx` },
     { label: 'Account OFX (.ofx)',    file: `processed/${categoryFiles.ofx || 'account.ofx'}`, downloadName: `${filePrefix}.ofx` },
     { label: 'i2 Chart (.anx)',       file: 'processed/i2_chart.anx', downloadName: `${filePrefix}_i2_chart.anx` },
+    { label: 'i2 Import Data (.csv)', file: `processed/${categoryFiles.i2_import_csv || 'i2_import_transactions.csv'}`, downloadName: `${filePrefix}_i2_import_transactions.csv` },
+    { label: 'i2 Import Spec (.ximp)', file: `processed/${categoryFiles.i2_import_spec || 'i2_import_spec.ximp'}`, downloadName: `${filePrefix}_i2_import_spec.ximp` },
     { label: 'Original Source',       file: `raw/original${originalFilename.includes('.') ? originalFilename.slice(originalFilename.lastIndexOf('.')) : '.xlsx'}`, downloadName: originalFilename },
     { label: 'Metadata (.json)',      file: 'meta.json', downloadName: `${filePrefix}_meta.json` },
   ]

@@ -9,6 +9,7 @@ from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session
 
 from core.export_anx import export_anx_from_graph
+from core.export_i2_import import write_i2_import_package
 from core.graph_analysis import build_graph_analysis, write_graph_analysis_exports
 from core.graph_export import write_graph_exports
 from paths import EXPORTS_DIR
@@ -370,6 +371,14 @@ def run_export_job(session: Session, job: ExportJob) -> ExportJob:
         graph_analysis_paths = write_graph_analysis_exports(target_dir, graph_analysis)
         anx_path = target_dir / "i2_chart.anx"
         export_anx_from_graph(graph_bundle["nodes_df"], graph_bundle["edges_df"], anx_path)
+        i2_import_paths = write_i2_import_package(
+            graph_bundle["nodes_df"],
+            graph_bundle["edges_df"],
+            target_dir,
+            subject="BSIE graph export import package",
+            comments="Generated from the BSIE graph export job for import into i2 Analyst's Notebook.",
+            author=job.created_by or "BSIE",
+        )
         output_path = str(graph_bundle["manifest_path"])
         summary = {
             "nodes": int(graph_bundle["manifest"]["node_count"]),
@@ -392,6 +401,8 @@ def run_export_job(session: Session, job: ExportJob) -> ExportJob:
                 graph_analysis_paths["suspicious_csv_path"].name,
                 graph_analysis_paths["suspicious_json_path"].name,
                 anx_path.name,
+                i2_import_paths["csv_path"].name,
+                i2_import_paths["spec_path"].name,
             ],
         }
     else:

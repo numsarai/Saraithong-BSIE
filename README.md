@@ -61,9 +61,27 @@ BSIE is now a persistent, investigation-grade bank statement intelligence platfo
 
 ## Quick Start
 
-**1. Install dependencies**
+Repository clones are intended for developers. Generated installers, smoke-test
+screenshots, local databases, and runtime data should stay out of the repo and
+are treated as local artifacts.
+If someone only needs the app, they should use packaged installers/releases
+instead of cloning the source repository.
+
+### Prerequisites
+
+- Python `3.12`
+- Node.js LTS + `npm`
+- macOS only: `create-dmg` if you want a DMG
+- Windows only: Inno Setup 6 if you want a Windows installer
+
+**1. Clone and create a local environment**
 ```bash
-pip install -r requirements.txt
+git clone <your-repo-url>
+cd bsie
+python3.12 -m venv .venv
+./.venv/bin/python -m pip install --upgrade pip setuptools wheel
+./.venv/bin/python -m pip install -r requirements.txt
+cd frontend && npm install && cd ..
 ```
 
 **2. Configure local runtime**
@@ -83,21 +101,31 @@ Optional operational settings:
 
 **3. Create or upgrade the local schema**
 ```bash
-alembic upgrade head
+./.venv/bin/alembic upgrade head
 ```
 
 Runtime startup also creates tables automatically for local continuity, but Alembic is the canonical schema path.
 
-**4. Run the server**
+**4. Run in development mode**
 ```bash
-python app.py
+./dev.sh
 ```
 
-The app starts at **http://127.0.0.1:8757**
+Or run backend/frontend manually:
+```bash
+./.venv/bin/python app.py
+cd frontend && npm run dev
+```
+
+Development URLs:
+
+- App: `http://127.0.0.1:6776`
+- API: `http://127.0.0.1:8757/api`
+- Health: `http://127.0.0.1:8757/health`
 
 **5. Run tests**
 ```bash
-PYTHONPATH=$PWD pytest tests -q
+./.venv/bin/pytest tests -q
 cd frontend && npm test && npm run build
 ```
 
@@ -280,8 +308,12 @@ processed/
   graph_manifest.json     ← graph schema/version + counts
   graph_analysis.json     ← BSIE graph analytics from normalized transactions
   graph_analysis.xlsx     ← analyst-friendly workbook for graph analytics
-  i2_chart.anx            ← simplified i2-friendly XML chart export
-  meta.json               ← summary statistics
+  suspicious_findings.csv ← focused analyst review cues from graph analysis
+  suspicious_findings.json
+  i2_chart.anx            ← direct i2 Analyst's Notebook chart export
+  i2_import_transactions.csv ← companion import data for the i2 import wizard
+  i2_import_spec.ximp     ← i2 import specification for the companion CSV
+meta.json                 ← summary statistics + category file map
 ```
 
 Bulk runs also write a case-level summary to `/data/output/bulk_runs/{run_id}/`.
@@ -371,8 +403,11 @@ BSIE graph exports now use one shared deterministic schema across:
 
 - per-account package exports
 - database-backed graph export jobs
-- IBM i2-style ANX output
+- IBM i2 Analyst's Notebook direct chart export (`.anx`)
+- IBM i2 Analyst's Notebook import package (`.ximp + .csv`)
 - the internal BSIE Graph Analysis Module
+
+Detailed workflow notes for analysts and operators live in [`docs/architecture/i2-export-workflows.md`](docs/architecture/i2-export-workflows.md).
 
 ### Graph node schema
 
@@ -445,11 +480,19 @@ This keeps the pipeline consistent:
 
 ### i2 export behavior
 
-`i2_chart.anx` is intentionally simpler than the CSV graph export:
+BSIE now emits two i2-ready surfaces from the same graph bundle:
 
-- includes analyst-friendly relationship edges such as `SENT_TO`, `RECEIVED_FROM`, `OWNS`, `MATCHED_TO`, and `POSSIBLE_SAME_AS`
-- excludes aggregate rows and bookkeeping-only lineage edges like `APPEARS_IN`
-- uses the same stable node IDs as the CSV graph export
+- `i2_chart.anx`
+  - for analysts who want to open a ready-made chart directly in Analyst's Notebook
+  - includes analyst-friendly relationship edges such as `SENT_TO`, `RECEIVED_FROM`, `OWNS`, `MATCHED_TO`, and `POSSIBLE_SAME_AS`
+  - excludes aggregate rows and bookkeeping-only lineage edges like `APPEARS_IN`
+  - uses the same stable node IDs as the CSV graph export
+- `i2_import_spec.ximp` + `i2_import_transactions.csv`
+  - for the i2 import wizard or `SeriesImport.exe`
+  - focuses on transaction flow edges only (`SENT_TO`, `RECEIVED_FROM`) so imported cards stay readable and transaction-centric
+  - preserves evidence-oriented fields such as transaction IDs, file IDs, parser runs, batch IDs, source files, sheets, and row numbers as import attributes
+
+Both i2 outputs are generated from the same deterministic `nodes.csv` and `edges.csv` bundle so the direct-chart path and import-wizard path stay aligned.
 
 ### Optional Neo4j integration
 
@@ -559,4 +602,8 @@ Set `"amount_mode"` to `"signed"` (single column, positive/negative) or `"debit_
 
 ## License
 
-MIT
+This repository is proprietary and is not released under an open-source
+license. No right to use, copy, modify, distribute, sublicense, or
+commercialize BSIE is granted without prior written permission from the owner.
+
+See [LICENSE](/Users/saraithong/Documents/bsie/LICENSE) for the full terms.

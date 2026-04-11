@@ -6,24 +6,21 @@ import { fmt, fmtDate } from '@/lib/utils'
 import { FileText, Users, ArrowRightLeft, AlertTriangle, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react'
 
 interface DashboardData {
-  readonly file_count: number
-  readonly account_count: number
-  readonly transaction_count: number
-  readonly alert_count: number
-  readonly total_in: number
-  readonly total_out: number
-  readonly circulation: number
+  readonly counts: { files: number; accounts: number; transactions: number; parser_runs: number }
+  readonly totals: { total_in: number; total_out: number; circulation: number }
+  readonly alerts: { total: number; new: number; critical: number; high: number }
   readonly recent_activity: ReadonlyArray<{
+    readonly id: string
     readonly status: string
     readonly bank: string
-    readonly account: string
-    readonly date: string
+    readonly started_at: string
+    readonly summary: any
   }>
   readonly top_accounts: ReadonlyArray<{
     readonly account: string
     readonly name: string
     readonly bank: string
-    readonly transaction_count: number
+    readonly txn_count: number
   }>
 }
 
@@ -50,11 +47,15 @@ export function Dashboard() {
     )
   }
 
+  const counts = data.counts || { files: 0, accounts: 0, transactions: 0, parser_runs: 0 }
+  const totals = data.totals || { total_in: 0, total_out: 0, circulation: 0 }
+  const alerts = data.alerts || { total: 0, new: 0, critical: 0, high: 0 }
+
   const statCards = [
-    { label: t('dashboard.stats.files'), value: data.file_count, icon: FileText, color: 'text-blue-400' },
-    { label: t('dashboard.stats.accounts'), value: data.account_count, icon: Users, color: 'text-violet-400' },
-    { label: t('dashboard.stats.transactions'), value: data.transaction_count, icon: ArrowRightLeft, color: 'text-sky-400' },
-    { label: t('dashboard.stats.alerts'), value: data.alert_count, icon: AlertTriangle, color: 'text-amber-400' },
+    { label: t('dashboard.stats.files'), value: counts.files ?? 0, icon: FileText, color: 'text-blue-400' },
+    { label: t('dashboard.stats.accounts'), value: counts.accounts ?? 0, icon: Users, color: 'text-violet-400' },
+    { label: t('dashboard.stats.transactions'), value: counts.transactions ?? 0, icon: ArrowRightLeft, color: 'text-sky-400' },
+    { label: t('dashboard.stats.alerts'), value: alerts.new ?? 0, icon: AlertTriangle, color: 'text-amber-400' },
   ] as const
 
   return (
@@ -70,7 +71,7 @@ export function Dashboard() {
             </div>
             <div>
               <div className="text-[11px] uppercase tracking-wide text-muted font-semibold">{label}</div>
-              <div className="text-2xl font-bold text-text">{value.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-text">{(value ?? 0).toLocaleString()}</div>
             </div>
           </Card>
         ))}
@@ -83,21 +84,21 @@ export function Dashboard() {
             <TrendingUp size={16} className="text-emerald-400" />
             <span>{t('dashboard.flow.totalIn')}</span>
           </CardTitle>
-          <div className="text-2xl font-bold text-emerald-400">{fmt(data.total_in)}</div>
+          <div className="text-2xl font-bold text-emerald-400">{fmt(totals.total_in)}</div>
         </Card>
         <Card>
           <CardTitle>
             <TrendingDown size={16} className="text-red-400" />
             <span>{t('dashboard.flow.totalOut')}</span>
           </CardTitle>
-          <div className="text-2xl font-bold text-red-400">{fmt(data.total_out)}</div>
+          <div className="text-2xl font-bold text-red-400">{fmt(totals.total_out)}</div>
         </Card>
         <Card>
           <CardTitle>
             <RefreshCw size={16} className="text-sky-400" />
             <span>{t('dashboard.flow.circulation')}</span>
           </CardTitle>
-          <div className="text-2xl font-bold text-sky-400">{fmt(data.circulation)}</div>
+          <div className="text-2xl font-bold text-sky-400">{fmt(totals.circulation)}</div>
         </Card>
       </div>
 
@@ -131,8 +132,8 @@ export function Dashboard() {
                       </span>
                     </td>
                     <td className="py-2 pr-3 text-text">{row.bank}</td>
-                    <td className="py-2 pr-3 text-text font-mono text-xs">{row.account}</td>
-                    <td className="py-2 text-muted">{fmtDate(row.date)}</td>
+                    <td className="py-2 pr-3 text-text font-mono text-xs">{row.summary?.subject_account ?? '—'}</td>
+                    <td className="py-2 text-muted">{fmtDate(row.started_at)}</td>
                   </tr>
                 ))}
                 {(!data.recent_activity || data.recent_activity.length === 0) && (
@@ -164,7 +165,7 @@ export function Dashboard() {
                     <td className="py-2 pr-3 text-text font-mono text-xs">{row.account}</td>
                     <td className="py-2 pr-3 text-text">{row.name || '—'}</td>
                     <td className="py-2 pr-3 text-muted">{row.bank}</td>
-                    <td className="py-2 text-right text-text font-semibold">{row.transaction_count.toLocaleString()}</td>
+                    <td className="py-2 text-right text-text font-semibold">{(row.txn_count ?? 0).toLocaleString()}</td>
                   </tr>
                 ))}
                 {(!data.top_accounts || data.top_accounts.length === 0) && (

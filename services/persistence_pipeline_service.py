@@ -182,6 +182,81 @@ def mark_parser_run_failed(parser_run_id: str, error: str) -> None:
         session.commit()
 
 
+def _cleanup_prior_runs(session, file_id: str, current_parser_run_id: str) -> int:
+    """Delete data from prior parser runs for the same file, excluding the current run.
+
+    This prevents duplicate transactions from accumulating when re-processing.
+    """
+    from persistence.models import Alert, TransactionMatch
+
+    prior_runs = session.scalars(
+        select(ParserRun).where(
+            ParserRun.file_id == file_id,
+            ParserRun.id != current_parser_run_id,
+            ParserRun.status == "done",
+        )
+    ).all()
+
+    if not prior_runs:
+        return 0
+
+    prior_run_ids = [r.id for r in prior_runs]
+    deleted_count = 0
+
+    for run_id in prior_run_ids:
+        # Delete transaction matches for transactions in this run
+        txn_ids = [t.id for t in session.scalars(
+            select(Transaction).where(Transaction.parser_run_id == run_id)
+        ).all()]
+
+        if txn_ids:
+            session.execute(
+                TransactionMatch.__table__.delete().where(
+                    TransactionMatch.source_transaction_id.in_(txn_ids)
+                )
+            )
+            session.execute(
+                TransactionMatch.__table__.delete().where(
+                    TransactionMatch.target_transaction_id.in_(txn_ids)
+                )
+            )
+            # Delete alerts for these transactions
+            session.execute(
+                Alert.__table__.delete().where(Alert.parser_run_id == run_id)
+            )
+
+        # Delete transactions
+        deleted = session.execute(
+            Transaction.__table__.delete().where(Transaction.parser_run_id == run_id)
+        ).rowcount
+        deleted_count += deleted
+
+        # Delete raw import rows
+        session.execute(
+            RawImportRow.__table__.delete().where(RawImportRow.parser_run_id == run_id)
+        )
+
+        # Delete statement batches
+        session.execute(
+            StatementBatch.__table__.delete().where(StatementBatch.parser_run_id == run_id)
+        )
+
+        # Mark the old parser run as superseded
+        for run in prior_runs:
+            if run.id == run_id:
+                run.status = "superseded"
+                session.add(run)
+
+    if deleted_count:
+        import logging
+        logging.getLogger(__name__).info(
+            "Cleaned %d transactions from %d prior parser runs for file %s",
+            deleted_count, len(prior_run_ids), file_id,
+        )
+
+    return deleted_count
+
+
 def persist_pipeline_run(
     *,
     file_id: str,
@@ -208,6 +283,9 @@ def persist_pipeline_run(
         file_row = session.get(FileRecord, file_id)
         if not file_row:
             raise ValueError(f"File {file_id} not found")
+
+        # Clean up data from prior parser runs for this file to prevent duplicates
+        _cleanup_prior_runs(session, file_id, parser_run_id)
 
         mapping_profile_id, mapping_version = _sync_mapping_profile(session, bank_key=bank_key, confirmed_mapping=confirmed_mapping)
         parser_run.mapping_profile_id = mapping_profile_id

@@ -106,3 +106,35 @@
 | MaxBodySize | Reject uploads >50 MB |
 | CI/CD | GitHub Actions: lint, type check, test, build |
 | Tests | 244 total (212 backend pytest + 32 frontend vitest) |
+| Rate Limiting | slowapi on login endpoint (10 req/min) |
+| Security Headers | X-Frame-Options, X-Content-Type-Options, Referrer-Policy, X-XSS-Protection |
+| File Validation | Upload allowlist: .xlsx/.xls/.ofx/.pdf/.csv/.png/.jpg/.bmp |
+
+## Investigation Workspace (13 Tabs)
+
+| Tab | Purpose |
+|-----|---------|
+| Database | Status, backup/restore, settings |
+| Files | Uploaded file registry with metadata |
+| Parser Runs | Run history, re-processing |
+| Accounts | Account registry, holder info, entity profiles |
+| Search | Full transaction search with filters |
+| Alerts | Alert dashboard, rule config, review |
+| Cross-Account | Multi-account flow analysis, BFS path finder |
+| Link Chart | Interactive multi-hop graph explorer (mini i2) |
+| Timeline | Temporal aggregation and visualization |
+| Duplicates | Duplicate group review |
+| Matches | Match candidate review |
+| Audit | Audit log and learning feedback |
+| Exports | Export job management |
+
+## Platform Operations
+
+| Feature | Details |
+|---------|---------|
+| Database | SQLite with WAL mode, SQLAlchemy 2 |
+| Backup | Automated scheduled backups with retention |
+| Job Queue | Serialized background processing (no DB lock) |
+| Auto Insights | Generated after pipeline completion |
+| File Metadata | Forensic integrity checks on upload |
+| Case Tapestry | Multi-account case narrative generation |

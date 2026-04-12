@@ -575,7 +575,9 @@ def normalize(
 
     records = []
 
-    for idx, row in df.iterrows():
+    col_list = list(df.columns)
+    for idx in range(len(df)):
+        row = df.iloc[idx]
         try:
             if fmt_type == "dual_account":
                 rec = _normalize_dual_account(

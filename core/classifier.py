@@ -120,13 +120,13 @@ def classify_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     types: list = []
     confs: list = []
 
-    for _, row in df.iterrows():
-        direction = str(row.get("direction", "UNKNOWN"))
-        cp_acc    = str(row.get("counterparty_account", "") or "")
-        desc      = str(row.get("description", "") or "")
-        nlp_hint  = str(row.get("nlp_type_hint", "unknown") or "unknown")
-        nlp_conf  = float(row.get("nlp_confidence", 0.0) or 0.0)
-        channel   = str(row.get("channel", "") or "")
+    for row in df.itertuples(index=False):
+        direction = str(getattr(row, "direction", "UNKNOWN"))
+        cp_acc    = str(getattr(row, "counterparty_account", "") or "")
+        desc      = str(getattr(row, "description", "") or "")
+        nlp_hint  = str(getattr(row, "nlp_type_hint", "unknown") or "unknown")
+        nlp_conf  = float(getattr(row, "nlp_confidence", 0.0) or 0.0)
+        channel   = str(getattr(row, "channel", "") or "")
 
         txn_type, conf = classify_transaction(
             direction, cp_acc, desc, nlp_hint, nlp_conf, channel

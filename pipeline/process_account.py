@@ -121,9 +121,12 @@ def _run_nlp(df: pd.DataFrame) -> pd.DataFrame:
         s = str(val).strip()
         return "" if s.lower() in ("nan", "none", "nat") else s
 
+    import re as _re_module
+    _BARE_TIME_RE = _re_module.compile(r'\d{1,2}:\d{2}(:\d{2})?')
+
     rows = []
-    for _, row in df.iterrows():
-        r = enrich_transaction_row(row.to_dict())
+    for row in df.itertuples(index=False):
+        r = enrich_transaction_row(row._asdict())
 
         nlp_name  = _clean(r.get("nlp_best_name"))
         cp_name   = _clean(r.get("counterparty_name"))
@@ -164,9 +167,8 @@ def _run_nlp(df: pd.DataFrame) -> pd.DataFrame:
                 r["counterparty_name"] = "หักบัญชีอัตโนมัติ"
 
         # ⑥ Description = bare time → use channel as description for readability
-        import re as _re
         desc = _clean(r.get("description"))
-        if _re.fullmatch(r'\d{1,2}:\d{2}(:\d{2})?', desc) or not desc:
+        if _BARE_TIME_RE.fullmatch(desc) or not desc:
             ch_label = _clean(r.get("channel"))
             if ch_label:
                 r["description"] = ch_label
@@ -284,23 +286,62 @@ def process_account(
         logger.info("=" * 60)
         return output_dir
 
-    # ── Step 1: Load Excel ────────────────────────────────────────────────
-    logger.info("[Step 1] Loading Excel")
-    # We need a bank config for the loader; try auto-detect if not given
-    _bank_cfg_key = bank_key
+    # ── PDF / Image path ───────────────────────────────────────────────────
+    if input_file.suffix.lower() == ".pdf":
+        from core.pdf_loader import parse_pdf_file
+        from core.image_loader import parse_image_file as parse_img
 
-    # Load raw without config first to allow detection
-    sheet_pick = find_best_sheet_and_header(input_file, preview_rows=30, scan_rows=12)
-    _sheet_name = sheet_pick["sheet_name"]
-    _header_row = int(sheet_pick["header_row"])
-    _raw_preview = pd.read_excel(
-        input_file,
-        sheet_name=_sheet_name,
-        header=_header_row,
-        engine="openpyxl",
-        dtype=str,
-    ).dropna(how="all")
-    _raw_preview.columns = [str(c).strip() for c in _raw_preview.columns]
+        logger.info("[Step 1] Loading PDF")
+        pdf_result = parse_pdf_file(input_file)
+        if pdf_result["tables_found"] == 0 or len(pdf_result["df"]) < 3:
+            logger.info("[Step 1] Text extraction insufficient, trying OCR")
+            pdf_result = parse_img(input_file)
+        data_df = pdf_result["df"]
+        if data_df.empty:
+            raise ValueError(f"Could not extract transactions from PDF: {input_file.name}")
+        data_df.columns = [str(c).strip() for c in data_df.columns]
+        _sheet_name = pdf_result["source_format"]
+        _header_row = int(pdf_result.get("header_row", 0))
+        # Jump to Step 2 below (shared Excel path handles the rest)
+
+    elif input_file.suffix.lower() in (".png", ".jpg", ".jpeg", ".bmp"):
+        from core.image_loader import parse_image_file as parse_img
+
+        logger.info("[Step 1] Loading Image (OCR)")
+        img_result = parse_img(input_file)
+        data_df = img_result["df"]
+        if data_df.empty:
+            raise ValueError(f"Could not extract transactions from image: {input_file.name}")
+        data_df.columns = [str(c).strip() for c in data_df.columns]
+        _sheet_name = "IMAGE"
+        _header_row = int(img_result.get("header_row", 0))
+        # Jump to Step 2 below (shared Excel path handles the rest)
+
+    else:
+        data_df = None  # Signal that the Excel path should load data
+
+    # ── Step 1: Load Excel (skipped for PDF/Image) ─────────────────────────
+    if data_df is not None:
+        # PDF/Image path — data_df already loaded above
+        _raw_preview = data_df
+        _bank_cfg_key = bank_key
+    else:
+        logger.info("[Step 1] Loading Excel")
+        # We need a bank config for the loader; try auto-detect if not given
+        _bank_cfg_key = bank_key
+
+        # Load raw without config first to allow detection
+        sheet_pick = find_best_sheet_and_header(input_file, preview_rows=30, scan_rows=12)
+        _sheet_name = sheet_pick["sheet_name"]
+        _header_row = int(sheet_pick["header_row"])
+        _raw_preview = pd.read_excel(
+            input_file,
+            sheet_name=_sheet_name,
+            header=_header_row,
+            engine="openpyxl",
+            dtype=str,
+        ).dropna(how="all")
+        _raw_preview.columns = [str(c).strip() for c in _raw_preview.columns]
 
     # ── Step 2: Detect bank ───────────────────────────────────────────────
     logger.info("[Step 2] Detecting bank")
@@ -321,14 +362,19 @@ def process_account(
     if "sheet_index" not in bank_config or bank_config.get("sheet_index") is None:
         bank_config["sheet_index"] = 0
     bank_config["header_row"] = _header_row
-    try:
-        preview_book = pd.ExcelFile(input_file, engine="openpyxl")
-        if _sheet_name in preview_book.sheet_names:
-            bank_config["sheet_index"] = preview_book.sheet_names.index(_sheet_name)
-    except Exception:
-        pass
-    raw_df = load_excel(input_file, bank_config)
-    raw_df = raw_df.copy()
+
+    if data_df is not None:
+        # PDF/Image: use data_df directly as raw_df
+        raw_df = data_df.copy()
+    else:
+        try:
+            preview_book = pd.ExcelFile(input_file, engine="openpyxl")
+            if _sheet_name in preview_book.sheet_names:
+                bank_config["sheet_index"] = preview_book.sheet_names.index(_sheet_name)
+        except Exception:
+            pass
+        raw_df = load_excel(input_file, bank_config)
+        raw_df = raw_df.copy()
     raw_df["_source_sheet_name"] = _sheet_name
     raw_df["_source_row_number"] = [int(_header_row) + idx + 2 for idx in range(len(raw_df))]
     raw_df["_raw_row_json"] = raw_df.apply(

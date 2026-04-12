@@ -1,7 +1,8 @@
-export async function uploadFile(file: File, uploaded_by?: string) {
+export async function uploadFile(file: File, uploaded_by?: string, force_redetect?: boolean) {
   const fd = new FormData()
   fd.append('file', file)
   if (uploaded_by) fd.append('uploaded_by', uploaded_by)
+  if (force_redetect) fd.append('force_redetect', '1')
   const r = await fetch('/api/upload', { method: 'POST', body: fd })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
@@ -95,6 +96,235 @@ export async function getResults(account: string, page = 1, pageSize = 100, pars
     payload.items = payload.rows
   }
   return payload
+}
+
+export async function getResultsTimeline(account: string, parserRunId?: string | null) {
+  const params = new URLSearchParams()
+  if (parserRunId) params.set('parser_run_id', parserRunId)
+  const r = await fetch(`/api/results/${account}/timeline?${params.toString()}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getTimelineAggregate(params: Record<string, string | number | undefined>) {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') qs.set(k, String(v))
+  }
+  const r = await fetch(`/api/transactions/timeline-aggregate?${qs.toString()}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAlerts(params: Record<string, string | number | undefined> = {}) {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') qs.set(k, String(v))
+  }
+  const r = await fetch(`/api/alerts?${qs.toString()}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAlertSummary() {
+  const r = await fetch('/api/alerts/summary')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAlertConfig() {
+  const r = await fetch('/api/alerts/config')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function updateAlertConfig(config: Record<string, any>) {
+  const r = await fetch('/api/alerts/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function reviewAlert(alertId: string, status: string, reviewer: string = 'analyst', note: string = '') {
+  const r = await fetch(`/api/alerts/${alertId}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, reviewer, note }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function generateAccountReport(account: string, parserRunId?: string, analyst = 'analyst') {
+  const r = await fetch('/api/reports/account', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account, parser_run_id: parserRunId || '', analyst }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  const blob = await r.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `report_${account}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function generateCaseReport(accounts: string[], analyst = 'analyst') {
+  const r = await fetch('/api/reports/case', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accounts, analyst }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  const blob = await r.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'case_report.pdf'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function getAccountInsights(account: string) {
+  const r = await fetch(`/api/analytics/insights?account=${account}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getSnaMetrics() {
+  const r = await fetch('/api/analytics/sna')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAccountProfile(accountId: string) {
+  const r = await fetch(`/api/accounts/${accountId}/profile`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAnnotations(nodeId?: string) {
+  const qs = nodeId ? `?node_id=${nodeId}` : ''
+  const r = await fetch(`/api/annotations${qs}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function createAnnotation(nodeId: string, content: string, tag = '', createdBy = 'analyst') {
+  const r = await fetch('/api/annotations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ node_id: nodeId, content, tag, type: tag ? 'tag' : 'note', created_by: createdBy }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function deleteAnnotation(annotationId: string) {
+  const r = await fetch(`/api/annotations/${annotationId}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function listWorkspaces() {
+  const r = await fetch('/api/workspaces')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function saveWorkspace(data: Record<string, any>) {
+  const r = await fetch('/api/workspaces', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function loadWorkspace(workspaceId: string) {
+  const r = await fetch(`/api/workspaces/${workspaceId}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function deleteWorkspace(workspaceId: string) {
+  const r = await fetch(`/api/workspaces/${workspaceId}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAccountFlows(account: string) {
+  const r = await fetch(`/api/fund-flow/${account}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getMatchedTransactions(accountA: string, accountB: string) {
+  const r = await fetch(`/api/fund-flow/${accountA}/to/${accountB}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function traceFundPath(from: string, to: string, maxHops = 4) {
+  const r = await fetch(`/api/fund-flow/trace?from_account=${from}&to_account=${to}&max_hops=${maxHops}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+// ── LLM ──────────────────────────────────────────────────────────────────
+
+export async function getLlmStatus() {
+  const r = await fetch('/api/llm/status')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function llmChat(message: string, opts?: { account?: string; transactions?: any[]; model?: string }) {
+  const r = await fetch('/api/llm/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, ...opts }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function llmSummarize(transactions: any[], account?: string, model?: string) {
+  const r = await fetch('/api/llm/summarize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transactions, account, model }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getDashboard() {
+  const r = await fetch('/api/dashboard')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function annotateTransaction(transactionId: string, note: string, reviewer = 'analyst') {
+  const r = await fetch(`/api/transactions/${transactionId}/annotate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note, reviewer }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getAuditTrail(objectType: string, objectId: string) {
+  const r = await fetch(`/api/audit-trail/${objectType}/${objectId}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
 }
 
 export async function getFiles() {

@@ -30,7 +30,24 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run pytest
-        run: pytest -q
+        run: pytest -q --tb=short
+
+      - name: Check for hardcoded secrets
+        run: |
+          # Simple grep for common secret patterns
+          ! grep -rn "API_KEY\s*=\s*['\"][^'\"]\{10,\}" --include="*.py" --exclude-dir=.venv . || echo "WARNING: Possible hardcoded secrets found"
+
+  backend-lint:
+    name: Backend Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - name: Check Python formatting
+        run: ruff check --select E,W,F --ignore E501 . || true
 
   frontend-checks:
     name: Frontend Tests and Build
@@ -53,6 +70,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit || true
 
       - name: Run frontend tests
         run: npm test

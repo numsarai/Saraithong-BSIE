@@ -78,13 +78,18 @@ def get_neo4j_settings() -> Neo4jSettings:
 def get_neo4j_status() -> dict[str, Any]:
     settings = get_neo4j_settings()
     configured = bool(settings.uri and settings.user and settings.password)
+    # HIGH-2 fix: NEVER expose password in API response
     return {
-        **asdict(settings),
+        "enabled": settings.enabled,
+        "uri_masked": _mask_secret(settings.uri),
+        "user": settings.user,
+        "database": settings.database,
+        "batch_size": settings.batch_size,
+        "sync_findings": settings.sync_findings,
         "configured": configured,
         "driver_available": GraphDatabase is not None,
         "driver_version": NEO4J_DRIVER_VERSION or "",
         "integration_version": NEO4J_INTEGRATION_VERSION,
-        "uri_masked": _mask_secret(settings.uri),
     }
 
 
@@ -140,10 +145,11 @@ def _prepare_finding_rows(findings: list[dict[str, Any]]) -> list[dict[str, Any]
 def sync_graph_to_neo4j(session: Session, *, limit: int = 2000, include_findings: bool = True, **filters) -> dict[str, Any]:
     from services.graph_analysis_service import get_graph_bundle_data
 
+    settings = get_neo4j_settings()
     status = get_neo4j_status()
     if not status["driver_available"]:
         raise RuntimeError("Neo4j driver is not installed")
-    if not status["enabled"]:
+    if not settings.enabled:
         raise RuntimeError("Neo4j export is disabled")
     if not status["configured"]:
         raise RuntimeError("Neo4j connection is not configured")
@@ -155,9 +161,10 @@ def sync_graph_to_neo4j(session: Session, *, limit: int = 2000, include_findings
     node_rows = _prepare_node_rows(graph_bundle["nodes_df"].to_dict(orient="records"))
     edge_rows = _prepare_edge_rows(graph_bundle["edges_df"].to_dict(orient="records"))
     derived_rows = _prepare_edge_rows(graph_bundle["derived_account_edges_df"].to_dict(orient="records"))
-    finding_rows = _prepare_finding_rows(list(analysis.get("suspicious_findings", []))) if include_findings and status["sync_findings"] else []
+    finding_rows = _prepare_finding_rows(list(analysis.get("suspicious_findings", []))) if include_findings and settings.sync_findings else []
 
-    driver = GraphDatabase.driver(status["uri"], auth=(status["user"], status["password"]))
+    # Use settings directly (not status) to access credentials securely
+    driver = GraphDatabase.driver(settings.uri, auth=(settings.user, settings.password))
     try:
         with driver.session(database=status["database"]) as neo4j_session:
             for node_type, rows in _group_rows(node_rows, "node_type").items():

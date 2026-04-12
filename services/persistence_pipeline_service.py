@@ -31,6 +31,36 @@ from utils.text_utils import normalize_text
 PARSER_VERSION = "3.0.0"
 
 
+def _upsert_account_entity_link(
+    session,
+    *,
+    account_id: str,
+    entity_id: str,
+    link_type: str,
+    confidence_score: Decimal = Decimal("1.0000"),
+    source_reason: str = "",
+) -> None:
+    """Insert an AccountEntityLink only if the (account, entity, type) combo doesn't exist."""
+    existing = session.scalars(
+        select(AccountEntityLink).where(
+            AccountEntityLink.account_id == account_id,
+            AccountEntityLink.entity_id == entity_id,
+            AccountEntityLink.link_type == link_type,
+        )
+    ).first()
+    if existing:
+        return
+    session.add(AccountEntityLink(
+        account_id=account_id,
+        entity_id=entity_id,
+        link_type=link_type,
+        confidence_score=confidence_score,
+        source_reason=source_reason,
+        is_manual_confirmed=False,
+        created_at=utcnow(),
+    ))
+
+
 def _to_python_date(value: Any) -> date | None:
     text = str(value or "").strip()
     if not text:
@@ -49,6 +79,19 @@ def _row_to_json(row: pd.Series) -> dict[str, Any]:
         else:
             payload[str(key)] = str(value)
     return payload
+
+
+def _legacy_account_package_files(output_dir: Path) -> list[str]:
+    files = ["meta.json"]
+    processed_dir = output_dir / "processed"
+    if not processed_dir.exists():
+        return files
+    files.extend(
+        f"processed/{path.name}"
+        for path in sorted(processed_dir.iterdir(), key=lambda item: item.name.lower())
+        if path.is_file()
+    )
+    return files
 
 
 def _sync_mapping_profile(session, *, bank_key: str, confirmed_mapping: dict | None) -> tuple[str | None, str | None]:
@@ -139,6 +182,81 @@ def mark_parser_run_failed(parser_run_id: str, error: str) -> None:
         session.commit()
 
 
+def _cleanup_prior_runs(session, file_id: str, current_parser_run_id: str) -> int:
+    """Delete data from prior parser runs for the same file, excluding the current run.
+
+    This prevents duplicate transactions from accumulating when re-processing.
+    """
+    from persistence.models import Alert, TransactionMatch
+
+    prior_runs = session.scalars(
+        select(ParserRun).where(
+            ParserRun.file_id == file_id,
+            ParserRun.id != current_parser_run_id,
+            ParserRun.status == "done",
+        )
+    ).all()
+
+    if not prior_runs:
+        return 0
+
+    prior_run_ids = [r.id for r in prior_runs]
+    deleted_count = 0
+
+    for run_id in prior_run_ids:
+        # Delete transaction matches for transactions in this run
+        txn_ids = [t.id for t in session.scalars(
+            select(Transaction).where(Transaction.parser_run_id == run_id)
+        ).all()]
+
+        if txn_ids:
+            session.execute(
+                TransactionMatch.__table__.delete().where(
+                    TransactionMatch.source_transaction_id.in_(txn_ids)
+                )
+            )
+            session.execute(
+                TransactionMatch.__table__.delete().where(
+                    TransactionMatch.target_transaction_id.in_(txn_ids)
+                )
+            )
+            # Delete alerts for these transactions
+            session.execute(
+                Alert.__table__.delete().where(Alert.parser_run_id == run_id)
+            )
+
+        # Delete transactions
+        deleted = session.execute(
+            Transaction.__table__.delete().where(Transaction.parser_run_id == run_id)
+        ).rowcount
+        deleted_count += deleted
+
+        # Delete raw import rows
+        session.execute(
+            RawImportRow.__table__.delete().where(RawImportRow.parser_run_id == run_id)
+        )
+
+        # Delete statement batches
+        session.execute(
+            StatementBatch.__table__.delete().where(StatementBatch.parser_run_id == run_id)
+        )
+
+        # Mark the old parser run as superseded
+        for run in prior_runs:
+            if run.id == run_id:
+                run.status = "superseded"
+                session.add(run)
+
+    if deleted_count:
+        import logging
+        logging.getLogger(__name__).info(
+            "Cleaned %d transactions from %d prior parser runs for file %s",
+            deleted_count, len(prior_run_ids), file_id,
+        )
+
+    return deleted_count
+
+
 def persist_pipeline_run(
     *,
     file_id: str,
@@ -166,6 +284,9 @@ def persist_pipeline_run(
         if not file_row:
             raise ValueError(f"File {file_id} not found")
 
+        # Clean up data from prior parser runs for this file to prevent duplicates
+        _cleanup_prior_runs(session, file_id, parser_run_id)
+
         mapping_profile_id, mapping_version = _sync_mapping_profile(session, bank_key=bank_key, confirmed_mapping=confirmed_mapping)
         parser_run.mapping_profile_id = mapping_profile_id
         parser_run.mapping_profile_version = mapping_version
@@ -183,10 +304,13 @@ def persist_pipeline_run(
         ).strip()
 
         raw_row_map: dict[int, str] = {}
-        for idx, row in raw_df.reset_index(drop=True).iterrows():
-            source_row_number = int(row.get("_source_row_number") or (header_row + idx + 2))
-            payload = _row_to_json(row)
-            raw_row = RawImportRow(
+        raw_rows_to_insert: list[RawImportRow] = []
+        raw_row_numbers: list[int] = []
+        for row in raw_df.reset_index(drop=True).itertuples(index=True):
+            idx = row.Index
+            source_row_number = int(getattr(row, "_source_row_number", 0) or (header_row + idx + 2))
+            payload = {str(k): (None if pd.isna(v) else str(v)) for k, v in row._asdict().items() if k != "Index"}
+            raw_row_obj = RawImportRow(
                 file_id=file_id,
                 parser_run_id=parser_run_id,
                 sheet_name=sheet_name,
@@ -195,9 +319,12 @@ def persist_pipeline_run(
                 parsed_status="parsed",
                 warning_json=[],
             )
-            session.add(raw_row)
-            session.flush()
-            raw_row_map[source_row_number] = raw_row.id
+            raw_rows_to_insert.append(raw_row_obj)
+            raw_row_numbers.append(source_row_number)
+        session.add_all(raw_rows_to_insert)
+        session.flush()  # single flush for all raw rows
+        for raw_row_obj, src_num in zip(raw_rows_to_insert, raw_row_numbers):
+            raw_row_map[src_num] = raw_row_obj.id
 
         tx_df = transactions_df.copy()
         tx_df["date"] = tx_df.get("date", "").fillna("")
@@ -244,63 +371,68 @@ def persist_pipeline_run(
         session.flush()
 
         entity_lookup: dict[tuple[str, str], str] = {}
-        for _, row in entities_df.fillna("").iterrows():
-            entity_type = str(row.get("entity_type", "UNKNOWN") or "UNKNOWN")
-            identifier_value = str(row.get("account_number", "") or row.get("name", "") or "UNKNOWN")
-            normalized_name = normalize_text(row.get("name", "") or "").lower() or None
-            existing = session.scalars(
-                select(Entity).where(
-                    Entity.entity_type == entity_type,
-                    Entity.identifier_value == identifier_value,
-                )
-            ).first()
-            if existing:
-                entity_lookup[(entity_type, identifier_value)] = existing.id
+        # Prefetch all existing entities in one query
+        existing_entities = session.scalars(select(Entity)).all()
+        for ent in existing_entities:
+            entity_lookup[(ent.entity_type, ent.identifier_value)] = ent.id
+
+        new_entities: list[Entity] = []
+        for row in entities_df.fillna("").itertuples(index=False):
+            entity_type = str(getattr(row, "entity_type", "UNKNOWN") or "UNKNOWN")
+            identifier_value = str(getattr(row, "account_number", "") or getattr(row, "name", "") or "UNKNOWN")
+            if (entity_type, identifier_value) in entity_lookup:
                 continue
+            normalized_name = normalize_text(getattr(row, "name", "") or "").lower() or None
             entity = Entity(
                 entity_type=entity_type,
-                full_name=str(row.get("name", "") or "") or None,
+                full_name=str(getattr(row, "name", "") or "") or None,
                 normalized_name=normalized_name,
                 alias_json=[],
                 identifier_value=identifier_value,
                 notes=None,
                 created_at=utcnow(),
             )
-            session.add(entity)
-            session.flush()
-            entity_lookup[(entity_type, identifier_value)] = entity.id
+            new_entities.append(entity)
+            entity_lookup[(entity_type, identifier_value)] = None  # placeholder
+        if new_entities:
+            session.add_all(new_entities)
+            session.flush()  # single flush for all new entities
+            for entity in new_entities:
+                entity_lookup[(entity.entity_type, entity.identifier_value)] = entity.id
 
         if subject_account_row:
             subject_entity_id = entity_lookup.get(("ACCOUNT", subject_account_row.normalized_account_number or ""))
             if subject_entity_id:
-                link = AccountEntityLink(
+                _upsert_account_entity_link(
+                    session,
                     account_id=subject_account_row.id,
                     entity_id=subject_entity_id,
                     link_type="owns",
                     confidence_score=Decimal("1.0000"),
                     source_reason="subject account entity",
-                    is_manual_confirmed=False,
-                    created_at=utcnow(),
                 )
-                session.add(link)
 
         persisted_transactions: list[Transaction] = []
-        for _, row in tx_df.fillna("").iterrows():
+        pending_cp_links: list[tuple] = []  # (cp_account_number, cp_name) for batch resolve
+        BATCH_SIZE = 200
+
+        for row in tx_df.fillna("").itertuples(index=False):
+            row_dict = row._asdict()
             tx_payload = {
                 "account_id": subject_account_row.id if subject_account_row else None,
                 "parser_run_id": parser_run_id,
-                "transaction_datetime": parse_datetime(row.get("date"), row.get("time")),
-                "amount": decimal_or_none(row.get("amount")) or Decimal("0.00"),
-                "direction": str(row.get("direction", "") or "UNKNOWN"),
-                "description_normalized": normalize_text(row.get("description", "") or "").lower(),
-                "reference_no": str(row.get("reference_no", "") or "").strip() or None,
-                "counterparty_account_normalized": normalize_account_number(row.get("counterparty_account")),
-                "balance_after": decimal_or_none(row.get("balance")),
-                "transaction_type": str(row.get("transaction_type", "") or "").strip() or None,
+                "transaction_datetime": parse_datetime(row_dict.get("date"), row_dict.get("time")),
+                "amount": decimal_or_none(row_dict.get("amount")) or Decimal("0.00"),
+                "direction": str(row_dict.get("direction", "") or "UNKNOWN"),
+                "description_normalized": normalize_text(row_dict.get("description", "") or "").lower(),
+                "reference_no": str(row_dict.get("reference_no", "") or "").strip() or None,
+                "counterparty_account_normalized": normalize_account_number(row_dict.get("counterparty_account")),
+                "balance_after": decimal_or_none(row_dict.get("balance")),
+                "transaction_type": str(row_dict.get("transaction_type", "") or "").strip() or None,
             }
             tx_payload["transaction_fingerprint"] = transaction_fingerprint(tx_payload)
             duplicate_status, duplicate_group_id, duplicate_confidence, duplicate_reason = classify_transaction_duplicate(session, tx_payload)
-            source_row_number = int(row.get("_source_row_number") or row.get("row_number") or 0 or 0)
+            source_row_number = int(row_dict.get("_source_row_number") or row_dict.get("row_number") or 0)
             lineage = {
                 "file_id": file_id,
                 "parser_run_id": parser_run_id,
@@ -314,7 +446,7 @@ def persist_pipeline_run(
                 "manual_corrections_applied": [],
                 "bank_detected": bank_key,
                 "duplicate_reason": duplicate_reason,
-                "transaction_record_id": str(row.get("transaction_id", "") or ""),
+                "transaction_record_id": str(row_dict.get("transaction_id", "") or ""),
                 "subject_account": subject_account,
                 "subject_name": effective_subject_name,
             }
@@ -325,23 +457,23 @@ def persist_pipeline_run(
                 source_row_id=raw_row_map.get(source_row_number),
                 account_id=subject_account_row.id if subject_account_row else None,
                 transaction_datetime=tx_payload["transaction_datetime"],
-                posted_date=_to_python_date(row.get("date")),
+                posted_date=_to_python_date(row_dict.get("date")),
                 value_date=None,
                 amount=tx_payload["amount"],
-                currency=str(row.get("currency", "THB") or "THB"),
+                currency=str(row_dict.get("currency", "THB") or "THB"),
                 direction=tx_payload["direction"],
                 balance_after=tx_payload["balance_after"],
-                description_raw=str(row.get("description", "") or "") or None,
+                description_raw=str(row_dict.get("description", "") or "") or None,
                 description_normalized=tx_payload["description_normalized"] or None,
                 reference_no=tx_payload["reference_no"],
-                channel=str(row.get("channel", "") or "") or None,
+                channel=str(row_dict.get("channel", "") or "") or None,
                 transaction_type=tx_payload["transaction_type"],
-                counterparty_account_raw=str(row.get("raw_account_value", "") or row.get("counterparty_account", "") or "") or None,
+                counterparty_account_raw=str(row_dict.get("raw_account_value", "") or row_dict.get("counterparty_account", "") or "") or None,
                 counterparty_account_normalized=tx_payload["counterparty_account_normalized"],
-                counterparty_name_raw=str(row.get("counterparty_name", "") or "") or None,
-                counterparty_name_normalized=normalize_text(row.get("counterparty_name", "") or "").lower() or None,
+                counterparty_name_raw=str(row_dict.get("counterparty_name", "") or "") or None,
+                counterparty_name_normalized=normalize_text(row_dict.get("counterparty_name", "") or "").lower() or None,
                 transaction_fingerprint=tx_payload["transaction_fingerprint"],
-                parse_confidence=Decimal(str(row.get("confidence", 0) or 0)).quantize(Decimal("0.0001")),
+                parse_confidence=Decimal(str(row_dict.get("confidence", 0) or 0)).quantize(Decimal("0.0001")),
                 duplicate_status=duplicate_status,
                 duplicate_group_id=duplicate_group_id,
                 review_status="pending" if duplicate_status == "unique" else "needs_review",
@@ -349,30 +481,45 @@ def persist_pipeline_run(
                 lineage_json=lineage,
             )
             session.add(transaction)
-            session.flush()
             persisted_transactions.append(transaction)
+            pending_cp_links.append((
+                row_dict.get("counterparty_account"),
+                str(row_dict.get("counterparty_name", "") or ""),
+            ))
 
-            cp_account = resolve_account(
-                session,
-                bank_name=bank_name,
-                raw_account_number=row.get("counterparty_account"),
-                account_holder_name=str(row.get("counterparty_name", "") or ""),
-                confidence_score=0.65,
-                notes="counterparty discovered from transaction",
-            )
+            # Batch flush every BATCH_SIZE rows
+            if len(persisted_transactions) % BATCH_SIZE == 0:
+                session.flush()
+
+        # Final flush for remaining transactions
+        session.flush()
+
+        # Batch resolve counterparty accounts
+        resolved_cp_cache: dict[str, Any] = {}
+        for transaction, (cp_acct_raw, cp_name) in zip(persisted_transactions, pending_cp_links):
+            cp_key = normalize_account_number(cp_acct_raw) or ""
+            if not cp_key:
+                continue
+            if cp_key not in resolved_cp_cache:
+                resolved_cp_cache[cp_key] = resolve_account(
+                    session,
+                    bank_name=bank_name,
+                    raw_account_number=cp_acct_raw,
+                    account_holder_name=cp_name,
+                    confidence_score=0.65,
+                    notes="counterparty discovered from transaction",
+                )
+            cp_account = resolved_cp_cache[cp_key]
             if cp_account:
                 entity_id = entity_lookup.get(("ACCOUNT", cp_account.normalized_account_number or ""))
                 if entity_id:
-                    session.add(
-                        AccountEntityLink(
-                            account_id=cp_account.id,
-                            entity_id=entity_id,
-                            link_type="counterparty_seen",
-                            confidence_score=Decimal("0.6500"),
-                            source_reason="counterparty account from transaction import",
-                            is_manual_confirmed=False,
-                            created_at=utcnow(),
-                        )
+                    _upsert_account_entity_link(
+                        session,
+                        account_id=cp_account.id,
+                        entity_id=entity_id,
+                        link_type="counterparty_seen",
+                        confidence_score=Decimal("0.6500"),
+                        source_reason="counterparty account from transaction import",
                     )
 
         generate_matches_for_transactions(session, persisted_transactions)
@@ -411,24 +558,28 @@ def persist_pipeline_run(
         export_job.completed_at = utcnow()
         export_job.output_path = str(output_dir)
         export_job.summary_json = {
-            "files": [
-                "meta.json",
-                "processed/transactions.csv",
-                "processed/entities.csv",
-                "processed/links.csv",
-                "processed/nodes.csv",
-                "processed/nodes.json",
-                "processed/edges.csv",
-                "processed/edges.json",
-                "processed/aggregated_edges.csv",
-                "processed/aggregated_edges.json",
-                "processed/derived_account_edges.csv",
-                "processed/derived_account_edges.json",
-                "processed/graph_manifest.json",
-                "processed/suspicious_findings.csv",
-                "processed/suspicious_findings.json",
-                "processed/i2_chart.anx",
-            ]
+            "files": _legacy_account_package_files(output_dir)
         }
+
+        # Generate alerts from graph analysis findings
+        try:
+            from core.graph_analysis import build_graph_analysis
+            from services.alert_service import process_findings
+            graph_result = build_graph_analysis(
+                session,
+                account=subject_account,
+                limit=2000,
+            )
+            findings = graph_result.get("suspicious_findings", [])
+            if findings:
+                process_findings(
+                    session,
+                    findings,
+                    account_id=subject_account_row.id if subject_account_row else None,
+                    parser_run_id=parser_run_id,
+                )
+        except Exception as alert_err:
+            import logging as _log
+            _log.getLogger(__name__).warning("Alert generation failed (non-fatal): %s", alert_err)
 
         session.commit()

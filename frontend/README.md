@@ -1,71 +1,97 @@
 # BSIE Frontend
 
-This directory contains the React + TypeScript + Vite analyst interface for BSIE.
+> Updated for BSIE v4.0
 
-## What The Frontend Actually Does
+React 19 + Vite 8 + TypeScript analyst interface for BSIE.
 
-BSIE is not a generic single-page shell. The frontend has four real surfaces:
+## Stack
 
-1. Main intake wizard
-2. Bank Manager
-3. Bulk Intake
-4. Investigation Admin
+- **React 19** with TypeScript
+- **Vite 8** for dev server and bundling
+- **Tailwind CSS 3** for styling
+- **Zustand 5** for state management
+- **TanStack React Query 5** for server state
+- **react-i18next** for internationalization (Thai primary, English fallback)
+- **Cytoscape.js** for graph visualization (LinkChart, AccountFlowGraph)
+- **Recharts** for charts (TimelineChart)
+- **sonner** for toast notifications
+- **vitest** for testing
 
-Navigation between those surfaces is controlled by Zustand state in [`/Users/saraithong/Documents/bsie/frontend/src/store.ts`](/Users/saraithong/Documents/bsie/frontend/src/store.ts).
+## Architecture
 
-## Main User Flow
+### Lazy-Loaded Pages
 
-The default analyst flow is a 5-step wizard:
+Four heavy pages are code-split via `React.lazy()`:
 
-1. [`Step1Upload.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step1Upload.tsx)
-   - upload `.xlsx`, `.xls`, or `.ofx`
-   - receive detected bank, suggested mapping, sample rows, and identity hints
-2. [`Step2Map.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step2Map.tsx)
-   - review bank detection
-   - confirm or edit mapping
-   - use mapping memory and bank fingerprint memory
-   - pass explicit analyst confirmation back to the backend
-3. [`Step3Config.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step3Config.tsx)
-   - configure subject account and account holder name
-   - surface remembered account names from prior ingests before processing
-4. [`Step4Processing.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step4Processing.tsx)
-   - poll job progress and show pipeline logs/status
-5. [`Step5Results.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step5Results.tsx)
-   - browse transaction results
-   - inspect exports and override effects
+1. **Dashboard** -- case overview and statistics
+2. **BankManager** -- bank template configuration
+3. **BulkIntake** -- batch folder processing
+4. **InvestigationDesk** -- 13-tab investigation workspace
+
+The default flow is the 5-step intake wizard (loaded eagerly).
+
+### Main User Flow (5-Step Wizard)
+
+1. `Step1Upload.tsx` -- upload .xlsx, .xls, .ofx, .pdf, or image; receive detected bank, suggested mapping, sample rows
+2. `Step2Map.tsx` -- review bank detection, confirm or edit mapping, use mapping memory
+3. `Step3Config.tsx` -- configure subject account and account holder name
+4. `Step4Processing.tsx` -- poll job progress, show pipeline status
+5. `Step5Results.tsx` -- browse results, inspect exports
+
+### Investigation Workspace (13 Tabs)
+
+The InvestigationDesk provides the operational workspace:
+
+1. Database -- status, backup/restore, settings
+2. Files -- uploaded file registry
+3. Parser Runs -- run history, re-processing
+4. Accounts -- account registry, review
+5. Search -- full transaction search with filters
+6. Alerts -- alert dashboard and rule config
+7. Cross-Account -- multi-account analysis
+8. Link Chart -- interactive Cytoscape.js graph
+9. Timeline -- temporal aggregation with Recharts
+10. Duplicates -- duplicate group review
+11. Matches -- match candidate review
+12. Audit -- audit log and learning feedback
+13. Exports -- export job management
+
+Sub-components extracted under `components/investigation/`:
+- `DatabaseTab.tsx`
+- `AlertsTab.tsx`
+- `CrossAccountTab.tsx`
+
+### Graph Components
+
+- `LinkChart.tsx` -- interactive Cytoscape.js graph explorer (replaces former GraphExplorer)
+- `AccountFlowGraph.tsx` -- per-account flow visualization
+- `TimelineChart.tsx` -- Recharts-based temporal chart
+- `TimeWheel.tsx` -- time distribution visualization
 
 ## Main Files
 
-- App shell: [`/Users/saraithong/Documents/bsie/frontend/src/App.tsx`](/Users/saraithong/Documents/bsie/frontend/src/App.tsx)
-- Entry point: [`/Users/saraithong/Documents/bsie/frontend/src/main.tsx`](/Users/saraithong/Documents/bsie/frontend/src/main.tsx)
-- Shared app state: [`/Users/saraithong/Documents/bsie/frontend/src/store.ts`](/Users/saraithong/Documents/bsie/frontend/src/store.ts)
-- API client layer: [`/Users/saraithong/Documents/bsie/frontend/src/api.ts`](/Users/saraithong/Documents/bsie/frontend/src/api.ts)
-- Sidebar navigation: [`/Users/saraithong/Documents/bsie/frontend/src/components/Sidebar.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/Sidebar.tsx)
-- Investigation Admin: [`/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.tsx)
-- Bulk Intake: [`/Users/saraithong/Documents/bsie/frontend/src/components/BulkIntake.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/BulkIntake.tsx)
-- Bank template management: [`/Users/saraithong/Documents/bsie/frontend/src/components/BankManager.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/BankManager.tsx)
+- App shell: `src/App.tsx`
+- Entry point: `src/main.tsx`
+- Shared app state: `src/store.ts`
+- API client layer: `src/api.ts`
+- Sidebar navigation: `src/components/Sidebar.tsx`
+- i18n translations: `src/locales/th.json`, `src/locales/en.json`
+- UI primitives: `src/components/ui/`
 
-## Investigation Admin
+## Internationalization
 
-The investigation surface is not just a debug page. It is the operational workspace for:
-
-- database status and backup controls
-- files and parser runs
-- account and transaction review
-- duplicate and match review
-- audit and learning-feedback inspection
-- graph analysis and export jobs
-
-Primary file:
-- [`/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.tsx)
+- Thai (`th.json`) is the primary language
+- English (`en.json`) is the fallback
+- All user-facing text goes through `useTranslation()` from react-i18next
+- Translation keys are organized by feature domain
 
 ## API Coupling Rule
 
 Keep frontend-to-backend coupling centralized in:
 
-- [`/Users/saraithong/Documents/bsie/frontend/src/api.ts`](/Users/saraithong/Documents/bsie/frontend/src/api.ts)
+- `src/api.ts`
 
-Do not scatter raw `fetch(...)` calls across many components unless there is a very strong reason.
+Do not scatter raw `fetch(...)` calls across components.
 
 ## Local Commands
 
@@ -84,7 +110,7 @@ npm run dev
 Run tests:
 
 ```bash
-npm test -- --run
+npm test
 ```
 
 Build:
@@ -93,7 +119,7 @@ Build:
 npm run build
 ```
 
-## Frontend Testing Focus
+## Testing Focus
 
 Important test areas:
 
@@ -102,10 +128,15 @@ Important test areas:
 - progress polling behavior
 - result rendering and override display
 - Investigation Desk review/audit/backup flows
+- alert dashboard rendering
+- link chart node/edge interactions
 
 Examples:
 
-- [`/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step2Map.test.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step2Map.test.tsx)
-- [`/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step3Config.test.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step3Config.test.tsx)
-- [`/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step5Results.test.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/steps/Step5Results.test.tsx)
-- [`/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.test.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.test.tsx)
+- `src/components/steps/Step2Map.test.tsx`
+- `src/components/steps/Step3Config.test.tsx`
+- `src/components/steps/Step5Results.test.tsx`
+- `src/components/InvestigationDesk.test.tsx`
+- `src/components/BankManager.test.tsx`
+- `src/components/BulkIntake.test.tsx`
+- `src/components/Sidebar.test.tsx`

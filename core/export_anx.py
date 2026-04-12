@@ -14,7 +14,9 @@ the richer CSV graph exports for machine processing.
 from __future__ import annotations
 
 import logging
+import math
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from pathlib import Path
 from typing import Union
 
@@ -39,6 +41,57 @@ _ICON_TYPE: dict[str, str] = {
 
 def _description_text(parts: list[tuple[str, object]]) -> str:
     return " | ".join(f"{key}:{value}" for key, value in parts if str(value or "").strip())
+
+
+def _chart_item_attributes(*, label: str, description: str = "", x_position: int | None = None) -> dict[str, str]:
+    attrs = {"Label": label}
+    if description:
+        attrs["Description"] = description
+    if x_position is not None:
+        attrs["XPosition"] = str(x_position)
+    return attrs
+
+
+def _chart_datetime_attrs(date_value: object, time_value: object = "") -> dict[str, str]:
+    date_text = str(date_value or "").strip()
+    time_text = str(time_value or "").strip()
+    if not date_text:
+        return {}
+
+    candidate = f"{date_text}T{time_text or '00:00:00'}"
+    parsed: datetime | None = None
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError:
+        try:
+            parsed = datetime.fromisoformat(f"{date_text}T00:00:00")
+        except ValueError:
+            return {}
+
+    attrs = {
+        "DateSet": "true",
+        "DateTime": parsed.isoformat(timespec="seconds"),
+    }
+    if time_text:
+        attrs["TimeSet"] = "true"
+    return attrs
+
+
+def _layout_positions(total: int) -> list[tuple[int, int]]:
+    if total <= 0:
+        return []
+    columns = max(1, math.ceil(math.sqrt(total)))
+    spacing_x = 180
+    spacing_y = 140
+    start_x = 80
+    start_y = 80
+
+    positions: list[tuple[int, int]] = []
+    for index in range(total):
+        row = index // columns
+        col = index % columns
+        positions.append((start_x + (col * spacing_x), start_y + (row * spacing_y)))
+    return positions
 
 
 def _graph_nodes_for_anx(nodes: pd.DataFrame, edges: pd.DataFrame) -> pd.DataFrame:
@@ -74,30 +127,55 @@ def export_anx_from_graph(
     filtered_edges = _graph_edges_for_anx(edges).fillna("")
     filtered_nodes = _graph_nodes_for_anx(nodes.fillna(""), filtered_edges)
 
-    chart = ET.Element("Chart", {"IdReferenceLinking": "false", "Rigorous": "false"})
-    collection = ET.SubElement(chart, "ChartItemCollection")
+    chart = ET.Element(
+        "Chart",
+        {
+            "SchemaVersion": "7.0.0.1",
+            "IdReferenceLinking": "false",
+            "Rigorous": "false",
+        },
+    )
 
-    for _, row in filtered_nodes.sort_values(["node_type", "label", "node_id"]).iterrows():
+    strengths = ET.SubElement(chart, "StrengthCollection")
+    ET.SubElement(strengths, "Strength", {"Name": "Solid", "DotStyle": "DotStyleSolid"})
+    ET.SubElement(strengths, "Strength", {"Name": "Dashed", "DotStyle": "DotStyleDashed"})
+
+    entity_types = sorted(
+        {
+            _ICON_TYPE.get(str(row.get("node_type", "Entity") or "Entity"), "Person")
+            for _, row in filtered_nodes.iterrows()
+        }
+    )
+    entity_type_collection = ET.SubElement(chart, "EntityTypeCollection")
+    for entity_type in entity_types:
+        ET.SubElement(
+            entity_type_collection,
+            "EntityType",
+            {
+                "Name": entity_type,
+                "IconFile": entity_type,
+            },
+        )
+
+    link_type_collection = ET.SubElement(chart, "LinkTypeCollection")
+    ET.SubElement(link_type_collection, "LinkType", {"Name": "Link"})
+
+    node_collection = ET.SubElement(chart, "ChartItemCollection")
+    link_collection = ET.SubElement(chart, "ChartItemCollection")
+    positions = _layout_positions(len(filtered_nodes))
+
+    for (position, (_, row)) in zip(
+        positions,
+        filtered_nodes.sort_values(["node_type", "label", "node_id"]).iterrows(),
+        strict=False,
+    ):
         node_id = str(row.get("node_id", "") or "").strip()
         if not node_id:
             continue
         label = str(row.get("label", "") or node_id).strip()
         node_type = str(row.get("node_type", "Entity") or "Entity")
         icon_type = _ICON_TYPE.get(node_type, "Person")
-
-        item = ET.SubElement(collection, "ChartItem", {"Label": label})
-        end = ET.SubElement(item, "End")
-        entity_el = ET.SubElement(
-            end,
-            "Entity",
-            {
-                "EntityId": node_id,
-                "Identity": node_id,
-                "LabelIsIdentity": "false",
-            },
-        )
-        icon = ET.SubElement(entity_el, "Icon")
-        ET.SubElement(icon, "IconStyle", {"Type": icon_type})
+        x_pos, y_pos = position
 
         desc_text = _description_text(
             [
@@ -114,9 +192,24 @@ def export_anx_from_graph(
                 ("Rows", row.get("source_row_numbers")),
             ]
         )
-        if desc_text:
-            desc = ET.SubElement(item, "Description")
-            desc.text = desc_text
+
+        item = ET.SubElement(
+            node_collection,
+            "ChartItem",
+            _chart_item_attributes(label=label, description=desc_text, x_position=x_pos),
+        )
+        end = ET.SubElement(item, "End", {"X": str(x_pos), "Y": str(y_pos)})
+        entity_el = ET.SubElement(
+            end,
+            "Entity",
+            {
+                "EntityId": node_id,
+                "Identity": node_id,
+                "LabelIsIdentity": "false",
+            },
+        )
+        icon = ET.SubElement(entity_el, "Icon")
+        ET.SubElement(icon, "IconStyle", {"Type": icon_type})
 
     for _, row in filtered_edges.sort_values(["edge_type", "from_node_id", "to_node_id", "edge_id"]).iterrows():
         from_id = str(row.get("from_node_id", "") or "").strip()
@@ -125,18 +218,6 @@ def export_anx_from_graph(
             continue
 
         label = str(row.get("label", "") or row.get("edge_type", "Link")).strip()
-        item = ET.SubElement(collection, "ChartItem", {"Label": label})
-        link_el = ET.SubElement(item, "Link", {"End1Id": from_id, "End2Id": to_id})
-        ET.SubElement(
-            link_el,
-            "LinkStyle",
-            {
-                "ArrowStyle": "ArrowOnHead",
-                "MlStyle": "MultiplicityMultiple",
-                "Type": "Link",
-            },
-        )
-
         desc_text = _description_text(
             [
                 ("EdgeType", row.get("edge_type")),
@@ -158,9 +239,25 @@ def export_anx_from_graph(
                 ("SourceFile", row.get("source_file")),
             ]
         )
-        if desc_text:
-            desc = ET.SubElement(item, "Description")
-            desc.text = desc_text
+        item = ET.SubElement(
+            link_collection,
+            "ChartItem",
+            {
+                **_chart_item_attributes(label=label, description=desc_text, x_position=0),
+                **_chart_datetime_attrs(row.get("date"), row.get("time")),
+            },
+        )
+        link_el = ET.SubElement(item, "Link", {"End1Id": from_id, "End2Id": to_id})
+        ET.SubElement(
+            link_el,
+            "LinkStyle",
+            {
+                "ArrowStyle": "ArrowOnHead",
+                "MlStyle": "MultiplicityMultiple",
+                "Type": "Link",
+                "Strength": "Solid",
+            },
+        )
 
     tree = ET.ElementTree(chart)
     ET.indent(tree, space="  ")

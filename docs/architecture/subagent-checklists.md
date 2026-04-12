@@ -1,5 +1,7 @@
 # BSIE Subagent Checklists And Templates
 
+> Updated for BSIE v4.0 -- `app.py` is now a thin shell with 21 routers. Subagent file ownership targets individual `routers/*.py` and `services/*.py` files rather than the monolithic app.py.
+
 This document turns the BSIE subagent policy into practical checklists and reusable templates.
 
 Use it before spawning subagents for real work.
@@ -35,13 +37,15 @@ Before any builder starts, write a quick ownership map like this:
 ```md
 Shared file map
 
-- app.py -> API / Contract owner
+- app.py -> Lifecycle / middleware owner (rarely edited)
+- routers/*.py -> One owner per router (domain-specific)
 - persistence/models.py -> Persistence / Schema owner
 - persistence/schemas.py -> API / Contract owner
 - pipeline/process_account.py -> Pipeline / Normalization owner
 - frontend/src/api.ts -> Frontend integration owner
 - frontend/src/store.ts -> Frontend wizard owner
 - frontend/src/components/InvestigationDesk.tsx -> Frontend admin owner
+- frontend/src/components/investigation/*.tsx -> Frontend admin owner
 - markdown docs -> Orchestrator
 ```
 

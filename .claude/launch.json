@@ -2,17 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "BSIE Backend",
-      "runtimeExecutable": "/Users/saraithong/Documents/bsie/.venv/bin/python3",
-      "runtimeArgs": ["/Users/saraithong/Documents/bsie/app.py"],
-      "port": 5001,
-      "autoPort": false
+      "name": "bsie-backend",
+      "runtimeExecutable": "/Users/saraithong/Documents/bsie/.venv/bin/uvicorn",
+      "runtimeArgs": ["app:app", "--host", "127.0.0.1", "--port", "8757"],
+      "port": 8757
     },
     {
-      "name": "BSIE Frontend",
+      "name": "bsie-frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "/Users/saraithong/Documents/bsie/frontend"],
-      "port": 5173
+      "port": 6776
     }
   ]
 }

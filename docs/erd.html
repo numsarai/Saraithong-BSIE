@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>BSIE Database ERD</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'TH Sarabun New',Tahoma,sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;min-height:100vh}
+h1{font-size:28px;font-weight:bold;color:#38bdf8;margin-bottom:4px}
+h2{font-size:18px;color:#94a3b8;margin-bottom:24px;font-weight:normal}
+.legend{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:14px;color:#94a3b8}
+.legend-dot{width:12px;height:12px;border-radius:3px}
+.erd{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;max-width:1400px}
+.table-card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:0;overflow:hidden;font-size:13px}
+.table-card.core{border-color:#3b82f6}
+.table-card.support{border-color:#8b5cf6}
+.table-card.audit{border-color:#f59e0b}
+.table-card.legacy{border-color:#6b7280;opacity:.75}
+.table-header{padding:10px 14px;font-size:15px;font-weight:bold;display:flex;justify-content:space-between;align-items:center}
+.core .table-header{background:#1e3a5f;color:#60a5fa}
+.support .table-header{background:#2e1065;color:#a78bfa}
+.audit .table-header{background:#422006;color:#fbbf24}
+.legacy .table-header{background:#1f2937;color:#9ca3af}
+.record-count{font-size:11px;background:rgba(255,255,255,.1);padding:2px 8px;border-radius:10px;font-weight:normal}
+.columns{padding:6px 0}
+.col-row{display:flex;padding:3px 14px;gap:8px;align-items:center;font-size:12px}
+.col-row:hover{background:rgba(255,255,255,.04)}
+.col-name{flex:1;color:#cbd5e1;font-family:monospace}
+.col-type{color:#64748b;font-size:11px;min-width:70px;text-align:right}
+.col-row .pk{color:#facc15;font-weight:bold;font-size:10px}
+.col-row .fk{color:#f87171;font-size:10px}
+.col-row .idx{color:#34d399;font-size:10px}
+.divider{border-top:1px solid #334155;margin:4px 14px}
+.relations{padding:8px 14px;font-size:11px;color:#64748b;line-height:1.6}
+.relations span{color:#94a3b8}
+.section-title{grid-column:1/-1;font-size:20px;font-weight:bold;color:#f1f5f9;margin-top:16px;padding-bottom:8px;border-bottom:1px solid #334155}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;max-width:1400px}
+.stat-card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;text-align:center}
+.stat-value{font-size:24px;font-weight:bold;color:#38bdf8}
+.stat-label{font-size:12px;color:#64748b;margin-top:4px}
+.recommendations{max-width:1400px;margin-top:32px;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px}
+.recommendations h3{color:#38bdf8;font-size:18px;margin-bottom:12px}
+.rec-item{padding:8px 0;border-bottom:1px solid #1e293b}
+.rec-item:last-child{border:none}
+.rec-good{color:#34d399}
+.rec-warn{color:#fbbf24}
+.rec-info{color:#60a5fa}
+</style>
+</head>
+<body>
+<h1>BSIE Database ERD</h1>
+<h2>Bank Statement Intelligence Engine - Entity Relationship Diagram</h2>
+
+<div class="stats">
+<div class="stat-card"><div class="stat-value">17</div><div class="stat-label">Tables (11 new + 6 legacy)</div></div>
+<div class="stat-card"><div class="stat-value">~349K</div><div class="stat-label">Total Records</div></div>
+<div class="stat-card"><div class="stat-value">382 MB</div><div class="stat-label">Database Size</div></div>
+<div class="stat-card"><div class="stat-value">15</div><div class="stat-label">Foreign Keys</div></div>
+</div>
+
+<div class="legend">
+<div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>Core Tables</div>
+<div class="legend-item"><div class="legend-dot" style="background:#8b5cf6"></div>Support Tables</div>
+<div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Audit Tables</div>
+<div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>Legacy Tables</div>
+<div class="legend-item"><span class="pk">PK</span> Primary Key</div>
+<div class="legend-item"><span class="fk">FK</span> Foreign Key</div>
+<div class="legend-item"><span class="idx">IDX</span> Indexed</div>
+</div>
+
+<div class="erd">
+
+<div class="section-title">Core Investigation Tables</div>
+
+<div class="table-card core">
+<div class="table-header">files <span class="record-count">806</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">original_filename</span><span class="col-type">VARCHAR(512)</span></div>
+<div class="col-row"><span class="col-name">stored_path</span><span class="col-type">VARCHAR(1024)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">file_hash_sha256</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">file_size_bytes</span><span class="col-type">INTEGER</span></div>
+<div class="col-row"><span class="col-name">uploaded_at</span><span class="col-type">DATETIME(tz)</span></div>
+<div class="col-row"><span class="col-name">bank_detected</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">import_status</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">mapping_profile_id</span><span class="col-type">VARCHAR(36)</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">1:N <span>parser_runs, statement_batches, transactions, raw_import_rows</span></div>
+</div>
+
+<div class="table-card core">
+<div class="table-header">accounts <span class="record-count">493</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">bank_name</span><span class="col-type">VARCHAR(128)</span></div>
+<div class="col-row"><span class="col-name">bank_code</span><span class="col-type">VARCHAR(32)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">normalized_account_number</span><span class="col-type">VARCHAR(32)</span></div>
+<div class="col-row"><span class="col-name">account_holder_name</span><span class="col-type">VARCHAR(255)</span></div>
+<div class="col-row"><span class="col-name">confidence_score</span><span class="col-type">NUMERIC(5,4)</span></div>
+<div class="col-row"><span class="col-name">source_count</span><span class="col-type">INTEGER</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">merged_into_account_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">status</span><span class="col-type">VARCHAR(32)</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">UNIQUE <span>(bank_code, normalized_account_number)</span><br>1:N <span>statement_batches, transactions, account_entity_links</span><br>Self-ref <span>merged_into_account_id</span></div>
+</div>
+
+<div class="table-card core">
+<div class="table-header">transactions <span class="record-count">40,396</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">statement_batch_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">file_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">parser_run_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">source_row_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">account_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">transaction_datetime</span><span class="col-type">DATETIME(tz)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">amount</span><span class="col-type">NUMERIC(18,2)</span></div>
+<div class="col-row"><span class="col-name">direction</span><span class="col-type">VARCHAR(16)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">transaction_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">counterparty_account_normalized</span><span class="col-type">VARCHAR(32)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">transaction_fingerprint</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">duplicate_status</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">duplicate_group_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">review_status</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">lineage_json</span><span class="col-type">JSON</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">Composite IDX <span>(account_id, transaction_datetime)</span><br>1:N <span>transaction_matches (source + target)</span></div>
+</div>
+
+<div class="table-card core">
+<div class="table-header">transaction_matches <span class="record-count">73,752</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">source_transaction_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">target_transaction_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">target_account_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">match_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">confidence_score</span><span class="col-type">NUMERIC(5,4)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">status</span><span class="col-type">VARCHAR(64)</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">N:1 <span>transactions (source + target)</span><br>N:1 <span>accounts (target_account_id)</span></div>
+</div>
+
+<div class="section-title">Evidence & Lineage Tables</div>
+
+<div class="table-card support">
+<div class="table-header">parser_runs <span class="record-count">439</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">file_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">mapping_profile_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">parser_version</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">status</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">bank_detected</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">summary_json</span><span class="col-type">JSON</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">N:1 <span>files, mapping_profiles</span><br>1:N <span>statement_batches, raw_import_rows, transactions</span></div>
+</div>
+
+<div class="table-card support">
+<div class="table-header">statement_batches <span class="record-count">380</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">file_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">parser_run_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">account_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">statement_start/end_date</span><span class="col-type">DATE</span></div>
+<div class="col-row"><span class="col-name">opening/closing_balance</span><span class="col-type">NUMERIC(18,2)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">batch_fingerprint</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">overlap_status</span><span class="col-type">VARCHAR(64)</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">N:1 <span>files, parser_runs, accounts</span><br>1:N <span>transactions</span></div>
+</div>
+
+<div class="table-card support">
+<div class="table-header">raw_import_rows <span class="record-count">40,381</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">file_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">parser_run_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">sheet_name</span><span class="col-type">VARCHAR(255)</span></div>
+<div class="col-row"><span class="col-name">source_row_number</span><span class="col-type">INTEGER</span></div>
+<div class="col-row"><span class="col-name">raw_row_json</span><span class="col-type">JSON</span></div>
+<div class="col-row"><span class="col-name">parsed_status</span><span class="col-type">VARCHAR(64)</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">N:1 <span>files, parser_runs</span><br>1:1 <span>transactions (source_row_id)</span></div>
+</div>
+
+<div class="table-card support">
+<div class="table-header">entities <span class="record-count">600</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">entity_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">full_name</span><span class="col-type">VARCHAR(255)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">normalized_name</span><span class="col-type">VARCHAR(255)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">identifier_value</span><span class="col-type">VARCHAR(255)</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">1:N <span>account_entity_links</span></div>
+</div>
+
+<div class="section-title">Link & Classification Tables</div>
+
+<div class="table-card support">
+<div class="table-header">account_entity_links <span class="record-count">34,970</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">account_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">entity_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">link_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">confidence_score</span><span class="col-type">NUMERIC(5,4)</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">N:1 <span>accounts, entities</span></div>
+</div>
+
+<div class="table-card support">
+<div class="table-header">duplicate_groups <span class="record-count">12,658</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">duplicate_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">confidence_score</span><span class="col-type">NUMERIC(5,4)</span></div>
+<div class="col-row"><span class="col-name">resolution_status</span><span class="col-type">VARCHAR(64)</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">1:N <span>transactions (duplicate_group_id)</span></div>
+</div>
+
+<div class="table-card support">
+<div class="table-header">mapping_profiles <span class="record-count">6</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">bank_name</span><span class="col-type">VARCHAR(128)</span></div>
+<div class="col-row"><span class="col-name">profile_version</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">column_mapping_json</span><span class="col-type">JSON</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">columns_signature</span><span class="col-type">VARCHAR(64)</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">1:N <span>files, parser_runs</span></div>
+</div>
+
+<div class="table-card support">
+<div class="table-header">export_jobs <span class="record-count">508</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">export_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">filters_json</span><span class="col-type">JSON</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">status</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">output_path</span><span class="col-type">VARCHAR(1024)</span></div>
+</div>
+</div>
+
+<div class="section-title">Audit & Review Tables</div>
+
+<div class="table-card audit">
+<div class="table-header">audit_logs <span class="record-count">477</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">object_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">object_id</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">action_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">old/new_value_json</span><span class="col-type">JSON</span></div>
+<div class="col-row"><span class="col-name">changed_by</span><span class="col-type">VARCHAR(255)</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">Composite IDX <span>(object_type, object_id)</span></div>
+</div>
+
+<div class="table-card audit">
+<div class="table-header">review_decisions <span class="record-count">121</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">object_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="idx">IDX</span><span class="col-name">object_id</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">decision_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">reviewer</span><span class="col-type">VARCHAR(255)</span></div>
+</div>
+</div>
+
+<div class="table-card audit">
+<div class="table-header">case_tags <span class="record-count">0</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">tag</span><span class="col-type">VARCHAR(128) UNIQUE</span></div>
+</div>
+<div class="divider"></div>
+<div class="relations">1:N <span>case_tag_links</span></div>
+</div>
+
+<div class="table-card audit">
+<div class="table-header">case_tag_links <span class="record-count">0</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="fk">FK</span><span class="col-name">case_tag_id</span><span class="col-type">VARCHAR(36)</span></div>
+<div class="col-row"><span class="col-name">object_type</span><span class="col-type">VARCHAR(64)</span></div>
+<div class="col-row"><span class="col-name">object_id</span><span class="col-type">VARCHAR(64)</span></div>
+</div>
+</div>
+
+<div class="section-title">Legacy Tables (backward compat)</div>
+
+<div class="table-card legacy">
+<div class="table-header">mapping_profile <span class="record-count">20</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">INTEGER</span></div>
+<div class="col-row"><span class="col-name">profile_id</span><span class="col-type">VARCHAR UNIQUE</span></div>
+<div class="col-row"><span class="col-name">bank</span><span class="col-type">VARCHAR</span></div>
+<div class="col-row"><span class="col-name">columns_json</span><span class="col-type">VARCHAR</span></div>
+<div class="col-row"><span class="col-name">mapping_json</span><span class="col-type">VARCHAR</span></div>
+</div>
+</div>
+
+<div class="table-card legacy">
+<div class="table-header">bank_fingerprint <span class="record-count">7</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">INTEGER</span></div>
+<div class="col-row"><span class="col-name">fingerprint_id</span><span class="col-type">VARCHAR UNIQUE</span></div>
+<div class="col-row"><span class="col-name">bank_key</span><span class="col-type">VARCHAR</span></div>
+<div class="col-row"><span class="col-name">ordered/set_signature</span><span class="col-type">VARCHAR</span></div>
+</div>
+</div>
+
+<div class="table-card legacy">
+<div class="table-header">job <span class="record-count">39</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">INTEGER</span></div>
+<div class="col-row"><span class="col-name">job_id</span><span class="col-type">VARCHAR UNIQUE</span></div>
+<div class="col-row"><span class="col-name">status</span><span class="col-type">VARCHAR</span></div>
+<div class="col-row"><span class="col-name">result_json</span><span class="col-type">VARCHAR</span></div>
+</div>
+</div>
+
+<div class="table-card legacy">
+<div class="table-header">override <span class="record-count">0</span></div>
+<div class="columns">
+<div class="col-row"><span class="pk">PK</span><span class="col-name">id</span><span class="col-type">INTEGER</span></div>
+<div class="col-row"><span class="col-name">transaction_id</span><span class="col-type">VARCHAR UNIQUE</span></div>
+<div class="col-row"><span class="col-name">override_from/to_account</span><span class="col-type">VARCHAR</span></div>
+</div>
+</div>
+
+</div>
+
+<div class="recommendations">
+<h3>Assessment & Recommendations</h3>
+
+<div class="rec-item">
+<span class="rec-good">GOOD</span> Schema design follows investigation-grade patterns: append-only evidence, full lineage tracking, confidence scoring, duplicate detection, and audit trails.
+</div>
+
+<div class="rec-item">
+<span class="rec-good">GOOD</span> Proper indexing on high-cardinality columns (transaction_fingerprint, normalized_account_number, file_hash_sha256) and composite index on (account_id, transaction_datetime).
+</div>
+
+<div class="rec-item">
+<span class="rec-good">GOOD</span> UUID primary keys enable safe distributed inserts and cross-system references. NUMERIC(18,2) for amounts and NUMERIC(5,4) for confidence scores provide sufficient precision.
+</div>
+
+<div class="rec-item">
+<span class="rec-good">GOOD</span> WAL journal mode + foreign keys enabled. Raw evidence preserved in raw_import_rows for reproducibility.
+</div>
+
+<div class="rec-item">
+<span class="rec-warn">WARN</span> <strong>account_entity_links has 34,970 records</strong> but no unique constraint on (account_id, entity_id, link_type). This may cause duplicate links. Consider adding a UNIQUE constraint.
+</div>
+
+<div class="rec-item">
+<span class="rec-warn">WARN</span> <strong>transaction_matches has 73,752 records (1.8x transactions)</strong>. This is a high ratio. Consider periodic cleanup of low-confidence matches (status="suggested", confidence < 0.3) to reduce DB size.
+</div>
+
+<div class="rec-item">
+<span class="rec-warn">WARN</span> <strong>No CASCADE DELETE rules</strong> on any foreign key. Deleting a file won't clean up its parser_runs, raw_import_rows, or transactions. This is intentional for evidence preservation but makes reset operations expensive.
+</div>
+
+<div class="rec-item">
+<span class="rec-warn">WARN</span> <strong>Legacy tables duplicate functionality</strong>: mapping_profile vs mapping_profiles, job vs parser_runs. Consider migrating legacy data and dropping the old tables when safe.
+</div>
+
+<div class="rec-item">
+<span class="rec-info">INFO</span> <strong>Database size (382 MB) is manageable</strong> for SQLite with WAL mode. Performance will remain good up to ~500K transactions. Beyond that, consider PostgreSQL migration.
+</div>
+
+<div class="rec-item">
+<span class="rec-info">INFO</span> <strong>JSON columns (lineage_json, raw_row_json, metadata_json)</strong> add flexibility but are not queryable by index. If you need to search by JSON fields, consider extracting frequently-queried values into proper columns.
+</div>
+
+<div class="rec-item">
+<span class="rec-info">INFO</span> <strong>Missing index suggestion</strong>: Add index on <code>transactions.posted_date</code> for date-range queries which are common in investigation workflows.
+</div>
+
+</div>
+
+</body>
+</html>

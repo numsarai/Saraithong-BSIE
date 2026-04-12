@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { deleteOverride, getOverrides, getResults, saveOverride } from '@/api'
+import { deleteOverride, generateAccountReport, getAccountInsights, getOverrides, getResults, getResultsTimeline, saveOverride } from '@/api'
 import { normalizeOperatorName, useStore } from '@/store'
 import { BankLogo } from '@/components/BankLogo'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -9,30 +10,34 @@ import { Badge } from '@/components/ui/badge'
 import { fmt, fmtDate, fmtDateRange } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Download, RotateCcw, ShieldCheck, History, Trash2 } from 'lucide-react'
+import { AccountFlowGraph } from '@/components/AccountFlowGraph'
+import { TimelineChart } from '@/components/TimelineChart'
+import { TimeWheel } from '@/components/TimeWheel'
 
 type OverrideState = { tid: string; from: string; to: string } | null
 
-function getQuickDiagnosisThai(reconciliation: any, checkMode: 'file_order' | 'chronological') {
+function getQuickDiagnosis(reconciliation: any, checkMode: 'file_order' | 'chronological', t: (key: string) => string) {
   const active = reconciliation?.check_modes?.[checkMode] || reconciliation || {}
   if ((reconciliation?.material_mismatched_rows ?? 0) > 0) {
-    return 'ยังมียอดคงเหลือที่ขาดความต่อเนื่องแบบมีนัยสำคัญ ควรตรวจช่วงที่ผิดก่อนใช้ผลนี้เป็นหลักฐานอ้างอิง'
+    return t('results.diagnosis.materialMismatch')
   }
   if (reconciliation?.chronology_issue_detected) {
-    return 'ไฟล์นี้น่าจะมีรายการที่ไม่เรียงตามเวลา แนะนำให้ดูผลแบบ Chronological ก่อนตัดสินว่า balance ผิดจริง'
+    return t('results.diagnosis.timeOrderIssue')
   }
   if ((reconciliation?.rounding_drift_rows ?? 0) > 0) {
-    return 'ความคลาดเคลื่อนส่วนใหญ่เป็นระดับเศษสตางค์หรือส่วนต่างเล็กน้อย อาจมาจาก rounding หรือ adjustment ของ statement'
+    return t('results.diagnosis.minorDrift')
   }
   if (active?.status === 'VERIFIED') {
-    return 'ผล balance check ของมุมมองปัจจุบันปกติ สามารถใช้ประกอบการวิเคราะห์ต่อได้'
+    return t('results.diagnosis.normal')
   }
   if (active?.status === 'INFERRED') {
-    return 'ไฟล์นี้ไม่มียอดคงเหลือจาก statement ให้ตรวจตรง ๆ ระบบจึงคำนวณยอดวิ่งเองเพื่อช่วยวิเคราะห์ธุรกรรม'
+    return t('results.diagnosis.noBalance')
   }
-  return 'ควรตรวจ mapping และรายการต้นฉบับช่วงที่มีปัญหาเพิ่มเติมก่อนสรุปผล'
+  return t('results.diagnosis.fallback')
 }
 
 export function Step5Results() {
+  const { t } = useTranslation()
   const { results, account, bankKey, parserRunId, currentTab, setCurrentTab, reset, operatorName } = useStore()
   const resolvedOperatorName = normalizeOperatorName(operatorName)
   const [page, setPage]       = useState(1)
@@ -50,6 +55,20 @@ export function Step5Results() {
     queryFn: () => getOverrides(),
     enabled: !!account,
   })
+  const { data: timelineData } = useQuery({
+    queryKey: ['results-timeline', account, parserRunId],
+    queryFn: () => getResultsTimeline(account, parserRunId),
+    enabled: !!account,
+    staleTime: 60_000,
+  })
+  const timelineItems = timelineData?.items || []
+  const { data: insightsData } = useQuery({
+    queryKey: ['account-insights', account],
+    queryFn: () => getAccountInsights(account),
+    enabled: !!account,
+    staleTime: 60_000,
+  })
+  const insights = insightsData?.insights || []
 
   const meta = results?.meta || txnData?.meta || {}
   const rows = txnData?.rows || results?.transactions || []
@@ -92,33 +111,35 @@ export function Step5Results() {
     max_abs_difference: reconciliation.max_abs_difference ?? null,
   }
   const filePrefix = account ? `bsie_${account}` : 'bsie'
-  const quickDiagnosisThai = getQuickDiagnosisThai(reconciliation, checkMode)
+  const quickDiagnosis = getQuickDiagnosis(reconciliation, checkMode, t)
   const downloadHref = (file: string, downloadName: string) =>
     `${dlBase}/${encodeURIComponent(file).replace(/%2F/g, '/')}` +
     `?download_name=${encodeURIComponent(downloadName)}`
   const downloads = [
-    { label: 'Report (.xlsx)',        file: `processed/${reportFile}`, downloadName: reportFile },
-    { label: 'Transactions (.csv)',   file: 'processed/transactions.csv', downloadName: `${filePrefix}_transactions.csv` },
-    { label: 'Transfer In (.csv)',    file: `processed/${categoryFiles.transfer_in || 'transfer_in.csv'}`, downloadName: `${filePrefix}_transfer_in.csv` },
-    { label: 'Transfer Out (.csv)',   file: `processed/${categoryFiles.transfer_out || 'transfer_out.csv'}`, downloadName: `${filePrefix}_transfer_out.csv` },
-    { label: 'Deposits (.csv)',       file: `processed/${categoryFiles.deposit || 'deposit.csv'}`, downloadName: `${filePrefix}_deposit.csv` },
-    { label: 'Withdrawals (.csv)',    file: `processed/${categoryFiles.withdraw || 'withdraw.csv'}`, downloadName: `${filePrefix}_withdraw.csv` },
-    { label: 'Entities (.csv)',       file: 'processed/entities.csv', downloadName: `${filePrefix}_entities.csv` },
-    { label: 'Entities (.xlsx)',      file: 'processed/entities.xlsx', downloadName: `${filePrefix}_entities.xlsx` },
-    { label: 'Links (.csv)',          file: 'processed/links.csv', downloadName: `${filePrefix}_links.csv` },
-    { label: 'Links (.xlsx)',         file: 'processed/links.xlsx', downloadName: `${filePrefix}_links.xlsx` },
-    { label: 'Graph Nodes (.csv)',    file: `processed/${categoryFiles.nodes || 'nodes.csv'}`, downloadName: `${filePrefix}_nodes.csv` },
-    { label: 'Graph Edges (.csv)',    file: `processed/${categoryFiles.edges || 'edges.csv'}`, downloadName: `${filePrefix}_edges.csv` },
-    { label: 'Graph Aggregate (.csv)', file: `processed/${categoryFiles.aggregated_edges || 'aggregated_edges.csv'}`, downloadName: `${filePrefix}_aggregated_edges.csv` },
-    { label: 'Graph Manifest (.json)', file: `processed/${categoryFiles.graph_manifest || 'graph_manifest.json'}`, downloadName: `${filePrefix}_graph_manifest.json` },
-    { label: 'Graph Analysis (.json)', file: `processed/${categoryFiles.graph_analysis || 'graph_analysis.json'}`, downloadName: `${filePrefix}_graph_analysis.json` },
-    { label: 'Graph Analysis (.xlsx)', file: `processed/${categoryFiles.graph_analysis_workbook || 'graph_analysis.xlsx'}`, downloadName: `${filePrefix}_graph_analysis.xlsx` },
-    { label: 'Reconciliation (.csv)', file: `processed/${categoryFiles.reconciliation || 'reconciliation.csv'}`, downloadName: `${filePrefix}_reconciliation.csv` },
-    { label: 'Reconciliation (.xlsx)', file: 'processed/reconciliation.xlsx', downloadName: `${filePrefix}_reconciliation.xlsx` },
-    { label: 'Account OFX (.ofx)',    file: `processed/${categoryFiles.ofx || 'account.ofx'}`, downloadName: `${filePrefix}.ofx` },
-    { label: 'i2 Chart (.anx)',       file: 'processed/i2_chart.anx', downloadName: `${filePrefix}_i2_chart.anx` },
-    { label: 'Original Source',       file: `raw/original${originalFilename.includes('.') ? originalFilename.slice(originalFilename.lastIndexOf('.')) : '.xlsx'}`, downloadName: originalFilename },
-    { label: 'Metadata (.json)',      file: 'meta.json', downloadName: `${filePrefix}_meta.json` },
+    { label: t('results.downloads.reportXlsx'),        file: `processed/${reportFile}`, downloadName: reportFile },
+    { label: t('results.downloads.transactionsCsv'),   file: 'processed/transactions.csv', downloadName: `${filePrefix}_transactions.csv` },
+    { label: t('results.downloads.transferInCsv'),    file: `processed/${categoryFiles.transfer_in || 'transfer_in.csv'}`, downloadName: `${filePrefix}_transfer_in.csv` },
+    { label: t('results.downloads.transferOutCsv'),   file: `processed/${categoryFiles.transfer_out || 'transfer_out.csv'}`, downloadName: `${filePrefix}_transfer_out.csv` },
+    { label: t('results.downloads.depositsCsv'),       file: `processed/${categoryFiles.deposit || 'deposit.csv'}`, downloadName: `${filePrefix}_deposit.csv` },
+    { label: t('results.downloads.withdrawalsCsv'),    file: `processed/${categoryFiles.withdraw || 'withdraw.csv'}`, downloadName: `${filePrefix}_withdraw.csv` },
+    { label: t('results.downloads.entitiesCsv'),       file: 'processed/entities.csv', downloadName: `${filePrefix}_entities.csv` },
+    { label: t('results.downloads.entitiesXlsx'),      file: 'processed/entities.xlsx', downloadName: `${filePrefix}_entities.xlsx` },
+    { label: t('results.downloads.linksCsv'),          file: 'processed/links.csv', downloadName: `${filePrefix}_links.csv` },
+    { label: t('results.downloads.linksXlsx'),         file: 'processed/links.xlsx', downloadName: `${filePrefix}_links.xlsx` },
+    { label: t('results.downloads.graphNodesCsv'),    file: `processed/${categoryFiles.nodes || 'nodes.csv'}`, downloadName: `${filePrefix}_nodes.csv` },
+    { label: t('results.downloads.graphEdgesCsv'),    file: `processed/${categoryFiles.edges || 'edges.csv'}`, downloadName: `${filePrefix}_edges.csv` },
+    { label: t('results.downloads.graphAggregateCsv'), file: `processed/${categoryFiles.aggregated_edges || 'aggregated_edges.csv'}`, downloadName: `${filePrefix}_aggregated_edges.csv` },
+    { label: t('results.downloads.graphManifestJson'), file: `processed/${categoryFiles.graph_manifest || 'graph_manifest.json'}`, downloadName: `${filePrefix}_graph_manifest.json` },
+    { label: t('results.downloads.graphAnalysisJson'), file: `processed/${categoryFiles.graph_analysis || 'graph_analysis.json'}`, downloadName: `${filePrefix}_graph_analysis.json` },
+    { label: t('results.downloads.graphAnalysisXlsx'), file: `processed/${categoryFiles.graph_analysis_workbook || 'graph_analysis.xlsx'}`, downloadName: `${filePrefix}_graph_analysis.xlsx` },
+    { label: t('results.downloads.reconciliationCsv'), file: `processed/${categoryFiles.reconciliation || 'reconciliation.csv'}`, downloadName: `${filePrefix}_reconciliation.csv` },
+    { label: t('results.downloads.reconciliationXlsx'), file: 'processed/reconciliation.xlsx', downloadName: `${filePrefix}_reconciliation.xlsx` },
+    { label: t('results.downloads.accountOfx'),    file: `processed/${categoryFiles.ofx || 'account.ofx'}`, downloadName: `${filePrefix}.ofx` },
+    { label: t('results.downloads.i2Chart'),       file: 'processed/i2_chart.anx', downloadName: `${filePrefix}_i2_chart.anx` },
+    { label: t('results.downloads.i2ImportCsv'), file: `processed/${categoryFiles.i2_import_csv || 'i2_import_transactions.csv'}`, downloadName: `${filePrefix}_i2_import_transactions.csv` },
+    { label: t('results.downloads.i2ImportSpec'), file: `processed/${categoryFiles.i2_import_spec || 'i2_import_spec.ximp'}`, downloadName: `${filePrefix}_i2_import_spec.ximp` },
+    { label: t('results.downloads.originalSource'),       file: `raw/original${originalFilename.includes('.') ? originalFilename.slice(originalFilename.lastIndexOf('.')) : '.xlsx'}`, downloadName: originalFilename },
+    { label: t('results.downloads.metadataJson'),      file: 'meta.json', downloadName: `${filePrefix}_meta.json` },
   ]
 
   useEffect(() => {
@@ -126,24 +147,24 @@ export function Step5Results() {
   }, [account, reconciliation.recommended_check_mode])
 
   const statCards = [
-    { label: 'Transactions',   value: String(meta.num_transactions ?? total),          color: '' },
-    { label: 'Total IN',       value: `฿${fmt(meta.total_in  || 0)}`,                  color: 'text-success' },
-    { label: 'Total OUT',      value: `฿${fmt(meta.total_out || 0)}`,                  color: 'text-danger' },
-    { label: 'Circulation',    value: `฿${fmt(meta.total_circulation || 0)}`,           color: 'text-accent' },
-    { label: 'Transfer In',    value: String(meta.category_counts?.transfer_in ?? '—'), color: '' },
-    { label: 'Transfer Out',   value: String(meta.category_counts?.transfer_out ?? '—'), color: '' },
-    { label: 'Deposits',       value: String(meta.category_counts?.deposit ?? '—'),      color: '' },
-    { label: 'Withdrawals',    value: String(meta.category_counts?.withdraw ?? '—'),     color: '' },
-    { label: 'Date Range',     value: fmtDateRange(meta.date_range),                    color: '' },
-    { label: 'Check View',     value: checkMode === 'chronological' ? 'Chronological' : 'File Order', color: 'text-accent' },
-    { label: 'Balance Check',  value: activeCheck.status || '—',                        color: activeCheck.status === 'VERIFIED' ? 'text-success' : activeCheck.status === 'FAILED' ? 'text-danger' : 'text-accent' },
-    { label: 'Mismatches',     value: String(activeCheck.mismatched_rows ?? '—'),       color: activeCheck.mismatched_rows ? 'text-danger' : '' },
-    { label: 'Max Diff',       value: activeCheck.max_abs_difference != null ? `฿${fmt(activeCheck.max_abs_difference)}` : '—', color: (activeCheck.max_abs_difference ?? 0) > 0 ? 'text-warning' : '' },
-    { label: 'Time Order',     value: reconciliation.chronology_issue_detected ? 'Review Needed' : 'OK', color: reconciliation.chronology_issue_detected ? 'text-warning' : '' },
-    { label: 'Sorted Mismatch', value: String(reconciliation.chronological_mismatched_rows ?? '—'), color: (reconciliation.chronological_mismatched_rows ?? 0) ? 'text-accent' : '' },
-    { label: 'Drift Rows',     value: String(reconciliation.rounding_drift_rows ?? '—'), color: (reconciliation.rounding_drift_rows ?? 0) ? 'text-warning' : '' },
-    { label: 'Unknown CPs',    value: String(meta.num_unknown ?? '—'),                  color: '' },
-    { label: 'Partial Accts',  value: String(meta.num_partial_accounts ?? '—'),         color: '' },
+    { label: t('results.stats.totalTxn'),   value: String(meta.num_transactions ?? total),          color: '' },
+    { label: t('results.stats.totalIn'),       value: `฿${fmt(meta.total_in  || 0)}`,                  color: 'text-success' },
+    { label: t('results.stats.totalOut'),      value: `฿${fmt(meta.total_out || 0)}`,                  color: 'text-danger' },
+    { label: t('results.stats.circulation'),    value: `฿${fmt(meta.total_circulation || 0)}`,           color: 'text-accent' },
+    { label: t('results.stats.transferIn'),    value: String(meta.category_counts?.transfer_in ?? '—'), color: '' },
+    { label: t('results.stats.transferOut'),   value: String(meta.category_counts?.transfer_out ?? '—'), color: '' },
+    { label: t('results.stats.deposits'),       value: String(meta.category_counts?.deposit ?? '—'),      color: '' },
+    { label: t('results.stats.withdrawals'),    value: String(meta.category_counts?.withdraw ?? '—'),     color: '' },
+    { label: t('results.stats.dateRange'),     value: fmtDateRange(meta.date_range),                    color: '' },
+    { label: t('results.stats.checkView'),     value: checkMode === 'chronological' ? t('results.chronological') : t('results.fileOrder'), color: 'text-accent' },
+    { label: t('results.stats.balanceCheck'),  value: activeCheck.status || '—',                        color: activeCheck.status === 'VERIFIED' ? 'text-success' : activeCheck.status === 'FAILED' ? 'text-danger' : 'text-accent' },
+    { label: t('results.stats.mismatches'),     value: String(activeCheck.mismatched_rows ?? '—'),       color: activeCheck.mismatched_rows ? 'text-danger' : '' },
+    { label: t('results.stats.maxDiff'),       value: activeCheck.max_abs_difference != null ? `฿${fmt(activeCheck.max_abs_difference)}` : '—', color: (activeCheck.max_abs_difference ?? 0) > 0 ? 'text-warning' : '' },
+    { label: t('results.stats.timeOrder'),     value: reconciliation.chronology_issue_detected ? t('results.reviewNeeded') : t('results.ok'), color: reconciliation.chronology_issue_detected ? 'text-warning' : '' },
+    { label: t('results.stats.sortedMismatch'), value: String(reconciliation.chronological_mismatched_rows ?? '—'), color: (reconciliation.chronological_mismatched_rows ?? 0) ? 'text-accent' : '' },
+    { label: t('results.stats.driftRows'),     value: String(reconciliation.rounding_drift_rows ?? '—'), color: (reconciliation.rounding_drift_rows ?? 0) ? 'text-warning' : '' },
+    { label: t('results.stats.unknownCPs'),    value: String(meta.num_unknown ?? '—'),                  color: '' },
+    { label: t('results.stats.partialAccts'),  value: String(meta.num_partial_accounts ?? '—'),         color: '' },
   ]
 
   const openOverride = (row: any) => {
@@ -162,7 +183,7 @@ export function Step5Results() {
         reason: ovForm.reason,
         override_by: normalizeOperatorName(ovForm.by),
       })
-      toast.success('Override saved')
+      toast.success(t('results.toast.overrideSaved'))
       setOverride(null)
       refetch()
       refetchOverrides()
@@ -181,7 +202,7 @@ export function Step5Results() {
       await deleteOverride(transactionId, account, resolvedOperatorName)
       refetch()
       refetchOverrides()
-      toast('Override removed', {
+      toast(t('results.toast.overrideRemoved'), {
         description: `Scoped override removed from account ${account || 'UNKNOWN'}.`,
         action: deletedOverride ? {
           label: 'Undo',
@@ -195,7 +216,7 @@ export function Step5Results() {
                 reason: deletedOverride.override_reason || '',
                 override_by: deletedOverride.override_by || resolvedOperatorName,
               })
-              toast.success('Override restored')
+              toast.success(t('results.toast.overrideRestored'))
               refetch()
               refetchOverrides()
             } catch (e: any) {
@@ -218,12 +239,12 @@ export function Step5Results() {
         <div className="flex items-center gap-3">
           <BankLogo bank={{ key: bankKey || String(meta.bank || '').toLowerCase(), name: meta.bank || bankKey || 'Bank' }} size="lg" />
           <div>
-          <h2 className="text-lg font-bold text-text">Results</h2>
-          <p className="text-muted text-sm">{account} · {meta.bank || ''} · {summaryTotal} transactions</p>
+          <h2 className="text-lg font-bold text-text">{t('results.title')}</h2>
+          <p className="text-muted text-sm">{account} · {meta.bank || ''} · {summaryTotal} {t('results.transactions')}</p>
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={reset}>
-          <RotateCcw size={13} />Process Another File
+          <RotateCcw size={13} />{t('results.processAnother')}
         </Button>
       </div>
 
@@ -239,13 +260,19 @@ export function Step5Results() {
             <Download size={13} />{d.label}
           </a>
         ))}
+        <button
+          onClick={() => generateAccountReport(account, parserRunId || undefined, resolvedOperatorName).catch(e => toast.error(e.message))}
+          className="flex items-center gap-2 px-3 py-2.5 bg-accent/20 border border-accent/40 rounded-lg text-accent text-sm hover:bg-accent/30 transition-all cursor-pointer font-semibold"
+        >
+          <Download size={13} />{t('results.downloads.reportPdf')}
+        </button>
       </div>
 
       {showingPreview ? (
         <Card className="border-accent/20 bg-accent/[0.06] p-3">
           <div className="flex items-center gap-2 text-sm text-text2">
-            <Badge variant="blue">Preview</Badge>
-            <span>Showing preview rows while the full results query finishes loading.</span>
+            <Badge variant="blue">{t('results.preview')}</Badge>
+            <span>{t('results.previewHint')}</span>
           </div>
         </Card>
       ) : null}
@@ -253,18 +280,17 @@ export function Step5Results() {
       <Card className="bg-success/[0.06] border-success/20 p-4">
         <CardTitle className="mb-2 text-text">
           <ShieldCheck size={15} className="text-success" />
-          Override Scope
+          {t('results.overrideScope')}
         </CardTitle>
         <p className="text-sm text-text2">
-          Manual relationship overrides are scoped to account <span className="font-mono">{account || 'UNKNOWN'}</span> only.
-          Matching transaction IDs in other accounts will not inherit this change.
+          {t('results.overrideScopeHint')} <span className="font-mono">{account || 'UNKNOWN'}</span> {t('results.overrideScopeHint2')}
         </p>
       </Card>
 
       <Card className="p-4">
         <CardTitle className="mb-3 text-text">
           <History size={15} className="text-accent" />
-          Override History
+          {t('results.overrideHistory')}
         </CardTitle>
         {overrideRows.length > 0 ? (
           <div className="space-y-2">
@@ -278,14 +304,14 @@ export function Step5Results() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="blue">Scoped</Badge>
+                    <Badge variant="blue">{t('results.scoped')}</Badge>
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => handleDeleteOverride(row.transaction_id)}
                     >
                       <Trash2 size={12} />
-                      Delete
+                      {t('results.delete')}
                     </Button>
                   </div>
                 </div>
@@ -300,7 +326,7 @@ export function Step5Results() {
           </div>
         ) : (
           <p className="text-sm text-muted">
-            No scoped overrides have been saved for account <span className="font-mono">{account || 'UNKNOWN'}</span>.
+            {t('results.noOverrides')} <span className="font-mono">{account || 'UNKNOWN'}</span>.
           </p>
         )}
       </Card>
@@ -315,18 +341,52 @@ export function Step5Results() {
         ))}
       </div>
 
+      {rows.length > 0 && (
+        <AccountFlowGraph account={account} bankKey={bankKey} rows={rows} />
+      )}
+
+      {timelineItems.length > 0 && (
+        <TimelineChart transactions={timelineItems} />
+      )}
+
+      {timelineItems.length > 0 && (
+        <TimeWheel transactions={timelineItems} />
+      )}
+
+      {insights.length > 0 && (
+        <Card className="border-amber-800/30 bg-amber-900/10 p-4">
+          <CardTitle className="mb-2 text-amber-400">{t('results.insights.title')}</CardTitle>
+          <div className="space-y-2">
+            {insights.map((insight: any, i: number) => {
+              const sevBg = insight.severity === 'high' ? 'bg-red-900/40 text-red-400'
+                : insight.severity === 'medium' ? 'bg-yellow-900/40 text-yellow-400'
+                : 'bg-blue-900/40 text-blue-400'
+              return (
+                <div key={i} className="rounded-lg border border-border bg-surface2/50 px-3 py-2 text-xs">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${sevBg}`}>{insight.severity}</span>
+                    <span className="font-semibold text-text">{insight.title_th || insight.title}</span>
+                  </div>
+                  <p className="text-muted">{insight.description}</p>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
       <Card className="border-accent/20 bg-accent/[0.06] p-4">
-        <CardTitle className="mb-2 text-text">สรุปสั้นสำหรับผู้ใช้งาน</CardTitle>
-        <p className="text-sm text-text2">{quickDiagnosisThai}</p>
+        <CardTitle className="mb-2 text-text">{t('results.userSummary')}</CardTitle>
+        <p className="text-sm text-text2">{quickDiagnosis}</p>
       </Card>
 
       {/* Reconciliation summary */}
       <div className="rounded-xl border border-border bg-surface p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-text">Balance Reconciliation</h3>
+            <h3 className="text-sm font-semibold text-text">{t('results.balanceReconciliation')}</h3>
             <p className="text-xs text-muted">
-              Statement balance verification is tracked separately from inferred running balances.
+              {t('results.balanceReconciliationHint')}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -338,7 +398,7 @@ export function Step5Results() {
                   checkMode === 'file_order' ? 'bg-accent text-white' : 'text-text2 hover:bg-surface',
                 ].join(' ')}
               >
-                File Order
+                {t('results.fileOrder')}
               </button>
               <button
                 onClick={() => setCheckMode('chronological')}
@@ -347,7 +407,7 @@ export function Step5Results() {
                   checkMode === 'chronological' ? 'bg-accent text-white' : 'text-text2 hover:bg-surface',
                 ].join(' ')}
               >
-                Chronological
+                {t('results.chronological')}
               </button>
             </div>
             <Badge
@@ -365,35 +425,35 @@ export function Step5Results() {
         </div>
         <div className="mt-3 rounded-lg border border-border bg-surface2 px-3 py-2 text-xs text-text2 space-y-1">
           <div>
-            มุมมองที่แนะนำ: <span className="font-semibold text-text">{reconciliation.recommended_check_mode === 'chronological' ? 'Chronological' : 'File Order'}</span>
+            {t('results.recommendedView')} <span className="font-semibold text-text">{reconciliation.recommended_check_mode === 'chronological' ? t('results.chronological') : t('results.fileOrder')}</span>
           </div>
           <div>
-            มุมมองนี้เปลี่ยนเฉพาะการตีความผล balance check ไม่ได้เปลี่ยนลำดับข้อมูลดิบใน statement ต้นฉบับ
+            {t('results.viewChangeNote')}
           </div>
         </div>
         <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3 text-sm">
           <div>
-            <div className="text-[11px] uppercase text-muted font-semibold">Matched Rows</div>
+            <div className="text-[11px] uppercase text-muted font-semibold">{t('results.matchedRows')}</div>
             <div className="text-text font-semibold">{reconciliation.matched_rows ?? '—'}</div>
           </div>
           <div>
-            <div className="text-[11px] uppercase text-muted font-semibold">Missing Balance Rows</div>
+            <div className="text-[11px] uppercase text-muted font-semibold">{t('results.missingBalanceRows')}</div>
             <div className="text-text font-semibold">{reconciliation.missing_balance_rows ?? '—'}</div>
           </div>
           <div>
-            <div className="text-[11px] uppercase text-muted font-semibold">Opening Balance</div>
+            <div className="text-[11px] uppercase text-muted font-semibold">{t('results.openingBalance')}</div>
             <div className="text-text font-semibold">
               {reconciliation.opening_balance != null ? `฿${fmt(reconciliation.opening_balance)}` : '—'}
             </div>
           </div>
           <div>
-            <div className="text-[11px] uppercase text-muted font-semibold">Closing Balance</div>
+            <div className="text-[11px] uppercase text-muted font-semibold">{t('results.closingBalance')}</div>
             <div className="text-text font-semibold">
               {reconciliation.closing_balance != null ? `฿${fmt(reconciliation.closing_balance)}` : '—'}
             </div>
           </div>
           <div>
-            <div className="text-[11px] uppercase text-muted font-semibold">Chronological Mismatches</div>
+            <div className="text-[11px] uppercase text-muted font-semibold">{t('results.chronologicalMismatches')}</div>
             <div className="text-text font-semibold">{reconciliation.chronological_mismatched_rows ?? '—'}</div>
           </div>
           <div>
@@ -401,7 +461,7 @@ export function Step5Results() {
             <div className="text-text font-semibold">{reconciliation.mismatches_reduced_by_sorting ?? '—'}</div>
           </div>
           <div>
-            <div className="text-[11px] uppercase text-muted font-semibold">Rounding Drift Rows</div>
+            <div className="text-[11px] uppercase text-muted font-semibold">{t('results.roundingDriftRows')}</div>
             <div className="text-text font-semibold">{reconciliation.rounding_drift_rows ?? '—'}</div>
           </div>
           <div>
@@ -461,7 +521,7 @@ export function Step5Results() {
                 : 'border-transparent text-muted hover:text-text2',
             ].join(' ')}
           >
-            {tab}
+            {t(`results.tabs.${tab}`)}
           </button>
         ))}
       </div>
@@ -587,13 +647,13 @@ export function Step5Results() {
             className="bg-surface border border-border rounded-xl p-6 w-full max-w-[500px] shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold mb-4 text-text">Override Relationship</h3>
+            <h3 className="text-base font-bold mb-4 text-text">{t('results.overrideModal.title')}</h3>
             <div className="mb-4 rounded-lg border border-success/20 bg-success/[0.06] px-3 py-2 text-xs text-text2">
               This override will apply only to account <span className="font-mono">{account || 'UNKNOWN'}</span>.
             </div>
             <div className="space-y-3">
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] uppercase text-muted font-semibold">Transaction ID</label>
+                <label className="text-[11px] uppercase text-muted font-semibold">{t('results.overrideModal.transactionId')}</label>
                 <input
                   value={override.tid} readOnly
                   className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-muted"
@@ -602,7 +662,7 @@ export function Step5Results() {
               <div className="grid grid-cols-2 gap-3">
                 {(['from','to'] as const).map(k => (
                   <div key={k} className="flex flex-col gap-1">
-                    <label className="text-[11px] uppercase text-muted font-semibold">{k === 'from' ? 'FROM' : 'TO'} Account</label>
+                    <label className="text-[11px] uppercase text-muted font-semibold">{k === 'from' ? t('results.overrideModal.fromAccount') : t('results.overrideModal.toAccount')}</label>
                     <input
                       value={ovForm[k]}
                       onChange={e => setOvForm(f => ({ ...f, [k]: e.target.value }))}
@@ -612,7 +672,7 @@ export function Step5Results() {
                 ))}
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] uppercase text-muted font-semibold">Reason</label>
+                <label className="text-[11px] uppercase text-muted font-semibold">{t('results.overrideModal.reason')}</label>
                 <input
                   value={ovForm.reason}
                   onChange={e => setOvForm(f => ({ ...f, reason: e.target.value }))}
@@ -629,8 +689,8 @@ export function Step5Results() {
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-5">
-              <Button variant="ghost" onClick={() => setOverride(null)}>Cancel</Button>
-              <Button variant="primary" onClick={handleSaveOverride}>Save Override</Button>
+              <Button variant="ghost" onClick={() => setOverride(null)}>{t('results.overrideModal.cancel')}</Button>
+              <Button variant="primary" onClick={handleSaveOverride}>{t('results.overrideModal.save')}</Button>
             </div>
           </div>
         </div>

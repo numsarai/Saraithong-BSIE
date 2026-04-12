@@ -288,24 +288,7 @@ describe('InvestigationDesk date formatting', () => {
     expect(await screen.findByText('Learning Feedback Summary')).toBeInTheDocument()
     expect(await screen.findByText('mapping_memory (1) · account_identity (1)')).toBeInTheDocument()
     expect(await screen.findByText('source mapping_profile:PROFILE-1')).toBeInTheDocument()
-    expect((await screen.findAllByText('corrected')).length).toBeGreaterThan(0)
-  })
-
-  it('renders graph analysis tab from persisted normalized transaction analytics', async () => {
-    renderWithQueryClient()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Graph Analysis' }))
-
-    expect(await screen.findByText('BSIE Graph Analysis Module')).toBeInTheDocument()
-    expect((await screen.findAllByText('Subject Account')).length).toBeGreaterThan(0)
-    expect(await screen.findByText(/partial_account_only/i)).toBeInTheDocument()
-    expect(await screen.findByText('Graph Explorer')).toBeInTheDocument()
-    expect((await screen.findAllByText('High fan-in into ACCOUNT:1111111111')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('Suspicious')).toBeInTheDocument()
-    expect(await screen.findByText(/Loaded 0 transactions/i)).toBeInTheDocument()
-    expect(await screen.findByText(/Hidden node count:/i)).toBeInTheDocument()
-    expect(await screen.findByText('Neo4j Enabled')).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Sync To Neo4j' })).toBeInTheDocument()
+    expect((await screen.findAllByText('Corrected')).length).toBeGreaterThan(0)
   })
 
   it('uses the stored operator name for graph exports', async () => {

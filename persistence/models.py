@@ -155,6 +155,9 @@ class Entity(Base):
 
 class AccountEntityLink(Base):
     __tablename__ = "account_entity_links"
+    __table_args__ = (
+        UniqueConstraint("account_id", "entity_id", "link_type", name="uq_account_entity_link"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     account_id: Mapped[str] = mapped_column(String(36), ForeignKey("accounts.id"), nullable=False, index=True)
@@ -182,6 +185,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
     __table_args__ = (
         Index("ix_transactions_account_datetime", "account_id", "transaction_datetime"),
+        Index("ix_transactions_posted_date", "posted_date"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -213,6 +217,7 @@ class Transaction(Base):
     review_status: Mapped[str] = mapped_column(String(64), default="pending", nullable=False, index=True)
     linkage_status: Mapped[str] = mapped_column(String(64), default="unresolved", nullable=False, index=True)
     lineage_json: Mapped[dict | None] = mapped_column(JSON)
+    analyst_note: Mapped[str | None] = mapped_column(Text)
 
 
 class TransactionMatch(Base):
@@ -288,6 +293,62 @@ class AdminSetting(Base):
     value_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_by: Mapped[str] = mapped_column(String(255), default="system", nullable=False)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    username: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True)
+    hashed_password: Mapped[str | None] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(32), default="analyst", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    oauth_provider: Mapped[str | None] = mapped_column(String(64))
+    oauth_id: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GraphAnnotation(Base):
+    __tablename__ = "graph_annotations"
+    __table_args__ = (
+        Index("ix_graph_annotations_node_id", "node_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    node_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    annotation_type: Mapped[str] = mapped_column(String(32), default="note", nullable=False)
+    content: Mapped[str | None] = mapped_column(Text)
+    tag: Mapped[str | None] = mapped_column(String(64))
+    created_by: Mapped[str] = mapped_column(String(255), default="analyst", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+    __table_args__ = (
+        Index("ix_alerts_status", "status"),
+        Index("ix_alerts_severity", "severity"),
+        Index("ix_alerts_rule_type", "rule_type"),
+        Index("ix_alerts_account_id", "account_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    transaction_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("transactions.id"), index=True)
+    account_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("accounts.id"))
+    parser_run_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("parser_runs.id"))
+    rule_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    confidence: Mapped[Decimal] = mapped_column(Numeric(5, 4), default=Decimal("0.0000"), nullable=False)
+    finding_id: Mapped[str | None] = mapped_column(String(128))
+    summary: Mapped[str | None] = mapped_column(Text)
+    evidence_json: Mapped[dict | list | None] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(32), default="new", nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(String(255))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    review_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class CaseTag(Base):

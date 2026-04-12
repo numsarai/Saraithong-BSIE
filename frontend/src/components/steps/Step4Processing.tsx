@@ -3,8 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { getJobStatus } from '@/api'
 import { useStore } from '@/store'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 
 export function Step4Processing() {
+  const { t } = useTranslation()
   const { jobId, setStep, setResults } = useStore()
   const logRef = useRef<HTMLDivElement>(null)
   const handledRef = useRef(false)
@@ -25,12 +27,12 @@ export function Step4Processing() {
       handledRef.current = true
       setResults(data.result)
       setStep(5)
-      toast.success('Pipeline complete!')
+      toast.success(t('step4.pipelineComplete'))
     } else if (data.status === 'error') {
       handledRef.current = true
-      toast.error(`Pipeline failed: ${data.error || 'Unknown error'}`)
+      toast.error(`${t('step4.pipelineFailed')}${data.error || 'Unknown error'}`)
     }
-  }, [data, data?.status, setResults, setStep])
+  }, [data, data?.status, setResults, setStep, t])
 
   useEffect(() => {
     if (logRef.current) {
@@ -48,9 +50,9 @@ export function Step4Processing() {
           <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
         )}
         <div>
-          <h2 className="text-lg font-bold text-text">Processing Pipeline</h2>
+          <h2 className="text-lg font-bold text-text">{t('step4.title')}</h2>
           <p className="text-muted text-sm capitalize">
-            {status === 'queued' ? 'Waiting to start…' : status === 'running' ? 'Running…' : status}
+            {status === 'queued' ? t('step4.waiting') : status === 'running' ? t('step4.running') : status}
           </p>
         </div>
       </div>
@@ -60,7 +62,7 @@ export function Step4Processing() {
         className="bg-surface2 rounded-xl p-4 h-64 overflow-y-auto font-mono text-xs space-y-0.5 border border-border"
       >
         {lines.length === 0 ? (
-          <p className="text-muted">Waiting for pipeline to start…</p>
+          <p className="text-muted">{t('step4.waitingForPipeline')}</p>
         ) : (
           lines.map((line, i) => (
             <div

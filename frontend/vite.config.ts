@@ -19,9 +19,7 @@ export default defineConfig({
     proxy: {
       '/api': { target: backendTarget, changeOrigin: true },
       '/static': { target: backendTarget, changeOrigin: true },
-      '/favicon.png': { target: backendTarget, changeOrigin: true },
       '/favicon.ico': { target: backendTarget, changeOrigin: true },
-      '/favicon.svg': { target: backendTarget, changeOrigin: true },
     },
   },
   build: {

@@ -1,6 +1,10 @@
 # Config Registry
 
+> Updated for BSIE v4.0
+
 This registry is the built-in validation layer for BSIE bank formats.
+
+**Supported banks (10 configs):** BBL, BAY, KBANK, KTB, SCB, TTB, GSB, CIAF, generic, OFX.
 
 Each entry ties together:
 - a built-in bank config in [`/Users/saraithong/Documents/bsie/config`](/Users/saraithong/Documents/bsie/config)
@@ -29,6 +33,7 @@ pytest -q
 
 - The config file must exist under the built-in config directory.
 - The config must include explicit `detection.keywords` and `detection.strong_headers`.
+- Some configs (e.g., GSB) also use `detection.body_keywords` for content-based bank detection when header keywords are insufficient.
 - The sample file must exist.
 - Auto-detection must match `expected_bank`.
 - If `normalize_assert` is present, normalization must produce rows and include the required standard-schema columns.

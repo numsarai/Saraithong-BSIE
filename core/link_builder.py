@@ -24,16 +24,16 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def _resolve_counterparty(row: pd.Series) -> str:
+def _resolve_counterparty(row) -> str:
     """
     Pick the best available counterparty identifier.
     Priority: valid account → partial → "UNKNOWN"
     """
-    cp = str(row.get("counterparty_account", "") or "").strip()
+    cp = str(getattr(row, "counterparty_account", "") or "").strip()
     if cp:
         return cp
 
-    partial = str(row.get("partial_account", "") or "").strip()
+    partial = str(getattr(row, "partial_account", "") or "").strip()
     if partial:
         return f"PARTIAL:{partial}"
 
@@ -55,9 +55,9 @@ def build_links(df: pd.DataFrame) -> pd.DataFrame:
     from_list: list[str] = []
     to_list:   list[str] = []
 
-    for _, row in df.iterrows():
-        direction       = str(row.get("direction", "UNKNOWN"))
-        subject_account = str(row.get("subject_account", "") or "")
+    for row in df.itertuples(index=False):
+        direction       = str(getattr(row, "direction", "UNKNOWN"))
+        subject_account = str(getattr(row, "subject_account", "") or "")
         counterparty    = _resolve_counterparty(row)
 
         if direction == "IN":

@@ -39,6 +39,18 @@ def persist_upload(
             for row in duplicates[:5]
         ]
 
+        # If exact same file already uploaded, reuse it instead of creating a new record
+        if duplicates:
+            existing = duplicates[0]
+            return {
+                "file_id": existing.id,
+                "stored_path": existing.stored_path,
+                "file_hash_sha256": file_hash,
+                "duplicate_file_status": "exact_duplicate",
+                "prior_ingestions": prior,
+                "reused": True,
+            }
+
         file_row = FileRecord(
             original_filename=original_filename,
             stored_path="",
@@ -50,8 +62,7 @@ def persist_upload(
             uploaded_by=uploaded_by or "analyst",
             import_status="uploaded",
             metadata_json={
-                "duplicate_policy": "allow_and_tag",
-                "prior_upload_count": len(duplicates),
+                "duplicate_policy": "reuse_existing",
             },
         )
         session.add(file_row)
@@ -64,7 +75,7 @@ def persist_upload(
         evidence_path.write_bytes(content)
         file_row.stored_path = str(evidence_path)
         file_row.storage_key = f"{file_id}/original{suffix.lower()}"
-        file_row.import_status = "uploaded_duplicate" if duplicates else "uploaded"
+        file_row.import_status = "uploaded"
         session.add(file_row)
         session.commit()
 
@@ -72,8 +83,9 @@ def persist_upload(
         "file_id": file_id,
         "stored_path": str(EVIDENCE_DIR / file_id / f"original{suffix.lower()}"),
         "file_hash_sha256": file_hash,
-        "duplicate_file_status": "exact_duplicate" if prior else "unique",
-        "prior_ingestions": prior,
+        "duplicate_file_status": "unique",
+        "prior_ingestions": [],
+        "reused": False,
     }
 
 

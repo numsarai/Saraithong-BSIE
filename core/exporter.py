@@ -25,9 +25,16 @@ import pandas as pd
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Font, PatternFill
 
+from openpyxl.styles import NamedStyle
+
 from core.account_parser import parse_account
+
+# ── Default report font ──────────────────────────────────────────────────
+REPORT_FONT_NAME = "TH Sarabun New"
+REPORT_FONT_SIZE = 16
 from utils.date_utils import format_date_range
 from core.export_anx import export_anx_from_graph
+from core.export_i2_import import write_i2_import_package
 from core.graph_analysis import build_graph_analysis, write_graph_analysis_exports
 from core.graph_export import write_graph_exports
 from core.bank_logo_registry import build_bank_logo_catalog, find_bank_logo_record, render_bank_logo_png_bytes
@@ -155,6 +162,39 @@ WORKBOOK_SHEET_NAMES = {
     "bank_logos": "Bank_Logos",
 }
 LOGO_SHEET_HEADERS = ["Logo", "Bank Name", "Key", "Template Status", "Category", "Notes"]
+
+# ── Transaction category color scheme ────────────────────────────────────
+# Light fills for data rows, dark fills for category sheet headers.
+CATEGORY_COLORS = {
+    "IN_TRANSFER": {
+        "light": "E8F5E9",   # green light
+        "dark":  "2E7D32",   # green dark
+    },
+    "OUT_TRANSFER": {
+        "light": "FFEBEE",   # red light
+        "dark":  "C62828",   # red dark
+    },
+    "DEPOSIT": {
+        "light": "E3F2FD",   # blue light
+        "dark":  "1565C0",   # blue dark
+    },
+    "WITHDRAW": {
+        "light": "FFFDE7",   # yellow light
+        "dark":  "F9A825",   # yellow dark
+    },
+}
+
+# Map sheet names to their transaction_type for header coloring
+_SHEET_TO_CATEGORY = {
+    "Transfer_In": "IN_TRANSFER",
+    "Transfer_Out": "OUT_TRANSFER",
+    "Deposits": "DEPOSIT",
+    "Withdrawals": "WITHDRAW",
+    "ready to transfer in": "IN_TRANSFER",
+    "ready to transfer out": "OUT_TRANSFER",
+    "ready to deposit": "DEPOSIT",
+    "ready to withdraw": "WITHDRAW",
+}
 
 
 def _safe_filename(name: str) -> str:
@@ -438,33 +478,44 @@ def _write_transactions_multisheet(
         cover_sheet.sheet_view.showGridLines = False
         context = report_context or {}
         cover_sheet["B2"] = "BSIE Report Workbook"
-        cover_sheet["B2"].font = Font(size=20, bold=True, color="1E293B")
+        cover_sheet["B2"].font = Font(name=REPORT_FONT_NAME, size=22, bold=True, color="1E293B")
         cover_sheet["B3"] = "Bank Statement Intelligence Engine"
-        cover_sheet["B3"].font = Font(size=11, color="475569")
+        cover_sheet["B3"].font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, color="475569")
         source_bank_name = str(context.get("bank_name") or "")
         source_subject_name = str(context.get("subject_name") or "") or "Unknown subject"
+        # Use Excel formulas for dynamic values instead of hardcoded numbers
+        all_txn_sheet = WORKBOOK_SHEET_NAMES["all_transactions"]
         cover_items = [
             ("Subject Account Name", source_subject_name),
             ("Subject Account Number", str(context.get("account_number") or "")),
             ("Bank", source_bank_name),
             ("Original File", str(context.get("original_filename") or "")),
             ("Date Range", str(context.get("date_range") or "")),
-            ("Transaction Count", str(context.get("transaction_count") or 0)),
+            ("Transaction Count", None),  # Will use formula
             ("Program Owner / Developer", APP_OWNER_NAME or APP_DEVELOPER_NAME),
             ("Contact", APP_CONTACT_PHONE),
         ]
         for index, (label, value) in enumerate(cover_items, start=5):
             cover_sheet[f"B{index}"] = label
-            cover_sheet[f"B{index}"].font = Font(size=10, bold=True, color="64748B")
-            cover_sheet[f"C{index}"] = value
-            cover_sheet[f"C{index}"].font = Font(size=11, color="0F172A")
+            cover_sheet[f"B{index}"].font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="64748B")
+            if value is not None:
+                cover_sheet[f"C{index}"] = value
+            cover_sheet[f"C{index}"].font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, color="0F172A")
+        # Transaction Count uses formula referencing All_Transactions sheet
+        txn_count_row = 10  # "Transaction Count" is 6th item (start=5, index 5+5=10)
+        cover_sheet[f"C{txn_count_row}"] = f"=COUNTA('{all_txn_sheet}'!A:A)-1"
+        cover_sheet[f"C{txn_count_row}"].font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, color="0F172A")
         cover_sheet["B13"] = "Report Notes"
-        cover_sheet["B13"].font = Font(size=11, bold=True, color="1E293B")
+        cover_sheet["B13"].font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="1E293B")
+        notes_font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, color="334155")
         cover_sheet["B14"] = "This workbook keeps analysis-ready views while preserving the original source file separately in the raw evidence folder."
+        cover_sheet["B14"].font = notes_font
         cover_sheet["B14"].alignment = Alignment(wrap_text=True, vertical="top")
         cover_sheet["B15"] = "Sheets 2-5 provide ready-to-use transfer in, transfer out, deposit, and withdraw views from normalized subject and counterparty data."
+        cover_sheet["B15"].font = notes_font
         cover_sheet["B15"].alignment = Alignment(wrap_text=True, vertical="top")
         cover_sheet["B16"] = "The final Bank_Logos sheet is a reference for current bank templates and prepared Thai bank logo assets."
+        cover_sheet["B16"].font = notes_font
         cover_sheet["B16"].alignment = Alignment(wrap_text=True, vertical="top")
         cover_sheet.column_dimensions["A"].width = 4
         cover_sheet.column_dimensions["B"].width = 18
@@ -487,12 +538,92 @@ def _write_transactions_multisheet(
         cover_logo.height = 92
         cover_sheet.add_image(cover_logo, "E2")
 
+        data_font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE)
+        default_header_font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="FFFFFF")
+        default_header_fill = PatternFill(fill_type="solid", fgColor="1E293B")
+
+        # Pre-build category fill objects
+        category_light_fills = {
+            cat: PatternFill(fill_type="solid", fgColor=colors["light"])
+            for cat, colors in CATEGORY_COLORS.items()
+        }
+        category_dark_fills = {
+            cat: PatternFill(fill_type="solid", fgColor=colors["dark"])
+            for cat, colors in CATEGORY_COLORS.items()
+        }
+
         for sheet_name, df in sheet_map.items():
             df_clean = df.reset_index(drop=True)
             df_clean.to_excel(writer, sheet_name=sheet_name, index=False)
 
-            # Auto-fit column widths
             ws = writer.sheets[sheet_name]
+
+            # Determine header color for category sheets
+            category = _SHEET_TO_CATEGORY.get(sheet_name)
+            if category and category in category_dark_fills:
+                header_fill = category_dark_fills[category]
+            else:
+                header_fill = default_header_fill
+
+            # Find transaction_type column index for row coloring
+            txn_type_col = None
+            col_names = [str(c).strip() for c in df_clean.columns]
+            if "transaction_type" in col_names:
+                txn_type_col = col_names.index("transaction_type") + 1  # 1-based
+
+            # Pre-compute row fill map for fast lookup
+            whole_sheet_fill = category_light_fills.get(category) if category and txn_type_col is None else None
+            row_fill_map: dict[int, PatternFill | None] = {}
+            if txn_type_col:
+                for excel_row in range(2, ws.max_row + 1):
+                    cell_val = str(ws.cell(row=excel_row, column=txn_type_col).value or "").strip()
+                    row_fill_map[excel_row] = category_light_fills.get(cell_val)
+
+            # Apply font, header styling, and row coloring
+            for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=ws.max_column):
+                row_num = row[0].row
+                if row_num == 1:
+                    for cell in row:
+                        cell.font = default_header_font
+                        cell.fill = header_fill
+                else:
+                    row_fill = row_fill_map.get(row_num) or whole_sheet_fill
+                    for cell in row:
+                        cell.font = data_font
+                        if row_fill:
+                            cell.fill = row_fill
+
+            # Add summary row with formulas for amount columns
+            if ws.max_row > 1:
+                summary_row = ws.max_row + 2
+                amount_col = None
+                for ci, col_name in enumerate(col_names, 1):
+                    if col_name.lower() in ("amount", "transaction_amount"):
+                        amount_col = ci
+                        break
+                if amount_col:
+                    amount_letter = ws.cell(row=1, column=amount_col).column_letter
+                    ws.cell(row=summary_row, column=1).value = "TOTAL"
+                    ws.cell(row=summary_row, column=1).font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True)
+                    ws.cell(row=summary_row, column=amount_col).value = f"=SUM({amount_letter}2:{amount_letter}{ws.max_row})"
+                    ws.cell(row=summary_row, column=amount_col).font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True)
+                    ws.cell(row=summary_row, column=amount_col).number_format = '#,##0.00'
+
+                    count_cell = ws.cell(row=summary_row + 1, column=1)
+                    count_cell.value = "COUNT"
+                    count_cell.font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="64748B")
+                    ws.cell(row=summary_row + 1, column=amount_col).value = f"=COUNTA({amount_letter}2:{amount_letter}{ws.max_row})"
+                    ws.cell(row=summary_row + 1, column=amount_col).font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="64748B")
+
+            # Auto-filter on header row
+            if ws.max_row >= 1 and ws.max_column >= 1:
+                last_col_letter = ws.cell(row=1, column=ws.max_column).column_letter
+                ws.auto_filter.ref = f"A1:{last_col_letter}{ws.max_row}"
+
+            # Freeze header row
+            ws.freeze_panes = "A2"
+
+            # Auto-fit column widths
             for col_cells in ws.columns:
                 max_len = max(
                     (len(str(cell.value)) for cell in col_cells if cell.value is not None),
@@ -503,7 +634,7 @@ def _write_transactions_multisheet(
 
         logo_sheet = writer.book.create_sheet(WORKBOOK_SHEET_NAMES["bank_logos"])
         header_fill = PatternFill(fill_type="solid", fgColor="1E293B")
-        header_font = Font(color="FFFFFF", bold=True)
+        header_font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, color="FFFFFF", bold=True)
         highlight_fill = PatternFill(fill_type="solid", fgColor="DBEAFE")
         logo_sheet.freeze_panes = "B2"
         logo_sheet.append(LOGO_SHEET_HEADERS)
@@ -524,10 +655,11 @@ def _write_transactions_multisheet(
             image.width = 40
             image.height = 40
             logo_sheet.add_image(image, f"A{row_index}")
-            logo_sheet.cell(row=row_index, column=2, value=str(bank.get("name") or ""))
-            logo_sheet.cell(row=row_index, column=3, value=str(bank.get("key") or ""))
-            logo_sheet.cell(row=row_index, column=4, value=str(bank.get("template_badge") or ""))
-            logo_sheet.cell(row=row_index, column=5, value=str(bank.get("bank_type") or ""))
+            logo_font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE)
+            logo_sheet.cell(row=row_index, column=2, value=str(bank.get("name") or "")).font = logo_font
+            logo_sheet.cell(row=row_index, column=3, value=str(bank.get("key") or "")).font = logo_font
+            logo_sheet.cell(row=row_index, column=4, value=str(bank.get("template_badge") or "")).font = logo_font
+            logo_sheet.cell(row=row_index, column=5, value=str(bank.get("bank_type") or "")).font = logo_font
             note_parts = []
             if str(bank.get("template_source") or "") == "custom":
                 note_parts.append("Custom template")
@@ -664,6 +796,19 @@ def export_package(
     except Exception as e:
         logger.warning(f"  ANX export failed (non-fatal): {e}")
 
+    # 4c. Export i2 import package (.ximp + companion CSV)
+    i2_import_paths = write_i2_import_package(
+        graph_bundle["nodes_df"],
+        graph_bundle["edges_df"],
+        processed_dir,
+        subject=f"BSIE import for {subject_name or account_number or 'statement'}",
+        comments=(
+            f"Generated from BSIE account package for {subject_name or account_number or 'statement'} "
+            "using the shared graph export bundle."
+        ),
+        author="BSIE",
+    )
+
     # 5. Multi-sheet report Excel (all sheets in one file)
     #    Filename: {subject_name}_{bank}_report.xlsx  (or report.xlsx if no name)
     if subject_name:
@@ -741,6 +886,8 @@ def export_package(
         "reconciliation": "reconciliation.csv",
         "ofx": "account.ofx",
         "anx": "i2_chart.anx",
+        "i2_import_csv": i2_import_paths["csv_path"].name,
+        "i2_import_spec": i2_import_paths["spec_path"].name,
     }
     meta["category_counts"] = {
         "transfer_in": len(transaction_categories["transfer_in"]),

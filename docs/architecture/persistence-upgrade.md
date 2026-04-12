@@ -1,7 +1,9 @@
 # BSIE Persistence Upgrade
 
+> Updated for BSIE v4.0 -- the migration from `database.py` to SQLAlchemy 2 is complete. `app.py` is now a thin shell (~230 lines) with 21 routers under `routers/`. The persistence layer is the authoritative evidence store.
+
 ## Current architecture preserved
-- FastAPI remains the backend surface in `app.py`.
+- FastAPI remains the backend surface, with endpoints organized into 21 routers under `routers/`.
 - The React analyst app remains the UI shell in `frontend/src/App.tsx`.
 - The existing parser, normalization, reconciliation, and export flow remains centered on `pipeline/process_account.py`.
 - Legacy SQLite-backed helpers for jobs, mapping memory, bank fingerprints, and overrides remain available through `database.py`.

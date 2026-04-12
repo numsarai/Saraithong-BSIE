@@ -7,6 +7,7 @@ import pandas as pd
 from defusedxml import ElementTree as ET
 
 from core.export_anx import export_anx_from_graph
+from core.export_i2_import import build_i2_import_frame, write_i2_import_package
 from core.graph_export import (
     AGGREGATED_EDGE_COLUMNS,
     GRAPH_EDGE_COLUMNS,
@@ -320,3 +321,101 @@ def test_export_anx_from_graph_uses_i2_safe_subset(tmp_path: Path):
     root = ET.parse(output_path).getroot()
     chart_items = root.findall(".//ChartItem")
     assert chart_items
+    assert root.find("./StrengthCollection") is not None
+    assert root.find("./EntityTypeCollection") is not None
+    assert root.find("./LinkTypeCollection") is not None
+    assert root.find(".//ChartItem/Description") is None
+
+    node_item = root.find("./ChartItemCollection/ChartItem")
+    assert node_item is not None
+    assert "Description" in node_item.attrib
+    assert node_item.find("./End") is not None
+    assert node_item.find("./End").attrib["X"]
+    assert node_item.find("./End").attrib["Y"]
+
+    edge_collection = root.findall("./ChartItemCollection")[-1]
+    edge_item = edge_collection.find("./ChartItem")
+    assert edge_item is not None
+    assert "Description" in edge_item.attrib
+    assert edge_item.find("./Link/LinkStyle").attrib["Type"] == "Link"
+    assert edge_item.find("./Link/LinkStyle").attrib["Strength"] == "Solid"
+
+
+def test_write_i2_import_package_from_graph_uses_flow_edges_and_companion_spec(tmp_path: Path):
+    nodes_df, edges_df, _, _ = build_graph_exports(_sample_transactions(), matches=_sample_matches(), batch_identity="BATCH-1")
+
+    frame = build_i2_import_frame(nodes_df, edges_df)
+    assert not frame.empty
+    assert "From Account Identity" in frame.columns
+    assert "To Account Identity" in frame.columns
+    assert "Transaction Amount" in frame.columns
+    assert set(frame["Edge Type"]) == {"SENT_TO", "RECEIVED_FROM"}
+
+    paths = write_i2_import_package(
+        nodes_df,
+        edges_df,
+        tmp_path,
+        subject="BSIE import subject",
+        comments="BSIE import comments",
+        author="tester",
+    )
+
+    csv_path = paths["csv_path"]
+    spec_path = paths["spec_path"]
+    assert csv_path.exists()
+    assert spec_path.exists()
+
+    csv_df = pd.read_csv(csv_path, dtype=str).fillna("")
+    assert len(csv_df) == len(frame)
+    assert csv_df.loc[0, "Transaction Currency"] == "THB"
+
+    spec_text = spec_path.read_text(encoding="utf-16")
+    assert '.\\i2_import_transactions.csv' in spec_text
+    assert "From Account Identity" in spec_text
+    assert "Transaction Amount" in spec_text
+
+    ns = {"imp": "urn:import-specification"}
+    root = ET.fromstring(spec_text)
+    assert root.find("./imp:ColumnAssignment/imp:Entities", ns) is not None
+    assert root.find("./imp:ColumnAssignment/imp:Links", ns) is not None
+    assert root.find("./imp:ColumnAssignment/imp:Connections", ns) is not None
+
+
+def test_build_i2_import_frame_tolerates_legacy_bundles_with_missing_optional_columns():
+    nodes = pd.DataFrame(
+        [
+            {
+                "node_id": "ACCOUNT:1111111111",
+                "label": "Subject Account",
+                "account_number": "1111111111",
+                "entity_name": "Subject",
+                "bank_name": "SCB",
+            },
+            {
+                "node_id": "ACCOUNT:2222222222",
+                "label": "Alice Account",
+                "account_number": "2222222222",
+                "entity_name": "Alice",
+                "bank_name": "SCB",
+            },
+        ]
+    )
+    legacy_edges = pd.DataFrame(
+        [
+            {
+                "edge_id": "EDGE-1",
+                "edge_type": "SENT_TO",
+                "aggregation_level": "transaction",
+                "from_node_id": "ACCOUNT:1111111111",
+                "to_node_id": "ACCOUNT:2222222222",
+                "amount": "500.00",
+            }
+        ]
+    )
+
+    frame = build_i2_import_frame(nodes, legacy_edges)
+
+    assert len(frame) == 1
+    assert frame.iloc[0]["Transaction Amount"] == "500"
+    assert frame.iloc[0]["Transaction Date"] == ""
+    assert frame.iloc[0]["Source File"] == ""

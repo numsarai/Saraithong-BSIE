@@ -1,0 +1,36 @@
+BSIE Proprietary Software License
+Copyright (c) 2026 ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง
+All rights reserved.
+
+This repository, the BSIE software, and all associated source code, assets,
+documentation, data models, and build artifacts are proprietary and
+confidential.
+
+No license or other right is granted to any person or entity to use, copy,
+modify, merge, publish, distribute, sublicense, sell, commercialize, host,
+reverse engineer, create derivative works from, or otherwise exploit this
+software or any portion of it, except with the prior written permission of the
+copyright owner.
+
+Access to this repository for review, evaluation, collaboration, or internal
+testing does not grant any ownership interest or any implied license. Any use
+outside the scope of an explicit written authorization from the copyright owner
+is prohibited.
+
+You may not remove or alter any copyright, attribution, ownership, or
+proprietary notices contained in this repository or in distributed copies of
+the software.
+
+Third-party software, dependencies, fonts, and other components included in or
+referenced by this repository remain subject to their own license terms. This
+license applies only to the original proprietary portions of BSIE.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. IN NO EVENT
+SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
+FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+
+For licensing requests or written permission, contact the repository owner.

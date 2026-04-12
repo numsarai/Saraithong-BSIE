@@ -310,6 +310,13 @@ def _score_config_candidate(key: str, cfg: dict, context: DetectionContext) -> T
         score -= 0.6
         negatives.append("missing_strong_header")
 
+    # Body keywords: scan transaction content for bank-specific phrases
+    for phrase in detection.get("body_keywords", []):
+        if phrase and _text_contains(context.body_text, phrase):
+            score += 1.5
+            positives.append(f"body_keyword:{phrase}")
+            break  # One body keyword match is enough
+
     return round(score, 3), positives, negatives
 
 

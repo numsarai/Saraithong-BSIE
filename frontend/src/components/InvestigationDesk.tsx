@@ -1,6 +1,7 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   createDatabaseBackup,
   createExportJob,
@@ -16,8 +17,6 @@ import {
   getExportJobs,
   getFileDetail,
   getFiles,
-  getGraphAnalysis,
-  getGraphNeo4jStatus,
   getMatches,
   getParserRunDetail,
   getParserRuns,
@@ -25,36 +24,35 @@ import {
   reprocessParserRun,
   resetDatabase,
   restoreDatabase,
-  syncGraphToNeo4j,
   updateDatabaseBackupSettings,
   reviewAccount,
   reviewDuplicate,
   reviewMatch,
   reviewTransaction,
   searchTransactionRecords,
+  getTimelineAggregate,
+  getAlerts,
+  getAlertSummary,
+  getAccountFlows,
+  getMatchedTransactions,
+  traceFundPath,
 } from '@/api'
 import { Card, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { GraphExplorer } from '@/components/GraphExplorer'
+import { TimelineChart } from '@/components/TimelineChart'
+import { LinkChart } from '@/components/LinkChart'
+import { LlmChat } from '@/components/LlmChat'
 import { toast } from 'sonner'
 import { fmt, fmtDate } from '@/lib/utils'
 import { normalizeOperatorName, useStore } from '@/store'
+import { DatabaseTab } from '@/components/investigation/DatabaseTab'
+import { AlertsTab } from '@/components/investigation/AlertsTab'
+import { CrossAccountTab } from '@/components/investigation/CrossAccountTab'
 
-const TABS = [
-  { id: 'database', label: 'Database' },
-  { id: 'files', label: 'Files' },
-  { id: 'runs', label: 'Parser Runs' },
-  { id: 'accounts', label: 'Accounts' },
-  { id: 'search', label: 'Transactions' },
-  { id: 'duplicates', label: 'Duplicates' },
-  { id: 'matches', label: 'Matches' },
-  { id: 'audit', label: 'Audit' },
-  { id: 'graph', label: 'Graph Analysis' },
-  { id: 'exports', label: 'Exports' },
-] as const
+const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'link-chart', 'timeline', 'duplicates', 'matches', 'audit', 'exports', 'llm'] as const
 
-type TabId = (typeof TABS)[number]['id']
+type TabId = (typeof TAB_IDS)[number]
 
 type TransactionFilters = {
   q: string
@@ -83,13 +81,6 @@ const INITIAL_FILTERS: TransactionFilters = {
   file_id: '',
   parser_run_id: '',
 }
-
-const AUDIT_QUICK_FILTERS = [
-  { value: '', label: 'All Audit' },
-  { value: 'learning_feedback', label: 'Learning Feedback' },
-  { value: 'account', label: 'Account Reviews' },
-  { value: 'transaction', label: 'Transaction Reviews' },
-] as const
 
 function formatValue(value: any) {
   if (value === null || value === undefined || value === '') return '—'
@@ -160,6 +151,32 @@ function SelectInput(props: SelectHTMLAttributes<HTMLSelectElement>) {
 }
 
 export function InvestigationDesk() {
+  const { t } = useTranslation()
+
+  const TABS = [
+    { id: 'database' as const, label: t('investigation.tabs.database') },
+    { id: 'files' as const, label: t('investigation.tabs.files') },
+    { id: 'runs' as const, label: t('investigation.tabs.runs') },
+    { id: 'accounts' as const, label: t('investigation.tabs.accounts') },
+    { id: 'search' as const, label: t('investigation.tabs.search') },
+    { id: 'alerts' as const, label: t('investigation.tabs.alerts') },
+    { id: 'cross-account' as const, label: t('investigation.tabs.crossAccount') },
+    { id: 'link-chart' as const, label: t('investigation.tabs.linkChart') },
+    { id: 'timeline' as const, label: t('investigation.tabs.timeline') },
+    { id: 'duplicates' as const, label: t('investigation.tabs.duplicates') },
+    { id: 'matches' as const, label: t('investigation.tabs.matches') },
+    { id: 'audit' as const, label: t('investigation.tabs.audit') },
+    { id: 'exports' as const, label: t('investigation.tabs.exports') },
+    { id: 'llm' as const, label: t('investigation.tabs.llm') },
+  ]
+
+  const AUDIT_QUICK_FILTERS = [
+    { value: '', label: t('investigation.auditFilters.all') },
+    { value: 'learning_feedback', label: t('investigation.auditFilters.learningFeedback') },
+    { value: 'account', label: t('investigation.auditFilters.accountReviews') },
+    { value: 'transaction', label: t('investigation.auditFilters.transactionReviews') },
+  ]
+
   const operatorName = useStore(s => s.operatorName)
   const resolvedOperatorName = normalizeOperatorName(operatorName)
   const defaultCorrectionReason = `${resolvedOperatorName} correction`
@@ -178,6 +195,10 @@ export function InvestigationDesk() {
   const [selectedTransactionId, setSelectedTransactionId] = useState('')
   const [selectedBackupFilename, setSelectedBackupFilename] = useState('')
   const [adminNote, setAdminNote] = useState('')
+  const [crossAccountSelected, setCrossAccountSelected] = useState('')
+  const [crossAccountTarget, setCrossAccountTarget] = useState('')
+  const [pathFrom, setPathFrom] = useState('')
+  const [pathTo, setPathTo] = useState('')
   const [backupEnabled, setBackupEnabled] = useState(false)
   const [backupIntervalHours, setBackupIntervalHours] = useState('24')
   const [backupFormat, setBackupFormat] = useState('json')
@@ -271,16 +292,54 @@ export function InvestigationDesk() {
     queryFn: () => getExportJobs(),
     enabled: tab === 'exports',
   })
-  const graphAnalysisQuery = useQuery({
-    queryKey: ['investigation', 'graph-analysis', deferredTransactionFilters],
-    queryFn: () => getGraphAnalysis({ ...deferredTransactionFilters, limit: 5000 }),
-    enabled: tab === 'graph',
+  const alertsQuery = useQuery({
+    queryKey: ['investigation', 'alerts'],
+    queryFn: () => getAlerts({ limit: 500 }),
+    enabled: tab === 'alerts',
+    staleTime: 15_000,
   })
-  const graphNeo4jStatusQuery = useQuery({
-    queryKey: ['investigation', 'graph-neo4j-status'],
-    queryFn: () => getGraphNeo4jStatus(),
-    enabled: tab === 'graph',
+  const alertSummaryQuery = useQuery({
+    queryKey: ['investigation', 'alert-summary'],
+    queryFn: () => getAlertSummary(),
+    enabled: tab === 'alerts',
+    staleTime: 15_000,
   })
+  const alertItems = alertsQuery.data?.items || []
+  const alertSummary = alertSummaryQuery.data || {}
+
+  const crossFlowQuery = useQuery({
+    queryKey: ['investigation', 'cross-account-flows', crossAccountSelected],
+    queryFn: () => getAccountFlows(crossAccountSelected),
+    enabled: tab === 'cross-account' && !!crossAccountSelected,
+    staleTime: 30_000,
+  })
+  const crossMatchQuery = useQuery({
+    queryKey: ['investigation', 'cross-account-match', crossAccountSelected, crossAccountTarget],
+    queryFn: () => getMatchedTransactions(crossAccountSelected, crossAccountTarget),
+    enabled: tab === 'cross-account' && !!crossAccountSelected && !!crossAccountTarget,
+  })
+  const pathTraceQuery = useQuery({
+    queryKey: ['investigation', 'path-trace', pathFrom, pathTo],
+    queryFn: () => traceFundPath(pathFrom, pathTo),
+    enabled: false, // Manual trigger only
+  })
+
+  const timelineAggQuery = useQuery({
+    queryKey: ['investigation', 'timeline-aggregate', deferredTransactionFilters],
+    queryFn: () => getTimelineAggregate(deferredTransactionFilters),
+    enabled: tab === 'timeline',
+    staleTime: 30_000,
+  })
+  const timelineAggItems = useMemo(() => {
+    const items = timelineAggQuery.data?.items || []
+    // Convert aggregated data to transaction-like rows for TimelineChart
+    return items.flatMap((d: any) => {
+      const rows: any[] = []
+      if (d.in_count > 0) rows.push({ date: d.date, amount: d.in_total, direction: 'IN' })
+      if (d.out_count > 0) rows.push({ date: d.date, amount: -d.out_total, direction: 'OUT' })
+      return rows
+    })
+  }, [timelineAggQuery.data])
 
   const currentRows = useMemo(() => {
     switch (tab) {
@@ -300,8 +359,6 @@ export function InvestigationDesk() {
         return auditQuery.data?.items || []
       case 'exports':
         return exportQuery.data?.items || []
-      case 'graph':
-        return []
       default:
         return []
     }
@@ -315,7 +372,6 @@ export function InvestigationDesk() {
     matchesQuery.data,
     auditQuery.data,
     exportQuery.data,
-    graphAnalysisQuery.data,
   ])
 
   const learningFeedbackSummary = useMemo(() => {
@@ -362,25 +418,6 @@ export function InvestigationDesk() {
       })
       toast.success(`${exportType} export created`)
       startTransition(() => setTab('exports'))
-      refreshAll()
-    } catch (error: any) {
-      toast.error(error.message)
-    }
-  }
-
-  const handleNeo4jSync = async () => {
-    try {
-      const payload = await syncGraphToNeo4j({
-        include_findings: true,
-        limit: 2000,
-        filters: {
-          ...(transactionFilters.parser_run_id ? { parser_run_id: transactionFilters.parser_run_id } : {}),
-          ...(transactionFilters.file_id ? { file_id: transactionFilters.file_id } : {}),
-          ...(transactionFilters.bank ? { bank: transactionFilters.bank } : {}),
-          ...(transactionFilters.q ? { q: transactionFilters.q } : {}),
-        },
-      })
-      toast.success(`Neo4j sync complete · ${payload.node_count} nodes · ${payload.edge_count + payload.derived_edge_count} edges`)
       refreshAll()
     } catch (error: any) {
       toast.error(error.message)
@@ -701,9 +738,9 @@ export function InvestigationDesk() {
         </Card>
       )}
 
-      {(tab === 'search' || tab === 'graph') && (
+      {(tab === 'search' || tab === 'timeline') && (
         <Card className="space-y-3">
-          <CardTitle>{tab === 'graph' ? 'Graph Analysis Filters' : 'Transaction Query Builder'}</CardTitle>
+          <CardTitle>Transaction Query Builder</CardTitle>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <TextInput value={transactionFilters.q} onChange={(event) => setTransactionFilters((state) => ({ ...state, q: event.target.value }))} placeholder="Description / reference" />
             <TextInput value={transactionFilters.counterparty} onChange={(event) => setTransactionFilters((state) => ({ ...state, counterparty: event.target.value }))} placeholder="Counterparty name/account" />
@@ -756,131 +793,59 @@ export function InvestigationDesk() {
         </Card>
       )}
 
-      {tab === 'graph' && (
+      {tab === 'alerts' && (
+        <AlertsTab
+          alertItems={alertItems}
+          alertSummary={alertSummary}
+          operatorName={operatorName}
+          isLoading={alertsQuery.isLoading}
+          refetchAlerts={() => alertsQuery.refetch()}
+          refetchAlertSummary={() => alertSummaryQuery.refetch()}
+        />
+      )}
+
+      {tab === 'cross-account' && (
+        <CrossAccountTab
+          crossAccountSelected={crossAccountSelected}
+          setCrossAccountSelected={setCrossAccountSelected}
+          crossAccountTarget={crossAccountTarget}
+          setCrossAccountTarget={setCrossAccountTarget}
+          pathFrom={pathFrom}
+          setPathFrom={setPathFrom}
+          pathTo={pathTo}
+          setPathTo={setPathTo}
+          crossFlowData={crossFlowQuery.data}
+          crossMatchData={crossMatchQuery.data}
+          pathTraceData={pathTraceQuery.data}
+          isPathTraceFetching={pathTraceQuery.isFetching}
+          refetchPathTrace={() => pathTraceQuery.refetch()}
+        />
+      )}
+
+      {tab === 'link-chart' && (
+        <LinkChart />
+      )}
+
+      {tab === 'llm' && (
+        <LlmChat />
+      )}
+
+      {tab === 'timeline' && (
         <div className="space-y-4">
-          <Card className="space-y-4">
-            <CardTitle>BSIE Graph Analysis Module</CardTitle>
-            <div className="text-sm text-text2">
-              Consumes persisted normalized transactions from BSIE, reuses the shared graph model, and exposes analyst-safe graph metrics without changing the original evidence layer.
-            </div>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
-              <StatCard label="Transactions" value={graphAnalysisQuery.data?.overview?.transaction_rows ?? 0} />
-              <StatCard label="Business Nodes" value={graphAnalysisQuery.data?.overview?.business_node_count ?? 0} />
-              <StatCard label="Business Edges" value={graphAnalysisQuery.data?.overview?.business_edge_count ?? 0} />
-              <StatCard label="Components" value={graphAnalysisQuery.data?.overview?.connected_components ?? 0} />
-              <StatCard label="Review Candidates" value={graphAnalysisQuery.data?.overview?.review_candidate_nodes ?? 0} tone="text-warning" />
-              <StatCard label="Suggested Match Edges" value={graphAnalysisQuery.data?.overview?.suggested_match_edges ?? 0} tone="text-accent" />
-              <StatCard label="Suspicious Findings" value={graphAnalysisQuery.data?.overview?.suspicious_finding_count ?? 0} tone="text-warning" />
-            </div>
-            <div className="grid gap-3 lg:grid-cols-2">
-              <FieldBlock label="Top Node By Degree" value={graphAnalysisQuery.data?.overview?.top_node_by_degree?.label || '—'} />
-              <FieldBlock label="Top Node By Flow" value={graphAnalysisQuery.data?.overview?.top_node_by_flow?.label || '—'} />
-            </div>
-            <div className="grid gap-3 lg:grid-cols-[repeat(4,minmax(0,1fr))]">
-              <StatCard label="Neo4j Enabled" value={graphNeo4jStatusQuery.data?.enabled ? 'Yes' : 'No'} tone={graphNeo4jStatusQuery.data?.enabled ? 'text-success' : 'text-muted'} />
-              <StatCard label="Neo4j Configured" value={graphNeo4jStatusQuery.data?.configured ? 'Yes' : 'No'} tone={graphNeo4jStatusQuery.data?.configured ? 'text-success' : 'text-warning'} />
-              <StatCard label="Neo4j Driver" value={graphNeo4jStatusQuery.data?.driver_version || 'missing'} tone={graphNeo4jStatusQuery.data?.driver_available ? 'text-success' : 'text-warning'} />
-              <StatCard label="Graph Query" value={graphAnalysisQuery.data?.query_meta?.cache_hit ? 'cached' : 'fresh'} />
-            </div>
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-              <FieldBlock label="Neo4j URI" value={graphNeo4jStatusQuery.data?.uri_masked || '—'} mono />
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleNeo4jSync}
-                  disabled={!graphNeo4jStatusQuery.data?.enabled || !graphNeo4jStatusQuery.data?.configured || !graphNeo4jStatusQuery.data?.driver_available}
-                >
-                  Sync To Neo4j
-                </Button>
-              </div>
-            </div>
-          </Card>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Card className="space-y-3">
-              <CardTitle>Top Nodes By Degree</CardTitle>
-              <div className="space-y-2">
-                {(graphAnalysisQuery.data?.top_nodes_by_degree || []).slice(0, 8).map((row: any) => (
-                  <div key={row.node_id} className="rounded-lg border border-border bg-surface2 px-3 py-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-medium text-text">{row.label || row.node_id}</div>
-                        <div className="text-xs text-muted">{row.node_type} · {row.node_id}</div>
-                      </div>
-                      <Badge variant="blue">degree {row.degree}</Badge>
-                    </div>
-                    <div className="mt-2 text-xs text-text2">
-                      in {row.in_degree} · out {row.out_degree} · flow {fmt(row.total_flow_value || 0)}
-                    </div>
-                  </div>
-                ))}
-                {(!graphAnalysisQuery.data?.top_nodes_by_degree || graphAnalysisQuery.data.top_nodes_by_degree.length === 0) && (
-                  <div className="text-sm text-muted">No graph metrics yet.</div>
-                )}
-              </div>
+          {timelineAggItems.length > 0 ? (
+            <TimelineChart
+              transactions={timelineAggItems}
+              title={t('investigation.tabs.timeline')}
+            />
+          ) : (
+            <Card className="p-8 text-center text-muted text-sm">
+              {timelineAggQuery.isLoading ? t('common.loading') : t('investigation.timelineEmpty')}
             </Card>
-
-            <Card className="space-y-3">
-              <CardTitle>Review Candidates</CardTitle>
-              <div className="space-y-2">
-                {(graphAnalysisQuery.data?.review_candidates || []).slice(0, 8).map((row: any) => (
-                  <div key={row.node_id} className="rounded-lg border border-border bg-surface2 px-3 py-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-medium text-text">{row.label || row.node_id}</div>
-                        <div className="text-xs text-muted">{row.node_type} · {row.node_id}</div>
-                      </div>
-                      <Badge variant="yellow">{row.reason_count} flags</Badge>
-                    </div>
-                    <div className="mt-2 text-xs text-text2">
-                      {String(row.reason_codes || '').replaceAll('|', ' · ')}
-                    </div>
-                  </div>
-                ))}
-                {(!graphAnalysisQuery.data?.review_candidates || graphAnalysisQuery.data.review_candidates.length === 0) && (
-                  <div className="text-sm text-muted">No review candidates in the current filter scope.</div>
-                )}
-              </div>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Card className="space-y-3">
-              <CardTitle>Connected Components</CardTitle>
-              <div className="space-y-2">
-                {(graphAnalysisQuery.data?.connected_components || []).slice(0, 8).map((row: any) => (
-                  <div key={row.component_id} className="rounded-lg border border-border bg-surface2 px-3 py-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="font-medium text-text">{row.component_id}</div>
-                      <Badge variant="gray">{row.size} nodes</Badge>
-                    </div>
-                    <div className="mt-2 text-xs text-text2 break-words">{row.node_labels || row.node_ids}</div>
-                  </div>
-                ))}
-                {(!graphAnalysisQuery.data?.connected_components || graphAnalysisQuery.data.connected_components.length === 0) && (
-                  <div className="text-sm text-muted">No connected components yet.</div>
-                )}
-              </div>
-            </Card>
-
-            <Card className="space-y-3">
-              <CardTitle>Lineage Coverage</CardTitle>
-              <div className="grid gap-3 md:grid-cols-2">
-                {Object.entries(graphAnalysisQuery.data?.lineage_summary || {}).map(([key, value]) => (
-                  <FieldBlock key={key} label={key.replaceAll('_', ' ')} value={value} />
-                ))}
-                {Object.keys(graphAnalysisQuery.data?.lineage_summary || {}).length === 0 && (
-                  <div className="text-sm text-muted">No lineage summary available yet.</div>
-                )}
-              </div>
-            </Card>
-          </div>
-
-          <GraphExplorer filters={{ ...deferredTransactionFilters, limit: 5000 }} />
+          )}
         </div>
       )}
 
-      {tab !== 'database' && tab !== 'graph' && (
+      {tab !== 'database' && (
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1056,7 +1021,11 @@ export function InvestigationDesk() {
                               )}
                               {row.extra_context_json?.feedback_status && (
                                 <Badge variant={auditFeedbackBadgeVariant(row.extra_context_json.feedback_status)}>
-                                  {row.extra_context_json.feedback_status}
+                                  {row.extra_context_json.feedback_status === 'corrected'
+                                    ? t('investigation.badge.corrected')
+                                    : row.extra_context_json.feedback_status === 'confirmed'
+                                      ? t('investigation.badge.confirmed')
+                                      : t('investigation.badge.unknown')}
                                 </Badge>
                               )}
                             </div>
@@ -1095,166 +1064,34 @@ export function InvestigationDesk() {
       )}
 
       {tab === 'database' && (
-        <Card className="space-y-4">
-          <CardTitle>Database Readiness</CardTitle>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {Object.entries(dbStatus?.key_record_counts || {}).map(([key, value]) => (
-              <FieldBlock key={key} label={key.replaceAll('_', ' ')} value={value} />
-            ))}
-          </div>
-          <div className="rounded-xl border border-border bg-surface2 p-4 text-sm text-text2 space-y-2">
-            <div>สถานะปัจจุบันของโปรเจคนี้เป็นระบบฐานข้อมูลถาวรแล้ว และตอนนี้รองรับทั้ง ingest ซ้ำ, duplicate detection, parser run history, transaction search, review, audit log, และ reproducible export jobs.</div>
-            <div>runtime ของโปรเจคนี้ถูกยุบให้เป็น local SQLite แบบถาวรแล้ว จึงไม่ต้องพึ่ง worker แยก, Redis, หรือ PostgreSQL สำหรับการใช้งานปกติในเครื่อง.</div>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-            <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
-              <div className="text-sm font-semibold text-text">Backup / Reset / Restore</div>
-              <div className="grid gap-3 md:grid-cols-[auto_minmax(120px,160px)_auto] md:items-end">
-                <label className="flex items-center gap-2 text-sm text-text">
-                  <input
-                    type="checkbox"
-                    checked={backupEnabled}
-                    onChange={(event) => setBackupEnabled(event.target.checked)}
-                    className="h-4 w-4 rounded border-border bg-surface2"
-                  />
-                  Scheduled backup enabled
-                </label>
-                <TextInput
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={backupIntervalHours}
-                  onChange={(event) => setBackupIntervalHours(event.target.value)}
-                  placeholder="Interval hours"
-                />
-                <Button variant="outline" onClick={handleSaveBackupSettings}>Save Schedule</Button>
-              </div>
-              <div className="grid gap-3 md:grid-cols-[auto_minmax(120px,160px)] md:items-end">
-                <label className="flex items-center gap-2 text-sm text-text">
-                  <input
-                    type="checkbox"
-                    checked={backupRetentionEnabled}
-                    onChange={(event) => setBackupRetentionEnabled(event.target.checked)}
-                    className="h-4 w-4 rounded border-border bg-surface2"
-                  />
-                  Retention enabled
-                </label>
-                <TextInput
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={backupRetainCount}
-                  onChange={(event) => setBackupRetainCount(event.target.value)}
-                  placeholder="Keep last N backups"
-                />
-              </div>
-              <div className="text-xs text-text2">
-                Current schedule source: <span className="font-mono">{backupSettingsQuery.data?.source || backupsQuery.data?.settings?.source || '—'}</span>{' '}
-                · effective format: <span className="font-mono">{backupSettingsQuery.data?.effective_backup_format || '—'}</span>{' '}
-                · retention: <span className="font-mono">{backupSettingsQuery.data?.retention_enabled ? `keep ${backupSettingsQuery.data?.retain_count}` : 'off'}</span>
-              </div>
-              <TextInput
-                value={adminNote}
-                onChange={(event) => setAdminNote(event.target.value)}
-                placeholder="Operation note for backup / reset / restore"
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={handleCreateBackup}>Create Backup</Button>
-                <Button variant="ghost" onClick={() => window.location.assign(`/api/download-backup/${encodeURIComponent(selectedBackupFilename)}?download_name=${encodeURIComponent(selectedBackupFilename)}`)} disabled={!selectedBackupFilename}>
-                  Download Selected Backup
-                </Button>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2 rounded-lg border border-border bg-surface2 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted">Reset Database</div>
-                  <div className="text-xs text-text2">Type: <span className="font-mono">{backupsQuery.data?.reset_confirmation_text || 'RESET BSIE DATABASE'}</span></div>
-                  <TextInput
-                    value={resetConfirmText}
-                    onChange={(event) => setResetConfirmText(event.target.value)}
-                    placeholder="Confirmation text"
-                  />
-                  <Button variant="danger" onClick={handleResetDatabase}>Reset Current Database</Button>
-                </div>
-                <div className="space-y-2 rounded-lg border border-border bg-surface2 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted">Restore Backup</div>
-                  <div className="text-xs text-text2">Type: <span className="font-mono">{backupsQuery.data?.restore_confirmation_text || 'RESTORE BSIE DATABASE'}</span></div>
-                  <TextInput
-                    value={restoreConfirmText}
-                    onChange={(event) => setRestoreConfirmText(event.target.value)}
-                    placeholder="Confirmation text"
-                  />
-                  <Button variant="success" onClick={handleRestoreDatabase} disabled={!selectedBackupFilename}>Restore Selected Backup</Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-text">Available Backups</div>
-                <Badge variant={backups.length > 0 ? 'green' : 'blue'}>{backups.length}</Badge>
-              </div>
-              <div className="max-h-[360px] overflow-auto rounded-lg border border-border">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-surface2 text-left text-xs uppercase tracking-wide text-muted">
-                    <tr>
-                      <th className="px-3 py-2">Backup</th>
-                      <th className="px-3 py-2">Rows</th>
-                      <th className="px-3 py-2">When</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {backups.length === 0 ? (
-                      <tr>
-                        <td className="px-3 py-4 text-muted" colSpan={3}>No backups yet.</td>
-                      </tr>
-                    ) : backups.map((backup: any) => (
-                      <tr
-                        key={backup.filename}
-                        className={[
-                          'cursor-pointer border-t border-border/60',
-                          selectedBackupFilename === backup.filename ? 'bg-accent/10' : 'hover:bg-surface2/80',
-                        ].join(' ')}
-                        onClick={() => setSelectedBackupFilename(backup.filename)}
-                      >
-                        <td className="px-3 py-2">
-                          <div className="font-medium text-text">{backup.filename}</div>
-                          <div className="text-xs text-muted">{backup.note || '—'}</div>
-                        </td>
-                        <td className="px-3 py-2">{formatValue(backup.total_rows)}</td>
-                        <td className="px-3 py-2 text-xs text-text2">{formatValue(backup.created_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {selectedBackup && (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <FieldBlock label="Selected Backup" value={selectedBackup.filename} mono />
-                  <FieldBlock label="Created By" value={selectedBackup.created_by} />
-                  <FieldBlock label="Database Backend" value={selectedBackup.database_backend} />
-                  <FieldBlock label="Backup Format" value={selectedBackup.backup_format} />
-                  <FieldBlock label="Total Rows" value={selectedBackup.total_rows} />
-                </div>
-              )}
-              {backupPreview && (
-                <div className="space-y-3 rounded-lg border border-border bg-surface2 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted">Restore Preview</div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <FieldBlock label="Will Replace Current Data" value={backupPreview.will_replace_current_data ? 'Yes' : 'No'} />
-                    <FieldBlock label="Schema Version" value={backupPreview.schema_version} />
-                    <FieldBlock label="Backup Format" value={backupPreview.backup_format} />
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    {Object.entries(backupPreview.delta_table_counts || {}).slice(0, 9).map(([key, value]) => (
-                      <FieldBlock key={key} label={`${key} delta`} value={value} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </Card>
+        <DatabaseTab
+          dbStatus={dbStatus}
+          backups={backups}
+          selectedBackupFilename={selectedBackupFilename}
+          setSelectedBackupFilename={setSelectedBackupFilename}
+          selectedBackup={selectedBackup}
+          backupPreview={backupPreview}
+          backupEnabled={backupEnabled}
+          setBackupEnabled={setBackupEnabled}
+          backupIntervalHours={backupIntervalHours}
+          setBackupIntervalHours={setBackupIntervalHours}
+          backupRetentionEnabled={backupRetentionEnabled}
+          setBackupRetentionEnabled={setBackupRetentionEnabled}
+          backupRetainCount={backupRetainCount}
+          setBackupRetainCount={setBackupRetainCount}
+          adminNote={adminNote}
+          setAdminNote={setAdminNote}
+          resetConfirmText={resetConfirmText}
+          setResetConfirmText={setResetConfirmText}
+          restoreConfirmText={restoreConfirmText}
+          setRestoreConfirmText={setRestoreConfirmText}
+          backupSettingsData={backupSettingsQuery.data}
+          backupsData={backupsQuery.data}
+          onSaveBackupSettings={handleSaveBackupSettings}
+          onCreateBackup={handleCreateBackup}
+          onResetDatabase={handleResetDatabase}
+          onRestoreDatabase={handleRestoreDatabase}
+        />
       )}
 
       {fileDetail && (

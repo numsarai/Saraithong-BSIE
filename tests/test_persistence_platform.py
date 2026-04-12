@@ -65,10 +65,13 @@ def test_persist_upload_creates_file_record_and_duplicate_hint():
 
     assert first["duplicate_file_status"] == "unique"
     assert second["duplicate_file_status"] == "exact_duplicate"
+    # Reuse policy: second upload returns the same file_id
+    assert second["file_id"] == first["file_id"]
+    assert second.get("reused") is True
 
     with get_db_session() as session:
         rows = session.query(FileRecord).filter(FileRecord.file_hash_sha256 == first["file_hash_sha256"]).all()
-        assert len(rows) >= 2
+        assert len(rows) == 1  # Only one record for duplicate files
 
 
 def test_ofx_pipeline_persists_parser_run_batch_and_transactions(tmp_path: Path):
@@ -89,7 +92,7 @@ def test_ofx_pipeline_persists_parser_run_batch_and_transactions(tmp_path: Path)
         operator="tester",
     )
 
-    process_account(
+    output_dir = process_account(
         input_file=ofx_path,
         subject_account=account,
         subject_name="Persist Tester",
@@ -111,6 +114,26 @@ def test_ofx_pipeline_persists_parser_run_batch_and_transactions(tmp_path: Path)
         transactions = session.query(Transaction).filter(Transaction.parser_run_id == run.id).all()
         assert len(transactions) == 2
         assert all(tx.lineage_json.get("file_id") == upload_meta["file_id"] for tx in transactions)
+
+        export_job = (
+            session.query(ExportJob)
+            .filter(
+                ExportJob.export_type == "legacy_account_package",
+                ExportJob.output_path == str(output_dir),
+            )
+            .order_by(ExportJob.created_at.desc())
+            .first()
+        )
+        assert export_job is not None
+        files = export_job.summary_json["files"]
+        assert "meta.json" in files
+        assert "processed/graph_analysis.json" in files
+        assert "processed/graph_analysis.xlsx" in files
+        assert "processed/i2_chart.anx" in files
+        assert "processed/i2_import_transactions.csv" in files
+        assert "processed/i2_import_spec.ximp" in files
+        for relative_path in files:
+            assert (Path(export_job.output_path) / relative_path).exists()
 
 
 def test_account_name_is_persisted_and_reused_when_later_ingest_lacks_name(tmp_path: Path):
@@ -524,6 +547,8 @@ def test_graph_export_job_writes_graph_csvs_and_anx(tmp_path: Path):
             "suspicious_findings.csv",
             "suspicious_findings.json",
             "i2_chart.anx",
+            "i2_import_transactions.csv",
+            "i2_import_spec.ximp",
         ]
 
         export_dir = Path(stored_job.output_path).parent
@@ -540,6 +565,8 @@ def test_graph_export_job_writes_graph_csvs_and_anx(tmp_path: Path):
         suspicious_csv_path = export_dir / "suspicious_findings.csv"
         suspicious_json_path = export_dir / "suspicious_findings.json"
         anx_path = export_dir / "i2_chart.anx"
+        i2_import_csv_path = export_dir / "i2_import_transactions.csv"
+        i2_import_spec_path = export_dir / "i2_import_spec.ximp"
 
         assert nodes_path.exists()
         assert nodes_json_path.exists()
@@ -554,6 +581,8 @@ def test_graph_export_job_writes_graph_csvs_and_anx(tmp_path: Path):
         assert suspicious_csv_path.exists()
         assert suspicious_json_path.exists()
         assert anx_path.exists()
+        assert i2_import_csv_path.exists()
+        assert i2_import_spec_path.exists()
 
         nodes_df = pd.read_csv(nodes_path, dtype=str).fillna("")
         edges_df = pd.read_csv(edges_path, dtype=str).fillna("")

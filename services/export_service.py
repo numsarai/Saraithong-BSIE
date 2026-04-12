@@ -8,13 +8,35 @@ import pandas as pd
 from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session
 
+from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill
+
 from core.export_anx import export_anx_from_graph
+from core.exporter import REPORT_FONT_NAME, REPORT_FONT_SIZE
+from core.export_i2_import import write_i2_import_package
 from core.graph_analysis import build_graph_analysis, write_graph_analysis_exports
 from core.graph_export import write_graph_exports
 from paths import EXPORTS_DIR
 from persistence.base import utcnow
 from persistence.models import Account, ExportJob, FileRecord, Transaction, TransactionMatch
 from services.search_service import list_duplicate_groups, list_matches, search_transactions
+
+
+def _apply_report_font(xlsx_path: Path) -> None:
+    """Apply TH Sarabun New font at size 16 to all cells in an xlsx file."""
+    wb = load_workbook(xlsx_path)
+    data_font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE)
+    header_font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="FFFFFF")
+    header_fill = PatternFill(fill_type="solid", fgColor="1E293B")
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=ws.max_column):
+            for cell in row:
+                if cell.row == 1:
+                    cell.font = header_font
+                    cell.fill = header_fill
+                else:
+                    cell.font = data_font
+    wb.save(xlsx_path)
 
 
 def _ensure_dir(job_id: str) -> Path:
@@ -313,6 +335,7 @@ def run_export_job(session: Session, job: ExportJob) -> ExportJob:
         xlsx_path = target_dir / "transactions.xlsx"
         df.to_csv(csv_path, index=False, encoding="utf-8-sig")
         df.to_excel(xlsx_path, index=False, engine="openpyxl")
+        _apply_report_font(xlsx_path)
         output_path = str(csv_path)
         summary = {"rows": len(df), "files": [csv_path.name, xlsx_path.name]}
     elif export_type == "duplicates":
@@ -322,6 +345,7 @@ def run_export_job(session: Session, job: ExportJob) -> ExportJob:
         xlsx_path = target_dir / "duplicate_review_report.xlsx"
         df.to_csv(csv_path, index=False, encoding="utf-8-sig")
         df.to_excel(xlsx_path, index=False, engine="openpyxl")
+        _apply_report_font(xlsx_path)
         output_path = str(csv_path)
         summary = {"rows": len(df), "files": [csv_path.name, xlsx_path.name]}
     elif export_type == "unresolved_matches":
@@ -331,6 +355,7 @@ def run_export_job(session: Session, job: ExportJob) -> ExportJob:
         xlsx_path = target_dir / "unresolved_match_report.xlsx"
         df.to_csv(csv_path, index=False, encoding="utf-8-sig")
         df.to_excel(xlsx_path, index=False, engine="openpyxl")
+        _apply_report_font(xlsx_path)
         output_path = str(csv_path)
         summary = {"rows": len(df), "files": [csv_path.name, xlsx_path.name]}
     elif export_type == "corrected_transactions":
@@ -341,6 +366,7 @@ def run_export_job(session: Session, job: ExportJob) -> ExportJob:
         xlsx_path = target_dir / "corrected_transactions.xlsx"
         df.to_csv(csv_path, index=False, encoding="utf-8-sig")
         df.to_excel(xlsx_path, index=False, engine="openpyxl")
+        _apply_report_font(xlsx_path)
         output_path = str(csv_path)
         summary = {"rows": len(df), "files": [csv_path.name, xlsx_path.name]}
     elif export_type == "graph":
@@ -370,6 +396,14 @@ def run_export_job(session: Session, job: ExportJob) -> ExportJob:
         graph_analysis_paths = write_graph_analysis_exports(target_dir, graph_analysis)
         anx_path = target_dir / "i2_chart.anx"
         export_anx_from_graph(graph_bundle["nodes_df"], graph_bundle["edges_df"], anx_path)
+        i2_import_paths = write_i2_import_package(
+            graph_bundle["nodes_df"],
+            graph_bundle["edges_df"],
+            target_dir,
+            subject="BSIE graph export import package",
+            comments="Generated from the BSIE graph export job for import into i2 Analyst's Notebook.",
+            author=job.created_by or "BSIE",
+        )
         output_path = str(graph_bundle["manifest_path"])
         summary = {
             "nodes": int(graph_bundle["manifest"]["node_count"]),
@@ -392,6 +426,8 @@ def run_export_job(session: Session, job: ExportJob) -> ExportJob:
                 graph_analysis_paths["suspicious_csv_path"].name,
                 graph_analysis_paths["suspicious_json_path"].name,
                 anx_path.name,
+                i2_import_paths["csv_path"].name,
+                i2_import_paths["spec_path"].name,
             ],
         }
     else:

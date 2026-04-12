@@ -4,6 +4,7 @@ from io import BytesIO
 import json
 from unittest.mock import patch
 
+import pandas as pd
 from fastapi.testclient import TestClient
 import app
 
@@ -25,7 +26,7 @@ def test_favicon_route_serves_built_asset(tmp_path, monkeypatch):
     react_dist = tmp_path / "dist"
     react_dist.mkdir()
     (react_dist / "favicon.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg' />", encoding="utf-8")
-    monkeypatch.setattr(app, "_REACT_DIST", react_dist)
+    monkeypatch.setattr("routers.ui._REACT_DIST", react_dist)
 
     response = client.get("/favicon.svg")
 
@@ -38,7 +39,7 @@ def test_favicon_png_route_serves_program_icon(tmp_path, monkeypatch):
     react_dist = tmp_path / "dist"
     react_dist.mkdir()
     (react_dist / "favicon.png").write_bytes(b"\x89PNG\r\n\x1a\nprogram-icon")
-    monkeypatch.setattr(app, "_REACT_DIST", react_dist)
+    monkeypatch.setattr("routers.ui._REACT_DIST", react_dist)
 
     response = client.get("/favicon.png")
 
@@ -48,7 +49,7 @@ def test_favicon_png_route_serves_program_icon(tmp_path, monkeypatch):
 
 
 def test_favicon_ico_route_falls_back_to_installer_icon(tmp_path, monkeypatch):
-    monkeypatch.setattr(app, "_BASE", tmp_path)
+    monkeypatch.setattr("routers.ui._BASE", tmp_path)
     installer_dir = tmp_path / "installer"
     installer_dir.mkdir()
     (installer_dir / "bsie.ico").write_bytes(b"\x00\x00\x01\x00fake-ico")
@@ -82,8 +83,7 @@ def test_banks_endpoint_includes_logo_metadata():
 
 def test_job_status_prefers_runtime_job_cache(monkeypatch):
     monkeypatch.setattr(
-        app,
-        "get_runtime_job",
+        "routers.jobs.get_runtime_job",
         lambda job_id: {
             "status": "done",
             "log": ["INFO tasks — Pipeline complete"],
@@ -118,8 +118,8 @@ def test_bank_create_allows_prepared_bank_key_without_builtin_template(tmp_path,
     builtin_dir = tmp_path / "builtin"
     config_dir.mkdir()
     builtin_dir.mkdir()
-    monkeypatch.setattr(app, "CONFIG_DIR", config_dir)
-    monkeypatch.setattr(app, "BUILTIN_CONFIG_DIR", builtin_dir)
+    monkeypatch.setattr("routers.banks.CONFIG_DIR", config_dir)
+    monkeypatch.setattr("routers.banks.BUILTIN_CONFIG_DIR", builtin_dir)
 
     response = client.post(
         "/api/banks",
@@ -142,8 +142,8 @@ def test_bank_create_allows_prepared_bank_key_without_builtin_template(tmp_path,
 def test_override_endpoint_accepts_react_payload_keys():
     """React clients send override_* keys; the API should accept them."""
     with (
-        patch.object(app, "add_override", return_value={"transaction_id": "TXN-000001"}) as add_override,
-        patch.object(app, "_reapply_overrides_to_csv") as reapply,
+        patch("routers.overrides.add_override", return_value={"transaction_id": "TXN-000001"}) as add_override,
+        patch("routers.overrides._reapply_overrides_to_csv") as reapply,
     ):
         response = client.post(
             "/api/override",
@@ -170,7 +170,7 @@ def test_override_endpoint_accepts_react_payload_keys():
 
 
 def test_remove_override_endpoint_passes_account_scope():
-    with patch.object(app, "remove_override", return_value=True) as remove_override:
+    with patch("routers.overrides.remove_override", return_value=True) as remove_override:
         response = client.delete("/api/override/TXN-000001", params={"account_number": "1234567890"})
 
     assert response.status_code == 200
@@ -180,9 +180,9 @@ def test_remove_override_endpoint_passes_account_scope():
 
 def test_remove_override_endpoint_uses_operator_for_audit():
     with (
-        patch.object(app, "remove_override", return_value=True),
-        patch.object(app, "get_db_session", _fake_db_session),
-        patch.object(app, "log_audit") as log_audit,
+        patch("routers.overrides.remove_override", return_value=True),
+        patch("routers.overrides.get_db_session", _fake_db_session),
+        patch("routers.overrides.log_audit") as log_audit,
     ):
         response = client.delete(
             "/api/override/TXN-000001",
@@ -201,7 +201,7 @@ def test_download_endpoint_uses_requested_download_name(tmp_path):
     target = processed_dir / "transactions.csv"
     target.write_text("id\n1\n", encoding="utf-8")
 
-    with patch.object(app, "OUTPUT_DIR", tmp_path):
+    with patch("routers.exports.OUTPUT_DIR", tmp_path):
         response = client.get(
             "/api/download/1234567890/processed/transactions.csv",
             params={"download_name": "bsie_1234567890_transactions.csv"},
@@ -218,7 +218,7 @@ def test_bulk_download_endpoint_uses_requested_download_name(tmp_path):
     target = run_dir / "bulk_summary.csv"
     target.write_text("file,status\nsample.xlsx,processed\n", encoding="utf-8")
 
-    with patch.object(app, "OUTPUT_DIR", tmp_path):
+    with patch("routers.exports.OUTPUT_DIR", tmp_path):
         response = client.get(
             "/api/download-bulk/20260330_030000/bulk_summary.csv",
             params={"download_name": "bsie_bulk_20260330_030000.csv"},
@@ -238,7 +238,7 @@ def test_results_endpoint_includes_entities_and_links(tmp_path):
     (processed_dir / "links.csv").write_text("transaction_id,from_account,to_account\nTXN-1,111,222\n", encoding="utf-8")
     (account_dir / "meta.json").write_text(json.dumps({"bank": "SCB"}), encoding="utf-8")
 
-    with patch.object(app, "OUTPUT_DIR", tmp_path):
+    with patch("routers.results.OUTPUT_DIR", tmp_path):
         response = client.get("/api/results/1234567890")
 
     assert response.status_code == 200
@@ -295,8 +295,8 @@ def test_results_endpoint_uses_parser_run_scope_for_meta(tmp_path, monkeypatch):
     def _fake_session():
         yield dummy_session
 
-    monkeypatch.setattr(app, "OUTPUT_DIR", tmp_path)
-    monkeypatch.setattr(app, "get_db_session", _fake_session)
+    monkeypatch.setattr("routers.results.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("routers.results.get_db_session", _fake_session)
 
     response = client.get("/api/results/1234567890", params={"parser_run_id": "RUN-123"})
 
@@ -315,7 +315,7 @@ def test_bulk_analytics_endpoint_returns_saved_artifact(tmp_path):
         encoding="utf-8",
     )
 
-    with patch.object(app, "OUTPUT_DIR", tmp_path):
+    with patch("routers.bulk.OUTPUT_DIR", tmp_path):
         response = client.get("/api/bulk/20260330_030000/analytics")
 
     assert response.status_code == 200
@@ -323,7 +323,7 @@ def test_bulk_analytics_endpoint_returns_saved_artifact(tmp_path):
 
 
 def test_graph_analysis_endpoint_returns_service_payload():
-    with patch.object(app, "get_graph_analysis", return_value={"overview": {"business_node_count": 4}, "top_nodes_by_degree": []}) as mock_graph:
+    with patch("routers.graph.get_graph_analysis", return_value={"overview": {"business_node_count": 4}, "top_nodes_by_degree": []}) as mock_graph:
         response = client.get("/api/graph-analysis", params={"parser_run_id": "RUN-1"})
 
     assert response.status_code == 200
@@ -332,7 +332,7 @@ def test_graph_analysis_endpoint_returns_service_payload():
 
 
 def test_graph_nodes_endpoint_returns_items():
-    with patch.object(app, "list_graph_nodes", return_value=[{"node_id": "ACCOUNT:1111111111"}]) as mock_nodes:
+    with patch("routers.graph.list_graph_nodes", return_value=[{"node_id": "ACCOUNT:1111111111"}]) as mock_nodes:
         response = client.get("/api/graph/nodes", params={"parser_run_id": "RUN-1"})
 
     assert response.status_code == 200
@@ -342,7 +342,7 @@ def test_graph_nodes_endpoint_returns_items():
 
 
 def test_graph_findings_endpoint_returns_items():
-    with patch.object(app, "list_graph_findings", return_value=[{"finding_id": "FINDING:1", "severity": "high"}]) as mock_findings:
+    with patch("routers.graph.list_graph_findings", return_value=[{"finding_id": "FINDING:1", "severity": "high"}]) as mock_findings:
         response = client.get("/api/graph/findings", params={"parser_run_id": "RUN-1", "severity": "high"})
 
     assert response.status_code == 200
@@ -362,7 +362,7 @@ def test_graph_neighborhood_endpoint_returns_payload():
         "query_meta": {"effective_limit": 5000},
         "graph_meta": {"visible_node_count": 0, "requested_max_nodes": 14},
     }
-    with patch.object(app, "get_graph_neighborhood", return_value=payload) as mock_neighborhood:
+    with patch("routers.graph.get_graph_neighborhood", return_value=payload) as mock_neighborhood:
         response = client.get(
             "/api/graph/neighborhood/ACCOUNT:1111111111",
             params={"parser_run_id": "RUN-1", "max_nodes": 12, "max_edges": 20},
@@ -375,7 +375,7 @@ def test_graph_neighborhood_endpoint_returns_payload():
 
 
 def test_graph_neo4j_status_endpoint_returns_payload():
-    with patch.object(app, "get_neo4j_status", return_value={"enabled": False, "configured": False, "driver_available": False}) as mock_status:
+    with patch("routers.graph.get_neo4j_status", return_value={"enabled": False, "configured": False, "driver_available": False}) as mock_status:
         response = client.get("/api/graph/neo4j-status")
 
     assert response.status_code == 200
@@ -384,7 +384,7 @@ def test_graph_neo4j_status_endpoint_returns_payload():
 
 
 def test_graph_neo4j_sync_endpoint_returns_payload():
-    with patch.object(app, "sync_graph_to_neo4j", return_value={"status": "ok", "node_count": 2}) as mock_sync:
+    with patch("routers.graph.sync_graph_to_neo4j", return_value={"status": "ok", "node_count": 2}) as mock_sync:
         response = client.post("/api/graph/neo4j-sync", json={"include_findings": True, "limit": 100, "filters": {"parser_run_id": "RUN-1"}})
 
     assert response.status_code == 200
@@ -438,9 +438,8 @@ def test_upload_uses_uploaded_by_form_field(tmp_path):
     stored_path.write_text("stub", encoding="utf-8")
 
     with (
-        patch.object(
-            app,
-            "persist_upload",
+        patch(
+            "routers.ingestion.persist_upload",
             return_value={
                 "file_id": "FILE-1",
                 "stored_path": str(stored_path),
@@ -448,8 +447,8 @@ def test_upload_uses_uploaded_by_form_field(tmp_path):
                 "prior_ingestions": [],
             },
         ) as persist_upload,
-        patch.object(app, "parse_ofx_file", return_value=app.pd.DataFrame([{"AMOUNT": "100.00"}])),
-        patch.object(app, "infer_identity_from_ofx", return_value={"account": "1234567890", "name": "Case Name"}),
+        patch("routers.ingestion.parse_ofx_file", return_value=pd.DataFrame([{"AMOUNT": "100.00"}])),
+        patch("routers.ingestion.infer_identity_from_ofx", return_value={"account": "1234567890", "name": "Case Name"}),
     ):
         response = client.post(
             "/api/upload",
@@ -462,7 +461,7 @@ def test_upload_uses_uploaded_by_form_field(tmp_path):
 
 
 def test_process_folder_endpoint_passes_operator():
-    with patch.object(app, "process_folder", return_value={"total_files": 0, "processed_files": 0, "skipped_files": 0, "error_files": 0, "files": []}) as process_folder:
+    with patch("routers.bulk.process_folder", return_value={"total_files": 0, "processed_files": 0, "skipped_files": 0, "error_files": 0, "files": []}) as process_folder:
         response = client.post(
             "/api/process-folder",
             json={"folder_path": "/cases/demo", "recursive": True, "operator": "Case Reviewer"},
@@ -514,11 +513,11 @@ def test_upload_repairs_stale_profile_mapping_for_debit_credit_layout(tmp_path):
     }
 
     with (
-        patch.object(app, "find_best_sheet_and_header", return_value=fake_sheet_pick),
-        patch.object(app, "detect_bank", return_value=fake_bank),
-        patch.object(app, "detect_columns", return_value=fake_columns),
-        patch.object(app, "find_matching_profile", return_value=stale_profile),
-        patch.object(app, "find_matching_bank_fingerprint", return_value=None),
+        patch("routers.ingestion.find_best_sheet_and_header", return_value=fake_sheet_pick),
+        patch("routers.ingestion.detect_bank", return_value=fake_bank),
+        patch("routers.ingestion.detect_columns", return_value=fake_columns),
+        patch("routers.ingestion.find_matching_profile", return_value=stale_profile),
+        patch("routers.ingestion.find_matching_bank_fingerprint", return_value=None),
     ):
         with workbook.open("rb") as fh:
             response = client.post(
@@ -557,11 +556,11 @@ def test_upload_excel_returns_identity_guess_from_repeated_transaction_pattern(t
     }
 
     with (
-        patch.object(app, "find_best_sheet_and_header", return_value=fake_sheet_pick),
-        patch.object(app, "detect_bank", return_value=fake_bank),
-        patch.object(app, "detect_columns", return_value=fake_columns),
-        patch.object(app, "find_matching_profile", return_value=None),
-        patch.object(app, "find_matching_bank_fingerprint", return_value=None),
+        patch("routers.ingestion.find_best_sheet_and_header", return_value=fake_sheet_pick),
+        patch("routers.ingestion.detect_bank", return_value=fake_bank),
+        patch("routers.ingestion.detect_columns", return_value=fake_columns),
+        patch("routers.ingestion.find_matching_profile", return_value=None),
+        patch("routers.ingestion.find_matching_bank_fingerprint", return_value=None),
     ):
         with workbook.open("rb") as fh:
             response = client.post(
@@ -608,11 +607,11 @@ def test_upload_excel_returns_identity_guess_from_inline_header_text(tmp_path):
     }
 
     with (
-        patch.object(app, "find_best_sheet_and_header", return_value=fake_sheet_pick),
-        patch.object(app, "detect_bank", return_value=fake_bank),
-        patch.object(app, "detect_columns", return_value=fake_columns),
-        patch.object(app, "find_matching_profile", return_value=None),
-        patch.object(app, "find_matching_bank_fingerprint", return_value=None),
+        patch("routers.ingestion.find_best_sheet_and_header", return_value=fake_sheet_pick),
+        patch("routers.ingestion.detect_bank", return_value=fake_bank),
+        patch("routers.ingestion.detect_columns", return_value=fake_columns),
+        patch("routers.ingestion.find_matching_profile", return_value=None),
+        patch("routers.ingestion.find_matching_bank_fingerprint", return_value=None),
     ):
         with workbook.open("rb") as fh:
             response = client.post(
@@ -628,7 +627,7 @@ def test_upload_excel_returns_identity_guess_from_inline_header_text(tmp_path):
 
 
 def test_account_remembered_name_endpoint_returns_match():
-    with patch.object(app, "best_known_account_holder_name", return_value="Persisted Name") as lookup_name:
+    with patch("routers.search.best_known_account_holder_name", return_value="Persisted Name") as lookup_name:
         response = client.get(
             "/api/accounts/remembered-name",
             params={"account": "123-456-7890", "bank_key": "scb"},
@@ -646,7 +645,7 @@ def test_account_remembered_name_endpoint_returns_match():
 
 
 def test_account_remembered_name_endpoint_returns_empty_payload_for_invalid_account():
-    with patch.object(app, "best_known_account_holder_name") as lookup_name:
+    with patch("routers.search.best_known_account_holder_name") as lookup_name:
         response = client.get(
             "/api/accounts/remembered-name",
             params={"account": "abc123", "bank_key": "scb"},
@@ -683,9 +682,9 @@ def test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_conte
 
     with (
         patch("core.mapping_memory.save_profile", return_value={"profile_id": "PROFILE-1"}) as save_profile,
-        patch.object(app, "save_bank_fingerprint", return_value={"fingerprint_id": "FINGERPRINT-1"}) as save_bank_fingerprint,
-        patch.object(app, "record_learning_feedback") as record_learning_feedback,
-        patch.object(app, "get_db_session", side_effect=_fake_db_session),
+        patch("routers.ingestion.save_bank_fingerprint", return_value={"fingerprint_id": "FINGERPRINT-1"}) as save_bank_fingerprint,
+        patch("routers.ingestion.record_learning_feedback") as record_learning_feedback,
+        patch("routers.ingestion.get_db_session", side_effect=_fake_db_session),
     ):
         response = client.post("/api/mapping/confirm", json=payload)
 
@@ -736,9 +735,9 @@ def test_mapping_confirm_endpoint_keeps_confirmed_feedback_at_normal_weight():
 
     with (
         patch("core.mapping_memory.save_profile", return_value={"profile_id": "PROFILE-2"}) as save_profile,
-        patch.object(app, "save_bank_fingerprint", return_value={"fingerprint_id": "FINGERPRINT-2"}) as save_bank_fingerprint,
-        patch.object(app, "record_learning_feedback") as record_learning_feedback,
-        patch.object(app, "get_db_session", side_effect=_fake_db_session),
+        patch("routers.ingestion.save_bank_fingerprint", return_value={"fingerprint_id": "FINGERPRINT-2"}) as save_bank_fingerprint,
+        patch("routers.ingestion.record_learning_feedback") as record_learning_feedback,
+        patch("routers.ingestion.get_db_session", side_effect=_fake_db_session),
     ):
         response = client.post("/api/mapping/confirm", json=payload)
 
@@ -764,7 +763,7 @@ def test_mapping_confirm_endpoint_keeps_confirmed_feedback_at_normal_weight():
 
 
 def test_learning_feedback_endpoint_uses_dedicated_query_helper():
-    with patch.object(app, "list_learning_feedback_logs", return_value=[{"id": "LF-1"}]) as list_learning_feedback_logs:
+    with patch("routers.exports.list_learning_feedback_logs", return_value=[{"id": "LF-1"}]) as list_learning_feedback_logs:
         response = client.get("/api/learning-feedback", params={"object_id": "mapping_profile:PROFILE-1", "limit": 50, "offset": 10})
 
     assert response.status_code == 200
@@ -785,7 +784,7 @@ def test_db_status_endpoint_reports_investigation_schema():
 
 def test_admin_backup_endpoints_round_trip(tmp_path):
     with (
-        patch.object(app, "BACKUPS_DIR", tmp_path),
+        patch("routers.exports.BACKUPS_DIR", tmp_path),
         patch("services.admin_service.BACKUPS_DIR", tmp_path),
     ):
         create_response = client.post("/api/admin/backup", json={"operator": "tester", "note": "api backup"})

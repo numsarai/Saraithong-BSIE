@@ -5,19 +5,19 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg:       '#0d1117',
-        surface:  '#161b22',
-        surface2: '#21262d',
-        surface3: '#30363d',
-        border:   '#30363d',
-        accent:   '#58a6ff',
-        accent2:  '#388bfd',
-        success:  '#3fb950',
-        warning:  '#d29922',
-        danger:   '#f85149',
-        muted:    '#8b949e',
-        text:     '#e6edf3',
-        text2:    '#c9d1d9',
+        bg:       'var(--color-bg)',
+        surface:  'var(--color-surface)',
+        surface2: 'var(--color-surface2)',
+        surface3: 'var(--color-surface3)',
+        border:   'var(--color-border)',
+        accent:   'var(--color-accent)',
+        accent2:  'var(--color-accent2)',
+        success:  'var(--color-success)',
+        warning:  'var(--color-warning)',
+        danger:   'var(--color-danger)',
+        muted:    'var(--color-muted)',
+        text:     'var(--color-text)',
+        text2:    'var(--color-text2)',
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
@@ -27,4 +27,3 @@ export default {
   },
   plugins: [],
 }
-

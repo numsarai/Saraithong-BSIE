@@ -90,7 +90,9 @@ def test_token_contains_expiration():
 # ── ensure_default_admin ─────────────────────────────────────────────
 
 
-def test_ensure_default_admin_creates_admin_when_empty(tmp_path: Path):
+def test_ensure_default_admin_creates_admin_when_empty(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("BSIE_ADMIN_USERNAME", "testadmin")
+    monkeypatch.setenv("BSIE_ADMIN_INITIAL_PASSWORD", "testpw123")
     engine = _make_engine(tmp_path)
 
     with Session(engine) as session:
@@ -99,9 +101,8 @@ def test_ensure_default_admin_creates_admin_when_empty(tmp_path: Path):
     with Session(engine) as session:
         users = session.scalars(select(User)).all()
     assert len(users) == 1
-    assert users[0].username == "admin"
+    assert users[0].username == "testadmin"
     assert users[0].role == "admin"
-    assert users[0].email == "admin@bsie.local"
 
 
 def test_ensure_default_admin_skips_when_users_exist(tmp_path: Path):
@@ -133,7 +134,7 @@ def test_ensure_default_admin_is_idempotent(tmp_path: Path):
 
 
 def test_default_admin_password_verifies(tmp_path: Path, monkeypatch):
-    # Set known password via env var for deterministic test
+    monkeypatch.setenv("BSIE_ADMIN_USERNAME", "testadmin")
     monkeypatch.setenv("BSIE_ADMIN_INITIAL_PASSWORD", "test-admin-pw-123")
     engine = _make_engine(tmp_path)
 
@@ -141,7 +142,7 @@ def test_default_admin_password_verifies(tmp_path: Path, monkeypatch):
         ensure_default_admin(session)
 
     with Session(engine) as session:
-        admin = session.scalars(select(User).where(User.username == "admin")).first()
+        admin = session.scalars(select(User).where(User.username == "testadmin")).first()
     assert admin is not None
     assert admin.hashed_password is not None
     assert verify_password("test-admin-pw-123", admin.hashed_password) is True

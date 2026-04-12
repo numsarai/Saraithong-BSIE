@@ -7,6 +7,8 @@ Security-hardened: rate limiting considerations, admin checks, input validation.
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from persistence.base import get_db_session
 from services.auth_service import (
@@ -21,11 +23,13 @@ from services.auth_service import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+limiter = Limiter(key_func=get_remote_address)
 
 ALLOWED_ROLES = {"analyst", "viewer", "admin"}
 
 
 @router.post("/login")
+@limiter.limit("10/minute")
 async def api_login(request: Request):
     """Authenticate with username/password and receive JWT token."""
     payload = await request.json()

@@ -144,19 +144,21 @@ def ensure_default_admin(session: Session) -> None:
     count = session.scalar(select(User.id).limit(1))
     if count:
         return
-    # Use env var or generate random password
+    initial_username = os.getenv("BSIE_ADMIN_USERNAME", "admin")
     initial_pw = os.getenv("BSIE_ADMIN_INITIAL_PASSWORD", "")
     if not initial_pw:
         initial_pw = secrets.token_urlsafe(16)
         _logger.warning("=" * 60)
         _logger.warning("  DEFAULT ADMIN CREATED")
-        _logger.warning("  Username: admin")
+        _logger.warning("  Username: %s", initial_username)
         _logger.warning("  Password: %s", initial_pw)
         _logger.warning("  CHANGE THIS PASSWORD IMMEDIATELY!")
         _logger.warning("=" * 60)
+    else:
+        _logger.info("Admin user '%s' created with configured password", initial_username)
     create_user(
         session,
-        username="admin",
+        username=initial_username,
         password=initial_pw,
         email="admin@bsie.local",
         role="admin",

@@ -149,43 +149,114 @@
 ```
 **ไม่ต้องใช้ server ใดๆ — ทำงานบนเครื่องเดี่ยวได้เลย**
 
-### 5.2 Phase 2: สถานีตำรวจ (Multi-user)
+### 5.2 Phase 2: สถานีตำรวจ (Multi-user + Local LLM)
 ```
 [Server สถานีตำรวจ / จังหวัด]
   ├── BSIE Backend (FastAPI + Uvicorn)
   ├── PostgreSQL Database
   ├── Nginx (reverse proxy + HTTPS)
-  └── File Storage (evidence)
-        │
+  ├── File Storage (evidence)
+  │
+  ├── ┌─── Local LLM Server ───┐
+  │   │ Ollama / vLLM           │
+  │   │ Llama 3.1 70B (Thai)    │
+  │   │ GPU: NVIDIA RTX 4090    │
+  │   │ หรือ A6000 (48GB VRAM) │
+  │   └─────────────────────────┘
+  │         │
         ├── [PC สอบสวน 1] ──── Browser ──── HTTPS
         ├── [PC สอบสวน 2] ──── Browser ──── HTTPS
         ├── [PC สอบสวน 3] ──── Browser ──── HTTPS
         └── [Tablet หัวหน้า] ── Browser ──── HTTPS
 ```
 
-**Server ที่ต้องการ:**
-- CPU: 4+ cores
-- RAM: 16+ GB
-- Storage: 500 GB SSD (สำหรับ evidence files)
-- OS: Ubuntu 22.04 LTS
-- HTTPS certificate (Let's Encrypt — ฟรี)
+**Server ที่ต้องการ (2 เครื่อง หรือ 1 เครื่อง high-end):**
 
-### 5.3 Phase 3-4: ระดับจังหวัด/ภาค
+**เครื่อง A — BSIE Application Server:**
+- CPU: 8+ cores (AMD EPYC / Intel Xeon)
+- RAM: 32+ GB
+- Storage: 1 TB NVMe SSD
+- OS: Ubuntu 22.04 LTS
+
+**เครื่อง B — Local LLM Server (แยกเฉพาะ AI):**
+- CPU: 8+ cores
+- RAM: 64+ GB
+- **GPU: NVIDIA RTX 4090 (24GB VRAM)** หรือ **A6000 (48GB VRAM)**
+- Storage: 500 GB NVMe SSD (สำหรับ model weights)
+- OS: Ubuntu 22.04 LTS + CUDA 12
+
+> **หมายเหตุ:** สามารถรวมเป็นเครื่องเดียวได้ถ้ามี GPU — ประมาณ 250,000-350,000 บาท
+
+### 5.3 ทำไมต้อง Local LLM (ไม่ใช้ Cloud AI)
+
+> **ข้อมูลคดีเป็นชั้นความลับ** — ไม่สามารถส่งข้อมูลธุรกรรม ชื่อผู้ต้องสงสัย เลขบัญชี หรือเส้นทางการเงินไปยัง Cloud AI (ChatGPT, Claude API, Gemini) ได้ เพราะ:
+>
+> 1. **ความลับทางราชการ** — ข้อมูลคดีอาจเป็นความลับระดับ "ลับ" หรือ "ลับมาก"
+> 2. **พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล** — ข้อมูลบัญชีเป็นข้อมูลส่วนบุคคลที่มีความอ่อนไหว
+> 3. **Training Data Risk** — Cloud LLM อาจนำข้อมูลไปเรียนรู้ (training) โดยไม่ได้รับอนุญาต
+> 4. **Chain of Custody** — หลักฐานต้องไม่ผ่านระบบภายนอกที่ไม่ได้รับการรับรอง
+> 5. **ระเบียบ สตช.** — ข้อมูลสืบสวนต้องอยู่ในโครงข่ายภายในหน่วยงาน
+
+### 5.4 Local LLM ทำอะไรได้บ้าง
+
+| ความสามารถ | ตัวอย่าง |
+|-----------|---------|
+| **สรุปคดีอัตโนมัติ** | "พบเงินเข้าจาก 15 บัญชีรวม 3.2 ล้านบาท โอนต่อไป 3 บัญชีภายใน 24 ชม." |
+| **ตอบคำถามเกี่ยวกับคดี** | "บัญชีนี้มีธุรกรรมกับใครบ้างเกิน 1 แสนบาท?" |
+| **จำแนกประเภทธุรกรรม** | ช่วย classify ธุรกรรมที่ heuristic ไม่มั่นใจ |
+| **แปลรายละเอียด** | แปลรายการภาษาอังกฤษเป็นไทยหรือกลับกัน |
+| **ตรวจจับรูปแบบ** | "ช่วยดูว่ามีรูปแบบ structuring หรือไม่?" |
+| **ร่าง narrative** | ร่างเนื้อหาสำหรับรายงาน STR/CTR |
+
+### 5.5 โมเดล LLM ที่แนะนำ
+
+| โมเดล | ขนาด | VRAM | ภาษาไทย | เหมาะกับ |
+|-------|------|------|---------|---------|
+| **Llama 3.1 8B** | 8B params | 8 GB | ดี | เครื่อง GPU ขนาดเล็ก |
+| **Llama 3.1 70B** (แนะนำ) | 70B params | 40 GB | ดีมาก | Server มี A6000 |
+| **Typhoon 1.5** (Thai-focused) | 8B-70B | 8-40 GB | ดีมาก (สร้างเพื่อภาษาไทย) | ทุกขนาด |
+| **Qwen 2.5 72B** | 72B params | 40 GB | ดี | ทางเลือก |
+
+**แนะนำ:** ใช้ **Ollama** เป็น runtime — ติดตั้งง่าย, รันบน Linux/Mac, API เหมือน OpenAI
+
+```bash
+# ติดตั้ง Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# ดาวน์โหลดโมเดล
+ollama pull llama3.1:70b       # หรือ
+ollama pull typhoon:8b         # สำหรับเครื่องเล็ก
+
+# BSIE เรียกใช้ผ่าน OpenAI-compatible API
+# http://localhost:11434/v1/chat/completions
 ```
-[Cloud / Data Center]
+
+### 5.6 Phase 3-4: ระดับจังหวัด/ภาค
+```
+[Data Center จังหวัด / ภาค (On-Premise)]
   ├── Load Balancer (Nginx)
   ├── BSIE Backend x 2-3 instances
   ├── PostgreSQL (primary + replica)
   ├── Redis (cache + session)
-  ├── S3-compatible storage (evidence)
+  ├── File Storage (NAS/SAN — evidence)
   ├── Backup server
-  └── Monitoring (Prometheus + Grafana)
-        │
+  ├── Monitoring (Prometheus + Grafana)
+  │
+  ├── ┌─── Local LLM Cluster ──────┐
+  │   │ GPU Server x 1-2            │
+  │   │ NVIDIA A6000 x 2 per server │
+  │   │ Ollama / vLLM               │
+  │   │ Llama 3.1 70B + Typhoon     │
+  │   └────────────────────────────┘
+  │         │
         ├── [สถานี อ.เมือง] ──── VPN/HTTPS
         ├── [สถานี อ.เกาะสมุย] ── VPN/HTTPS
         ├── [สถานี อ.ไชยา] ──── VPN/HTTPS
         └── [บก.จว.สุราษฎร์ธานี] VPN/HTTPS
 ```
+
+> **สำคัญ:** ทุก Phase ใช้ **On-Premise** (เครื่อง server ในหน่วยงาน) ไม่ใช้ Public Cloud  
+> เพื่อให้ข้อมูลคดีอยู่ภายในโครงข่ายตำรวจเท่านั้น
 
 ---
 
@@ -239,12 +310,26 @@
 
 ## 9. สรุปงบประมาณ
 
-| Phase | ระยะเวลา | งบประมาณ |
-|-------|---------|---------|
-| Phase 1 (Pilot) | 3 เดือน | **ฟรี** (ใช้เครื่องที่มี) |
-| Phase 2 (จังหวัด) | 6 เดือน | **100,000 - 200,000 บาท** (server + อบรม) |
-| Phase 3 (ขยาย) | 12 เดือน | **500,000 - 1,000,000 บาท** (cloud + dev team) |
-| Phase 4 (ระดับภาค) | ปีที่ 2 | **1,000,000 - 3,000,000 บาท/ปี** |
+| Phase | ระยะเวลา | งบประมาณ | รายละเอียด |
+|-------|---------|---------|-----------|
+| Phase 1 (Pilot) | 3 เดือน | **ฟรี** | ใช้เครื่องที่มี |
+| Phase 2 (จังหวัด) | 6 เดือน | **400,000 - 600,000 บาท** | App Server + GPU Server + อบรม |
+| Phase 3 (ขยาย) | 12 เดือน | **1,000,000 - 2,000,000 บาท** | ทีมพัฒนา + Mobile + เชื่อมระบบ |
+| Phase 4 (ระดับภาค) | ปีที่ 2 | **3,000,000 - 5,000,000 บาท** | GPU Cluster + Multi-site |
+
+### รายละเอียดงบประมาณ Phase 2 (จังหวัดสุราษฎร์ธานี)
+
+| รายการ | งบประมาณ |
+|--------|---------|
+| Server BSIE (CPU 8-core, 32GB RAM, 1TB SSD) | 50,000 - 80,000 บาท |
+| **GPU Server สำหรับ Local LLM** (RTX 4090 24GB หรือ A6000 48GB) | **250,000 - 350,000 บาท** |
+| UPS + อุปกรณ์เครือข่าย | 20,000 - 30,000 บาท |
+| อบรมพนักงานสอบสวน (2 รุ่น x 50 คน) | 30,000 - 50,000 บาท |
+| ค่าดำเนินการ / ติดตั้ง | 20,000 - 30,000 บาท |
+| **รวม** | **370,000 - 540,000 บาท** |
+
+> **หมายเหตุ:** ไม่มีค่า license รายปี — ซอฟต์แวร์ทั้งหมดเป็น open source + พัฒนาเอง  
+> เปรียบเทียบ: i2 Analyst's Notebook = 500,000+ บาท/license/**ต่อปี** (ต่อคน)
 
 ### ROI (ผลตอบแทนการลงทุน)
 

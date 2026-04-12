@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPNI Platform — BSIE v4.0 Presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── Reset + Base ──────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px;scroll-behavior:smooth}
+body{
+  font-family:'Noto Sans Thai','Noto Sans',sans-serif;
+  background:#0d1117;color:#1a202c;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+
+/* ── Slide container ───────────────────────────────────── */
+.slides-wrapper{
+  position:relative;width:100vw;height:100vh;overflow:hidden;
+}
+section.slide{
+  position:absolute;top:0;left:0;
+  width:100vw;height:100vh;
+  display:none;overflow:hidden;
+}
+section.slide.active{display:flex;align-items:stretch}
+
+.slide-inner{
+  width:100%;height:100%;
+  padding:40px 48px;
+  display:flex;flex-direction:column;
+  overflow-y:auto;
+}
+
+/* ── Backgrounds ───────────────────────────────────────── */
+.slide{background:#f7fafc}
+.slide-dark{background:#1a365d}
+.slide-vdark{background:#1a202c}
+.slide-orange{background:#dd6b20}
+.slide-red{background:#c53030}
+.slide-green{background:#38a169}
+.slide-gold{background:#d69e2e}
+
+/* ── Typography ────────────────────────────────────────── */
+.slide-title{font-size:1.6rem;font-weight:700;margin-bottom:0.3rem;color:#1a365d;text-align:center}
+.slide-title.white{color:#fff}
+.slide-title.dark{color:#1a202c}
+.slide-sub{font-size:0.85rem;text-align:center;margin-bottom:0.6rem;color:#4a5568}
+.slide-sub.light-blue{color:#bee3f8}
+.mega{font-size:3rem;font-weight:800;color:#fff;text-align:center;margin:0.3rem 0}
+.mega-close{font-size:2rem;margin-bottom:0.3rem}
+.subtitle{font-size:1.3rem;text-align:center;margin-bottom:0.2rem}
+.subtitle-sm{font-size:1.05rem;color:#fff;text-align:center;margin-top:0.6rem}
+.desc-light{font-size:0.9rem;color:#bee3f8;text-align:center;margin-top:0.2rem}
+.meta{font-size:0.78rem;color:#a0aec0;text-align:center;line-height:1.6}
+.small-label{font-size:0.75rem;text-align:center;margin-bottom:0.2rem}
+
+/* ── Title slide ───────────────────────────────────────── */
+.title-slide{justify-content:center;align-items:center;text-align:center}
+.gold-line{width:100px;height:3px;background:#d69e2e;margin:0.8rem auto}
+
+/* ── Cards & Layouts ───────────────────────────────────── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;flex:1;min-height:0}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.7rem;flex:1;min-height:0}
+.card{background:#fff;border-radius:8px;padding:0.7rem 0.8rem;overflow:hidden}
+.card-dark{background:#2d3748}
+.card-dred{background:#742a2a}
+.card-orange{background:#9c4e18}
+.full-width{grid-column:1/-1}
+.card-title{font-size:0.95rem;font-weight:700;margin-bottom:0.4rem}
+.card-title.navy{color:#1a365d} .card-title.red{color:#e53e3e}
+.card-title.green{color:#38a169} .card-title.blue{color:#2b6cb0}
+.card-title.purple{color:#805ad5} .card-title.gold{color:#d69e2e}
+.card-title.orange{color:#dd6b20} .card-title.salmon{color:#fc8181}
+.card-title.gold-light{color:#ecc94b} .card-title.mint{color:#48bb78}
+.card-title.sky{color:#63b3ed}
+
+/* borders */
+.border-red{border-left:4px solid #e53e3e}
+.border-green{border-left:4px solid #38a169}
+.border-blue{border-left:4px solid #2b6cb0}
+.border-purple{border-left:4px solid #805ad5}
+.border-gold{border-left:4px solid #d69e2e}
+.border-orange{border-left:4px solid #dd6b20}
+.border-mint{border-left:4px solid #48bb78}
+.border-sky{border-left:4px solid #63b3ed}
+
+/* ── Bullet lists ──────────────────────────────────────── */
+.bullet-list{list-style:none;padding:0;font-size:0.78rem;line-height:1.55}
+.bullet-list li{padding-left:1.1em;position:relative;margin-bottom:0.2rem}
+.bullet-list li::before{content:'●';position:absolute;left:0;font-size:0.6em;top:0.35em;color:#38a169}
+.bullet-list .red-bullet::before{color:#e53e3e}
+.bullet-list .green-bullet::before{color:#38a169}
+.bullet-list .gold-bullet::before{color:#ecc94b}
+.bullet-list .purple-bullet::before{color:#805ad5}
+.bullet-list .salmon-bullet::before{color:#fc8181}
+.bullet-list .orange-bullet::before{color:#dd6b20}
+.green-bullet li::before{color:#38a169}
+.white-text{color:#fff}
+.white-text li::before{color:var(--bullet-color,#d69e2e)}
+
+/* ── Module row (slide 2) ──────────────────────────────── */
+.mod-row{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin:0.6rem 0}
+.mod-card{background:#2d3748;border-radius:8px;padding:0.5rem;text-align:center;border:2px solid #4a5568}
+.mod-active{background:#48bb78;border-color:#d69e2e}
+.mod-num{display:block;font-size:0.65rem;color:#a0aec0}
+.mod-name{display:block;font-size:0.85rem;font-weight:700;color:#fff;margin:0.15rem 0}
+.mod-status{display:block;font-size:0.7rem;color:#a0aec0}
+.mod-status.gold{color:#d69e2e}
+.shared-layer{background:#1e3a5f;border-radius:8px;padding:0.6rem;text-align:center;margin:0.5rem 0}
+.layer-title{color:#fff;font-size:0.95rem;margin-bottom:0.4rem}
+.tag-row{display:flex;flex-wrap:wrap;gap:0.35rem;justify-content:center;margin-bottom:0.4rem}
+.tag{padding:0.2rem 0.6rem;border-radius:4px;color:#fff;font-size:0.7rem;font-weight:600}
+.layer-desc{font-size:0.72rem;color:#bee3f8;margin-top:0.3rem}
+.infra-bar{background:#2d3748;border-radius:6px;padding:0.4rem;text-align:center;font-size:0.72rem;color:#fff;margin-top:0.3rem}
+.note-sm{font-size:0.68rem;color:#a0aec0;text-align:center}
+.note-sm.white{color:rgba(255,255,255,0.7)}
+.note-pink{font-size:0.72rem;color:#febdbd;margin-top:0.6rem;line-height:1.5}
+
+/* ── Architecture (slide 4) ────────────────────────────── */
+.arch-layer{border-radius:8px;padding:0.5rem 0.7rem;margin-bottom:0.4rem}
+.arch-layer.half{flex:1}
+.arch-split{display:flex;gap:0.5rem;margin-bottom:0.4rem}
+.layer-label{font-weight:700;font-size:0.8rem;display:block;margin-bottom:0.2rem}
+.layer-label.gold{color:#d69e2e} .layer-label.mint{color:#48bb78}
+.layer-label.lilac{color:#d6bcfa} .layer-label.salmon{color:#fc8181}
+.layer-info{font-size:0.72rem;color:#fff;margin-bottom:0.3rem}
+.tech-row{display:flex;flex-wrap:wrap;gap:0.3rem}
+.tech-tag{padding:0.15rem 0.5rem;border-radius:4px;font-size:0.65rem;font-weight:600;background:#2d3748}
+.tech-tag.sky{color:#63b3ed} .tech-tag.mint{color:#48bb78}
+.arch-desc{font-size:0.68rem;color:#fff;line-height:1.5}
+
+/* ── DB grid (slide 5) ─────────────────────────────────── */
+.db-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;flex:1}
+.db-card{background:#2d3748;border-radius:6px;padding:0.4rem 0.5rem;border-left:3px solid}
+.db-name{display:block;font-size:0.75rem;font-weight:700}
+.db-desc{display:block;font-size:0.62rem;color:#fff;margin-top:0.1rem}
+
+/* ── Pipeline steps (slide 6) ──────────────────────────── */
+.step-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:0.35rem;flex:1}
+.step-card{background:#2d3748;border-radius:8px;padding:0.5rem;text-align:center;border-top:3px solid;display:flex;flex-direction:column;justify-content:center}
+.step-num{font-size:1.5rem;font-weight:800}
+.step-name{font-size:0.72rem;font-weight:700;color:#fff;margin:0.2rem 0}
+.step-desc{font-size:0.6rem;color:#bee3f8}
+
+/* ── Reports (slide 11) ────────────────────────────────── */
+.report-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.3rem 1.5rem}
+.report-row{display:flex;gap:0.5rem;font-size:0.72rem;padding:0.15rem 0}
+.report-fmt{font-weight:700;color:#1a365d;min-width:9rem}
+.report-desc{color:#4a5568}
+
+/* ── Security Thai bar (slide 12) ──────────────────────── */
+.thai-bar{background:#2d3748;border:1px solid #d69e2e;border-radius:8px;padding:0.5rem;text-align:center;margin-top:0.5rem}
+.thai-bar p{font-size:0.72rem;color:#fff;line-height:1.5}
+
+/* ── Infrastructure (slide 14) ─────────────────────────── */
+.infra-tree{font-family:'SF Mono','Fira Code',monospace;font-size:0.68rem;color:#fff;line-height:1.6;white-space:pre;background:transparent;border:none;padding:0.3rem}
+
+/* ── Roadmap (slide 15) ────────────────────────────────── */
+.road-year-marks{display:flex;justify-content:space-between;padding:0 2rem;margin-bottom:0.3rem}
+.road-year-marks span{font-size:0.7rem;color:#a0aec0;font-weight:700}
+.road-timeline{position:relative;padding:5rem 0 3rem;min-height:15rem}
+.road-axis{position:absolute;top:50%;left:2rem;right:2rem;height:3px;background:#4a5568;transform:translateY(-50%)}
+.road-phases{display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;position:relative;z-index:1}
+.road-phase{display:flex;flex-direction:column;align-items:center;text-align:center}
+.road-deliverables{margin-bottom:0.3rem}
+.road-deliverables ul{list-style:none;font-size:0.6rem;color:#fff;line-height:1.4;background:#2d3748;border-radius:6px;padding:0.3rem 0.5rem;text-align:left}
+.road-deliverables li::before{content:'● ';font-size:0.5rem}
+.road-bar{border-radius:6px;padding:0.25rem 0.4rem;min-width:100%;margin-bottom:0.2rem}
+.road-name{display:block;font-size:0.72rem;font-weight:700;color:#fff}
+.road-sub{display:block;font-size:0.58rem;color:rgba(255,255,255,0.8)}
+.road-diamond{width:12px;height:12px;transform:rotate(45deg);margin:0.15rem 0}
+.road-badge{border:2px solid;border-radius:6px;padding:0.1rem 0.5rem;font-size:0.7rem;font-weight:700;background:#2d3748}
+.road-time{font-size:0.6rem;color:#a0aec0;margin-top:0.15rem}
+.road-total{display:flex;justify-content:space-between;align-items:center;background:#2d3748;border:2px solid #d69e2e;border-radius:8px;padding:0.4rem 0.8rem;margin-top:0.5rem}
+.road-total-label{font-size:0.9rem;font-weight:700;color:#fff}
+.road-total-val{font-size:0.85rem;font-weight:700;color:#d69e2e}
+
+/* ── Budget (slide 16) ─────────────────────────────────── */
+.budget-list{flex:1;display:flex;flex-direction:column;gap:0.4rem}
+.budget-phase{background:#fff8e8;border-radius:8px;padding:0.5rem 0.7rem}
+.budget-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem}
+.budget-phase-name{font-size:0.8rem;font-weight:700}
+.budget-total-badge{padding:0.2rem 0.7rem;border-radius:6px;font-size:0.85rem;font-weight:700;color:#fff}
+.budget-item{display:flex;justify-content:space-between;font-size:0.7rem;padding:0.1rem 0.3rem;color:#1a202c}
+.budget-cost{color:#4a5568}
+.budget-grand{display:flex;justify-content:space-between;align-items:center;background:#1a202c;border-radius:8px;padding:0.5rem 0.8rem;margin-top:0.4rem}
+.budget-grand-label{font-size:1rem;font-weight:700;color:#fff}
+.budget-grand-val{font-size:1.3rem;font-weight:800;color:#d69e2e}
+
+/* ── Highlights (slide 17) ─────────────────────────────── */
+.highlights-list{display:flex;flex-direction:column;gap:0.6rem;flex:1}
+.highlight-card{display:flex;border-radius:8px;overflow:hidden;background:#fff}
+.highlight-bar{width:6px;flex-shrink:0}
+.highlight-body{padding:0.5rem 0.8rem}
+.highlight-title{font-size:1rem;font-weight:700;margin-bottom:0.2rem}
+.highlight-desc{font-size:0.78rem;color:#4a5568;line-height:1.5}
+
+/* ── Comparison table (slide 18) ───────────────────────── */
+.comp-table-wrap{flex:1;overflow:auto}
+.comp-table{width:100%;border-collapse:collapse;font-size:0.72rem}
+.comp-table th{background:#1a365d;color:#fff;padding:0.35rem 0.4rem;text-align:center;font-weight:700}
+.comp-table th:first-child{text-align:left}
+.comp-table td{padding:0.3rem 0.4rem;text-align:center;border-bottom:1px solid #e2e8f0}
+.comp-table tr:nth-child(even){background:#edf2f7}
+.comp-label{font-weight:700;text-align:left!important}
+.comp-green{color:#38a169;font-weight:600}
+.comp-red{color:#e53e3e}
+.comp-gold{color:#b7791f}
+
+/* ── Stats (slide 19) ──────────────────────────────────── */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;flex:1}
+.stat-card{background:#2d3748;border-radius:8px;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:0.6rem}
+.stat-num{font-size:1.7rem;font-weight:800}
+.stat-label{font-size:0.72rem;color:#fff;margin-top:0.2rem}
+
+/* ── ROI (slide 20) ────────────────────────────────────── */
+.roi-list{display:flex;flex-direction:column;gap:0.6rem;flex:1;justify-content:center}
+.roi-row{display:flex;align-items:center;gap:0.6rem}
+.roi-label{min-width:7rem;font-size:0.9rem;font-weight:700;color:#fff;text-align:right}
+.roi-bar-bg{flex:1;background:#22543d;border-radius:6px;height:2rem;position:relative;overflow:hidden}
+.roi-bar-fill{height:100%;border-radius:6px;transition:width 0.8s}
+.roi-bar-text{position:absolute;top:50%;left:0.6rem;transform:translateY(-50%);font-size:0.72rem;font-weight:600;color:#1a202c;white-space:nowrap}
+.roi-bottom{background:#22543d;border-radius:8px;padding:0.5rem;text-align:center;font-size:1rem;font-weight:700;color:#fff;margin-top:0.5rem}
+
+/* ── User table (slide 21) ─────────────────────────────── */
+.user-table{width:100%;border-collapse:collapse;font-size:0.75rem;margin-top:0.3rem}
+.user-table th{background:#1a365d;color:#fff;padding:0.3rem;text-align:center}
+.user-table th:first-child{text-align:left}
+.user-table td{padding:0.3rem;text-align:center;border-bottom:1px solid #e2e8f0}
+.user-table td:first-child{font-weight:700;text-align:left}
+.user-table tr:nth-child(even){background:#edf2f7}
+
+/* ── Closing (slide 22) ───────────────────────────────── */
+.closing-slide{justify-content:center;align-items:center;text-align:center}
+.close-steps{display:flex;flex-direction:column;gap:0.5rem;margin:1rem 0;text-align:left;max-width:42rem;width:100%}
+.close-step{display:flex;align-items:center;gap:0.6rem}
+.close-num{font-size:1.4rem;font-weight:800;min-width:2rem;text-align:right}
+.close-text{font-size:1rem;color:#fff}
+.close-highlight{background:#1e3a5f;border-radius:8px;padding:0.5rem 1rem;font-size:0.9rem;font-weight:700;color:#d69e2e;margin:0.5rem 0}
+.close-contact{font-size:0.72rem;color:#a0aec0;margin-top:0.5rem}
+
+/* ── Progress bar ──────────────────────────────────────── */
+#progress{position:fixed;top:0;left:0;height:3px;background:#d69e2e;z-index:100;transition:width 0.3s}
+
+/* ── Slide counter ─────────────────────────────────────── */
+#counter{position:fixed;bottom:12px;right:20px;font-size:0.75rem;color:rgba(255,255,255,0.6);z-index:100;user-select:none}
+
+/* ── Nav buttons ───────────────────────────────────────── */
+.nav-btn{
+  position:fixed;top:50%;transform:translateY(-50%);
+  z-index:100;background:rgba(0,0,0,0.3);color:#fff;
+  border:none;padding:0.7rem 0.5rem;cursor:pointer;
+  font-size:1.2rem;border-radius:6px;opacity:0.5;transition:opacity 0.2s;
+}
+.nav-btn:hover{opacity:1}
+#prev-btn{left:8px}
+#next-btn{right:8px}
+
+/* ── Mobile responsive ─────────────────────────────────── */
+@media(max-width:1024px){
+  .slide-inner{padding:24px 28px}
+  .three-col{grid-template-columns:1fr 1fr}
+  .db-grid{grid-template-columns:repeat(3,1fr)}
+  .step-grid{grid-template-columns:repeat(4,1fr)}
+  .stat-grid{grid-template-columns:repeat(3,1fr)}
+  .mod-row{grid-template-columns:repeat(2,1fr)}
+  .road-phases{grid-template-columns:repeat(2,1fr)}
+  .comp-table{font-size:0.65rem}
+}
+@media(max-width:640px){
+  .slide-inner{padding:16px 18px}
+  .two-col,.three-col{grid-template-columns:1fr}
+  .db-grid{grid-template-columns:repeat(2,1fr)}
+  .step-grid{grid-template-columns:repeat(3,1fr)}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .arch-split{flex-direction:column}
+  .mod-row{grid-template-columns:1fr 1fr}
+  .road-phases{grid-template-columns:1fr 1fr}
+  .mega{font-size:2rem}
+  .slide-title{font-size:1.2rem}
+  .nav-btn{padding:0.4rem 0.3rem;font-size:1rem}
+  body{overflow-y:auto}
+  section.slide{position:relative;height:auto;min-height:100vh;display:flex!important}
+  .slides-wrapper{height:auto;overflow:auto}
+  #progress,#counter,.nav-btn{display:none}
+}
+
+/* ── Print / PDF ───────────────────────────────────────── */
+@media print{
+  body{overflow:visible;background:#fff}
+  .slides-wrapper{height:auto;overflow:visible}
+  section.slide{
+    position:relative!important;display:flex!important;
+    width:297mm;height:210mm;
+    page-break-after:always;page-break-inside:avoid;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+  section.slide:last-child{page-break-after:auto}
+  .slide-inner{overflow:hidden}
+  #progress,#counter,.nav-btn{display:none}
+}
+@page{size:A4 landscape;margin:0}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="slides-wrapper">
+<section class="slide slide-dark">
+  <div class="slide-inner title-slide">
+    <p class="small-label" style="color:#a0aec0">สำนักงานตำรวจแห่งชาติ</p>
+    <h1 class="mega">SPNI Platform</h1>
+    <p class="subtitle" style="color:#63b3ed">Smart Police &amp; National Intelligence</p>
+    <div class="gold-line"></div>
+    <p class="subtitle-sm">โมดูลแรก: BSIE v4.0 — Bank Statement Intelligence Engine</p>
+    <p class="desc-light">ระบบวิเคราะห์ธุรกรรมทางการเงินอัจฉริยะ สำหรับงานสืบสวนสอบสวน</p>
+    <div style="margin-top:2.5rem">
+      <p class="meta">เอกสารประกอบการนำเสนอเพื่อของบประมาณระดับประเทศ</p>
+      <p class="meta">จัดทำโดย ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง</p>
+      <p class="meta">เมษายน 2569</p>
+    </div>
+  </div>
+</section>
+
+
+    <section class="slide slide-dark">
+      <div class="slide-inner">
+        <h2 class="slide-title white">SPNI Platform — ภาพรวม 4 โมดูล</h2>
+        <p class="slide-sub light-blue">แพลตฟอร์มรวมเครื่องมือสืบสวนสอบสวนสำหรับ สตช. ทั้งประเทศ</p>
+        <div class="mod-row">
+        <div class="mod-card mod-active">
+          <span class="mod-num">โมดูล 1</span>
+          <span class="mod-name">BSIE — การเงิน</span>
+          <span class="mod-status gold">v4.0 พร้อมใช้ ★</span>
+        </div>
+        <div class="mod-card mod-pending">
+          <span class="mod-num">โมดูล 2</span>
+          <span class="mod-name">CDR — โทรศัพท์</span>
+          <span class="mod-status ">วางแผน</span>
+        </div>
+        <div class="mod-card mod-pending">
+          <span class="mod-num">โมดูล 3</span>
+          <span class="mod-name">Social Media Intel</span>
+          <span class="mod-status ">วางแผน</span>
+        </div>
+        <div class="mod-card mod-pending">
+          <span class="mod-num">โมดูล 4</span>
+          <span class="mod-name">CCTV — ภาพ/วีดีโอ</span>
+          <span class="mod-status ">วางแผน</span>
+        </div></div>
+        <div class="shared-layer">
+          <h3 class="layer-title">Shared Intelligence Layer</h3>
+          <div class="tag-row"><span class="tag" style="background:#38a169">Entity Registry</span><span class="tag" style="background:#2b6cb0">Link Analysis</span><span class="tag" style="background:#dd6b20">Case Mgmt</span><span class="tag" style="background:#e53e3e">Local LLM AI</span><span class="tag" style="background:#805ad5">Evidence Chain</span><span class="tag" style="background:#d69e2e">Regulatory</span></div>
+          <p class="layer-desc">ทุกโมดูลเชื่อมข้อมูลข้ามกัน — บุคคลเดียวกันพบข้ามบัญชี + CDR + Social + CCTV</p>
+        </div>
+        <div class="infra-bar">Infrastructure: On-Premise Server │ Local LLM (Ollama) │ PostgreSQL │ VPN/HTTPS │ ห้าม Cloud AI</div>
+        <p class="note-sm" style="margin-top:0.8rem">ทำไมเริ่มจาก BSIE?&nbsp; 1) คดีการเงินมากที่สุด&nbsp; 2) ข้อมูลมีโครงสร้างชัดเจน&nbsp; 3) เห็นผลเร็ว — 3 วัน→30 นาที&nbsp; 4) พื้นฐานสำหรับโมดูลอื่น&nbsp; 5) ไม่มีเครื่องมือฟรีที่ดีในตลาด</p>
+      </div>
+    </section>
+    
+
+    <section class="slide">
+      <div class="slide-inner">
+        <h2 class="slide-title">ปัญหาการสืบสวนทางการเงินในปัจจุบัน</h2>
+        <div class="two-col">
+          <div class="card border-red">
+            <h3 class="card-title red">ปัญหาที่พบ</h3>
+            <ul class="bullet-list"><li class="red-bullet">วิเคราะห์ Statement <b>ด้วยมือ</b> ใช้เวลา <b>3-5 วัน</b>ต่อคดี</li>
+<li class="red-bullet">ดูได้<b>ทีละบัญชี</b> ไม่เห็น<b>ภาพรวมเครือข่าย</b></li>
+<li class="red-bullet">ใช้ Excel ธรรมดา ไม่มีเครื่องมือ<b>วิเคราะห์เฉพาะทาง</b></li>
+<li class="red-bullet">i2 Analyst's Notebook ราคา <b>500,000+ บาท/license/ปี</b> ไม่รองรับไทย</li>
+<li class="red-bullet">ไม่มีมาตรฐาน<b>รายงาน ปปง.</b> (STR/CTR)</li>
+<li class="red-bullet">ไม่มีระบบ<b>แจ้งเตือนอัตโนมัติ</b> — พลาดได้ง่าย</li>
+<li class="red-bullet">ข้อมูลกระจาย<b>หลาย Excel</b> ไม่เชื่อมโยงข้ามบัญชี</li>
+<li class="red-bullet"><b>ไม่มีเครื่องมือฟรี</b>ที่ดีสำหรับตำรวจไทย</li></ul>
+          </div>
+          <div class="card border-green">
+            <h3 class="card-title green">BSIE แก้ได้</h3>
+            <ul class="bullet-list"><li class="green-bullet">ประมวลผลอัตโนมัติ <b>ภายใน 30 นาที</b></li>
+<li class="green-bullet">เชื่อมโยงข้ามบัญชี <b>เห็นเครือข่าย</b>ทั้งหมด</li>
+<li class="green-bullet">กราฟเครือข่าย Timeline <b>แจ้งเตือน 12 รูปแบบ</b></li>
+<li class="green-bullet">มี <b>mini i2 Analyst's Notebook</b> ในตัว — <b>ฟรี</b></li>
+<li class="green-bullet">สร้างรายงาน <b>PDF/Excel/STR/CTR</b> ตามมาตรฐาน</li>
+<li class="green-bullet"><b>ตรวจจับ 5 รูปแบบฟอกเงิน</b> FATF อัตโนมัติ</li>
+<li class="green-bullet">วิเคราะห์ทางสถิติ: <b>Z-score, IQR, Benford's Law</b></li>
+<li class="green-bullet">ฟรี — <b>ไม่มีค่า license</b> รองรับ<b>ทั้งประเทศ</b></li></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-vdark">
+      <div class="slide-inner">
+        <h2 class="slide-title white">สถาปัตยกรรมระบบ BSIE v4.0</h2>
+        <div class="arch-layer" style="background:#204070">
+          <span class="layer-label gold">Frontend</span>
+          <div class="tech-row"><span class="tech-tag sky">React 19</span><span class="tech-tag sky">TypeScript</span><span class="tech-tag sky">Vite</span><span class="tech-tag sky">Tailwind CSS</span><span class="tech-tag sky">Zustand</span><span class="tech-tag sky">Cytoscape.js</span><span class="tech-tag sky">Recharts</span><span class="tech-tag sky">react-i18next</span></div>
+        </div>
+        <div class="arch-layer" style="background:#153525">
+          <span class="layer-label mint">Backend</span>
+          <p class="layer-info">Python 3.12 │ FastAPI │ 21 Routers │ 34 Services │ 120+ Endpoints</p>
+          <div class="tech-row"><span class="tech-tag mint">ingestion</span><span class="tech-tag mint">search</span><span class="tech-tag mint">graph</span><span class="tech-tag mint">alerts</span><span class="tech-tag mint">fund_flow</span><span class="tech-tag mint">analytics</span><span class="tech-tag mint">reports</span><span class="tech-tag mint">auth</span><span class="tech-tag mint">exports</span><span class="tech-tag mint">workspace</span></div>
+        </div>
+        <div class="arch-split">
+          <div class="arch-layer half" style="background:#352515">
+            <span class="layer-label gold">Processing Core — 30 modules</span>
+            <p class="arch-desc">bank_detector, column_detector, nlp_engine, normalizer, classifier, link_builder, graph_rules, pdf_loader, image_loader (OCR), exporter, llm_agent ...</p>
+          </div>
+          <div class="arch-layer half" style="background:#251535">
+            <span class="layer-label lilac">34 Services</span>
+            <p class="arch-desc">alert, anomaly_detection, sna, threat_hunting, fund_flow, auth, regulatory_export, report, insights, case_tapestry, job_queue, audit ...</p>
+          </div>
+        </div>
+        <div class="arch-split">
+          <div class="arch-layer half" style="background:#152515">
+            <span class="layer-label mint">Database: SQLAlchemy 2 + SQLite WAL</span>
+            <p class="arch-desc">20 tables │ Alembic migrations │ Optimized pragmas │ → PostgreSQL (Phase 2)</p>
+          </div>
+          <div class="arch-layer half" style="background:#251515">
+            <span class="layer-label salmon">AI/ML: Local LLM + NLP</span>
+            <p class="arch-desc">EasyOCR (Thai+EN) │ NLP Engine (ชื่อ/เบอร์/บัตร ปชช./PromptPay) │ Ollama</p>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-vdark">
+      <div class="slide-inner">
+        <h2 class="slide-title white">ฐานข้อมูล — 20 Tables</h2>
+        <div class="db-grid">
+        <div class="db-card" style="border-color:#38a169">
+          <span class="db-name" style="color:#38a169">FileRecord</span>
+          <span class="db-desc">ไฟล์อัพโหลด + SHA-256</span>
+        </div>
+        <div class="db-card" style="border-color:#38a169">
+          <span class="db-name" style="color:#38a169">ParserRun</span>
+          <span class="db-desc">ประวัติการประมวลผล</span>
+        </div>
+        <div class="db-card" style="border-color:#2b6cb0">
+          <span class="db-name" style="color:#2b6cb0">Account</span>
+          <span class="db-desc">บัญชีทุกแห่ง (normalized)</span>
+        </div>
+        <div class="db-card" style="border-color:#2b6cb0">
+          <span class="db-name" style="color:#2b6cb0">Transaction</span>
+          <span class="db-desc">ธุรกรรม 30+ fields</span>
+        </div>
+        <div class="db-card" style="border-color:#38a169">
+          <span class="db-name" style="color:#38a169">StatementBatch</span>
+          <span class="db-desc">ชุดรายการเดินบัญชี</span>
+        </div>
+        <div class="db-card" style="border-color:#38a169">
+          <span class="db-name" style="color:#38a169">RawImportRow</span>
+          <span class="db-desc">ข้อมูลดิบ forensic</span>
+        </div>
+        <div class="db-card" style="border-color:#805ad5">
+          <span class="db-name" style="color:#805ad5">Entity</span>
+          <span class="db-desc">บุคคล/นิติบุคคล</span>
+        </div>
+        <div class="db-card" style="border-color:#805ad5">
+          <span class="db-name" style="color:#805ad5">AccountEntityLink</span>
+          <span class="db-desc">เชื่อม Account↔Entity</span>
+        </div>
+        <div class="db-card" style="border-color:#dd6b20">
+          <span class="db-name" style="color:#dd6b20">TransactionMatch</span>
+          <span class="db-desc">จับคู่ข้ามบัญชี</span>
+        </div>
+        <div class="db-card" style="border-color:#e53e3e">
+          <span class="db-name" style="color:#e53e3e">Alert</span>
+          <span class="db-desc">แจ้งเตือน + severity</span>
+        </div>
+        <div class="db-card" style="border-color:#dd6b20">
+          <span class="db-name" style="color:#dd6b20">DuplicateGroup</span>
+          <span class="db-desc">กลุ่มข้อมูลซ้ำ</span>
+        </div>
+        <div class="db-card" style="border-color:#d69e2e">
+          <span class="db-name" style="color:#d69e2e">ReviewDecision</span>
+          <span class="db-desc">การตัดสินใจ analyst</span>
+        </div>
+        <div class="db-card" style="border-color:#d69e2e">
+          <span class="db-name" style="color:#d69e2e">AuditLog</span>
+          <span class="db-desc">Audit Trail ทุก action</span>
+        </div>
+        <div class="db-card" style="border-color:#63b3ed">
+          <span class="db-name" style="color:#63b3ed">ExportJob</span>
+          <span class="db-desc">งานส่งออกรายงาน</span>
+        </div>
+        <div class="db-card" style="border-color:#fc8181">
+          <span class="db-name" style="color:#fc8181">User</span>
+          <span class="db-desc">ผู้ใช้ JWT + RBAC</span>
+        </div>
+        <div class="db-card" style="border-color:#4a5568">
+          <span class="db-name" style="color:#4a5568">AdminSetting</span>
+          <span class="db-desc">ตั้งค่า + Workspace</span>
+        </div>
+        <div class="db-card" style="border-color:#d6bcfa">
+          <span class="db-name" style="color:#d6bcfa">GraphAnnotation</span>
+          <span class="db-desc">บันทึกบน node</span>
+        </div>
+        <div class="db-card" style="border-color:#48bb78">
+          <span class="db-name" style="color:#48bb78">CaseTag</span>
+          <span class="db-desc">แท็กคดี</span>
+        </div>
+        <div class="db-card" style="border-color:#48bb78">
+          <span class="db-name" style="color:#48bb78">CaseTagLink</span>
+          <span class="db-desc">เชื่อม tag↔วัตถุ</span>
+        </div>
+        <div class="db-card" style="border-color:#38a169">
+          <span class="db-name" style="color:#38a169">MappingProfile</span>
+          <span class="db-desc">โปรไฟล์ mapping</span>
+        </div></div>
+        <p class="note-sm white" style="margin-top:0.5rem">25+ Indexes │ Unique constraints │ Foreign keys │ JSON columns │ Alembic migrations</p>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-vdark">
+      <div class="slide-inner">
+        <h2 class="slide-title white">Processing Pipeline — 14 ขั้นตอน</h2>
+        <div class="step-grid">
+        <div class="step-card" style="border-color:#38a169">
+          <span class="step-num" style="color:#38a169">1</span>
+          <span class="step-name">Load File</span>
+          <span class="step-desc">Excel/PDF/Image/OFX</span>
+        </div>
+        <div class="step-card" style="border-color:#38a169">
+          <span class="step-num" style="color:#38a169">2</span>
+          <span class="step-name">Detect Bank</span>
+          <span class="step-desc">8 ธนาคาร auto</span>
+        </div>
+        <div class="step-card" style="border-color:#2b6cb0">
+          <span class="step-num" style="color:#2b6cb0">3</span>
+          <span class="step-name">Detect Cols</span>
+          <span class="step-desc">Fuzzy 3-tier</span>
+        </div>
+        <div class="step-card" style="border-color:#2b6cb0">
+          <span class="step-num" style="color:#2b6cb0">4</span>
+          <span class="step-name">Load Memory</span>
+          <span class="step-desc">Profile ที่จำไว้</span>
+        </div>
+        <div class="step-card" style="border-color:#63b3ed">
+          <span class="step-num" style="color:#63b3ed">5</span>
+          <span class="step-name">Apply Map</span>
+          <span class="step-desc">แปลงคอลัมน์</span>
+        </div>
+        <div class="step-card" style="border-color:#63b3ed">
+          <span class="step-num" style="color:#63b3ed">6</span>
+          <span class="step-name">Normalize</span>
+          <span class="step-desc">วันที่/เงิน/ทิศทาง</span>
+        </div>
+        <div class="step-card" style="border-color:#dd6b20">
+          <span class="step-num" style="color:#dd6b20">7</span>
+          <span class="step-name">Parse Acct</span>
+          <span class="step-desc">แยกเลข normalize</span>
+        </div>
+        <div class="step-card" style="border-color:#dd6b20">
+          <span class="step-num" style="color:#dd6b20">8</span>
+          <span class="step-name">Extract Desc</span>
+          <span class="step-desc">แยกรายละเอียด</span>
+        </div>
+        <div class="step-card" style="border-color:#805ad5">
+          <span class="step-num" style="color:#805ad5">9</span>
+          <span class="step-name">NLP Enrich</span>
+          <span class="step-desc">ชื่อ/เบอร์/ID/PP</span>
+        </div>
+        <div class="step-card" style="border-color:#805ad5">
+          <span class="step-num" style="color:#805ad5">10</span>
+          <span class="step-name">Classify</span>
+          <span class="step-desc">IN/OUT/TRANSFER</span>
+        </div>
+        <div class="step-card" style="border-color:#d69e2e">
+          <span class="step-num" style="color:#d69e2e">11</span>
+          <span class="step-name">Build Links</span>
+          <span class="step-desc">from→to accounts</span>
+        </div>
+        <div class="step-card" style="border-color:#d69e2e">
+          <span class="step-num" style="color:#d69e2e">12</span>
+          <span class="step-name">Overrides</span>
+          <span class="step-desc">แก้ไขจาก analyst</span>
+        </div>
+        <div class="step-card" style="border-color:#fc8181">
+          <span class="step-num" style="color:#fc8181">13</span>
+          <span class="step-name">Build Entity</span>
+          <span class="step-desc">สร้าง Entity list</span>
+        </div>
+        <div class="step-card" style="border-color:#fc8181">
+          <span class="step-num" style="color:#fc8181">14</span>
+          <span class="step-name">Export</span>
+          <span class="step-desc">Account Package</span>
+        </div></div>
+      </div>
+    </section>
+    
+
+    <section class="slide">
+      <div class="slide-inner">
+        <h2 class="slide-title">การนำเข้าข้อมูล — ครบทุกรูปแบบ</h2>
+        <div class="three-col">
+        <div class="card">
+          <h3 class="card-title navy">8 ธนาคารไทย Auto-detect</h3>
+          <ul class="bullet-list green-bullet"><li><b>SCB</b> — ไทยพาณิชย์</li>
+<li><b>KBANK</b> — กสิกรไทย</li>
+<li><b>BBL</b> — กรุงเทพ</li>
+<li><b>KTB</b> — กรุงไทย</li>
+<li><b>BAY</b> — กรุงศรี</li>
+<li><b>TTB</b> — ทหารไทยธนชาต</li>
+<li><b>GSB</b> — ออมสิน</li>
+<li><b>BAAC</b> — ธ.ก.ส.</li></ul>
+        </div>
+        <div class="card">
+          <h3 class="card-title navy">รูปแบบไฟล์ + OCR</h3>
+          <ul class="bullet-list green-bullet"><li><b>Excel</b> (.xlsx / .xls) — ทุกธนาคาร</li>
+<li><b>PDF</b> ข้อความ — pdfplumber extraction</li>
+<li><b>PDF สแกน</b> — EasyOCR + table reconstruction</li>
+<li><b>รูปภาพ</b> (JPG/PNG/BMP) — EasyOCR Thai+EN</li>
+<li><b>OFX</b> — ธนาคารออนไลน์</li>
+<li><b>SHA-256</b> ตรวจจับไฟล์ซ้ำอัตโนมัติ</li></ul>
+        </div>
+        <div class="card">
+          <h3 class="card-title navy">Smart Column Mapping</h3>
+          <ul class="bullet-list green-bullet"><li><b>3-tier Fuzzy</b> — exact → alias → fuzzy</li>
+<li><b>Self-learning</b> — จำ profile ที่เคย mapping</li>
+<li><b>Body keywords</b> — ตรวจจากเนื้อหาไฟล์</li>
+<li><b>Re-process</b> — mapping ผิด? ทำใหม่ได้</li>
+<li><b>NLP</b> — ชื่อไทย, เบอร์, บัตร ปชช., PromptPay</li></ul>
+        </div></div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-dark">
+      <div class="slide-inner">
+        <h2 class="slide-title white">กราฟเครือข่าย — mini i2 Analyst's Notebook</h2>
+        <p class="slide-sub light-blue">Link Chart 815 บรรทัด — Interactive Multi-hop Expand ไม่จำกัดความลึก</p>
+        <div class="two-col">
+          <div class="card card-dark border-gold">
+            <h3 class="card-title gold">Multi-hop Link Chart</h3>
+            <ul class="bullet-list white-text"><li class="gold-bullet">กดขยายเครือข่าย<b>ทีละชั้น ไม่จำกัดความลึก</b></li>
+<li class="gold-bullet"><b>5 Layout</b>: Circle, Spread, Compact, Hierarchy, Peacock</li>
+<li class="gold-bullet"><b>Conditional Formatting</b> — ขนาด node ตามยอดเงิน</li>
+<li class="gold-bullet">สี border ตาม<b>ระดับความเสี่ยง</b>จาก alert</li>
+<li class="gold-bullet"><b>Edge labels</b> แสดง/ซ่อนยอดเงินบน edge</li>
+<li class="gold-bullet"><b>Pin / Hide / Multi-select</b> จัดระเบียบกราฟ</li>
+<li class="gold-bullet"><b>Focus History</b> — ดูประวัติการสำรวจ node</li>
+<li class="gold-bullet"><b>Export PNG</b> สำหรับใช้ในรายงาน</li></ul>
+          </div>
+          <div class="card card-dark border-gold">
+            <h3 class="card-title gold">SNA + Path Tracing</h3>
+            <ul class="bullet-list white-text"><li class="gold-bullet"><b>Degree Centrality</b> — บัญชีเชื่อมต่อมากสุด</li>
+<li class="gold-bullet"><b>Betweenness</b> — บัญชี<b>ตัวกลาง</b> (broker)</li>
+<li class="gold-bullet"><b>Closeness</b> — เข้าถึงทุกจุดเร็วสุด</li>
+<li class="gold-bullet"><b>BFS Path Finder</b> — ตามเงิน A→B→C→D <b>4 ทอด</b></li>
+<li class="gold-bullet"><b>Graph Annotations</b> — จดบันทึกบน node ได้</li>
+<li class="gold-bullet"><b>Tags</b>: ผู้ต้องสงสัย, พยาน, เหยื่อ, ตรวจสอบเพิ่ม</li>
+<li class="gold-bullet"><b>Workspace</b> — บันทึก/โหลด chart state</li>
+<li class="gold-bullet"><b>Entity Profile</b> — หน้ารวมข้อมูลบุคคล/บัญชี</li></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+
+    <section class="slide">
+      <div class="slide-inner">
+        <h2 class="slide-title">การแสดงผล — Timeline, Heatmap, Dashboard</h2>
+        <div class="three-col">
+        <div class="card" style="border-top:4px solid #2b6cb0">
+          <h3 class="card-title" style="color:#2b6cb0">Timeline Chart</h3>
+          <ul class="bullet-list green-bullet"><li><b>Recharts</b> — Bar + Dot mode</li>
+<li>Granularity: <b>วัน / สัปดาห์ / เดือน</b></li>
+<li>ดูรูปแบบธุรกรรมตามเวลา</li>
+<li><b>ตรวจจับช่วงเวลาผิดปกติ</b></li></ul>
+        </div>
+        <div class="card" style="border-top:4px solid #805ad5">
+          <h3 class="card-title" style="color:#805ad5">Time Wheel (Heatmap)</h3>
+          <ul class="bullet-list green-bullet"><li><b>Custom SVG</b> — Hour x Day</li>
+<li>24 ชม. x 7 วัน = <b>168 ช่อง</b></li>
+<li>สีตามความถี่ธุรกรรม</li>
+<li><b>ตรวจจับเวลาผิดปกติ</b> (ตี 2-5)</li></ul>
+        </div>
+        <div class="card" style="border-top:4px solid #38a169">
+          <h3 class="card-title" style="color:#38a169">Dashboard</h3>
+          <ul class="bullet-list green-bullet"><li><b>สรุปภาพรวม</b> — สถิติ, เงินเข้า/ออก</li>
+<li><b>Recent Activity</b> — ธุรกรรมล่าสุด</li>
+<li><b>Top Accounts</b> — บัญชียอดสูงสุด</li>
+<li><b>Code-split</b> — React.lazy + Suspense</li></ul>
+        </div></div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-orange">
+      <div class="slide-inner">
+        <h2 class="slide-title white">ระบบแจ้งเตือนอัตโนมัติ — 12 รูปแบบ</h2>
+        <div class="three-col">
+        <div class="card card-orange">
+          <h3 class="card-title gold-light">7 กฎกราฟเครือข่าย</h3>
+          <ul class="bullet-list white-text"><li class="gold-bullet"><b>Repeated Transfers</b> — คู่เดิม ≥3 ครั้ง</li>
+<li class="gold-bullet"><b>Fan-in</b> — เงินเข้าจาก ≥3 แหล่ง</li>
+<li class="gold-bullet"><b>Fan-out</b> — เงินออกไป ≥3 เป้า</li>
+<li class="gold-bullet"><b>Circular Paths</b> — เงินวน A⇄B</li>
+<li class="gold-bullet"><b>Pass-through</b> — รับแล้วโอนต่อทันที</li>
+<li class="gold-bullet"><b>High-degree Hub</b> — เชื่อม ≥6 บัญชี</li>
+<li class="gold-bullet"><b>Repeated Counterparty</b> — คนเดิมหลายวัน</li></ul>
+        </div>
+        <div class="card card-orange">
+          <h3 class="card-title gold-light">5 รูปแบบฟอกเงิน FATF</h3>
+          <ul class="bullet-list white-text"><li class="gold-bullet"><b>Smurfing</b> — แบ่งรายการย่อย หลีกเลี่ยงเกณฑ์</li>
+<li class="gold-bullet"><b>Layering</b> — สร้างชั้นธุรกรรมซ้อนทับ</li>
+<li class="gold-bullet"><b>Rapid Movement</b> — เข้า-ออกภายใน 24 ชม.</li>
+<li class="gold-bullet"><b>Dormant Activation</b> — บัญชีนิ่ง→ใช้ทันที</li>
+<li class="gold-bullet"><b>Round-tripping</b> — เงินวนกลับแหล่งเดิม</li></ul>
+        </div>
+        <div class="card card-orange">
+          <h3 class="card-title gold-light">4 วิธีทางสถิติ</h3>
+          <ul class="bullet-list white-text"><li class="gold-bullet"><b>Z-score</b> — เบี่ยงเบน &gt;Nσ</li>
+<li class="gold-bullet"><b>IQR</b> — Q1-1.5xIQR ถึง Q3+1.5xIQR</li>
+<li class="gold-bullet"><b>Benford's Law</b> — หลักแรกผิดปกติ</li>
+<li class="gold-bullet"><b>Moving Average</b> — เบี่ยงจากค่าเฉลี่ย 30 รายการ</li></ul>
+        </div></div>
+      </div>
+    </section>
+    
+
+    <section class="slide">
+      <div class="slide-inner">
+        <h2 class="slide-title">การวิเคราะห์ข้ามบัญชี + Investigation Desk + รายงาน</h2>
+        <div class="two-col" style="margin-bottom:0.8rem">
+          <div class="card border-blue">
+            <h3 class="card-title blue">Cross-Account Analysis</h3>
+            <ul class="bullet-list green-bullet"><li><b>Fund Flow</b> — เงินเข้า/ออกของบัญชีใดก็ได้</li>
+<li><b>Pairwise</b> — ธุรกรรมทั้งหมดระหว่าง 2 บัญชี</li>
+<li><b>BFS Path Finder</b> — A→B→C→D สูงสุด <b>4 ทอด</b></li>
+<li><b>Bulk Cross-Match</b> — จับคู่ข้ามทุกบัญชีพร้อมกัน</li>
+<li><b>Multi-period</b> — เปรียบเทียบ 2 ช่วงเวลา</li></ul>
+          </div>
+          <div class="card border-purple">
+            <h3 class="card-title purple">Investigation Desk — 13 แท็บ</h3>
+            <ul class="bullet-list"><li class="purple-bullet"><b>Database</b> │ Files │ Parser Runs │ <b>Accounts</b> │ <b>Search</b></li>
+<li class="purple-bullet"><b>Alerts</b> │ <b>Cross-Account</b> │ <b>Link Chart</b> │ <b>Timeline</b></li>
+<li class="purple-bullet">Duplicates │ Matches │ <b>Audit</b> │ <b>Exports</b></li></ul>
+          </div>
+        </div>
+        <div class="card border-gold full-width">
+          <h3 class="card-title gold">รายงานพร้อมใช้งาน — 6 รูปแบบ</h3>
+          <div class="report-grid"><div class="report-row"><span class="report-fmt">Excel (.xlsx)</span><span class="report-desc">14+ ชีท, TH Sarabun New, สีตามประเภท, สูตร =SUM/=COUNTA, auto-filter</span></div><div class="report-row"><span class="report-fmt">PDF</span><span class="report-desc">ปก + สถิติ + คู่สัญญา + alerts + ธุรกรรม + ช่องลงนาม</span></div><div class="report-row"><span class="report-fmt">i2 Chart (.anx)</span><span class="report-desc">เปิดใน Analyst's Notebook ได้ทันที — XML format</span></div><div class="report-row"><span class="report-fmt">i2 Import (.csv+.ximp)</span><span class="report-desc">CSV data 29 คอลัมน์ + XML spec สำหรับ import</span></div><div class="report-row"><span class="report-fmt">STR / CTR</span><span class="report-desc">รูปแบบรายงาน ปปง. พร้อมส่ง — regulatory compliance</span></div><div class="report-row"><span class="report-fmt">CSV</span><span class="report-desc">transactions, entities, links, reconciliation, graph data</span></div></div>
+        </div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-vdark">
+      <div class="slide-inner">
+        <h2 class="slide-title white">ความปลอดภัย, Chain of Custody, ภาษาไทย</h2>
+        <div class="three-col">
+        <div class="card card-dark">
+          <h3 class="card-title" style="color:#63b3ed">Authentication</h3>
+          <ul class="bullet-list white-text" style="--bullet-color:#63b3ed"><li><b>JWT</b> tokens + 3 ระดับ: Admin/Analyst/Viewer</li>
+<li><b>PBKDF2-SHA256</b> 100,000 iterations</li>
+<li><b>Rate Limiting</b> — 10 req/min login</li>
+<li><b>Configurable</b> — BSIE_AUTH_REQUIRED env</li></ul>
+        </div>
+        <div class="card card-dark">
+          <h3 class="card-title" style="color:#fc8181">Security Headers</h3>
+          <ul class="bullet-list white-text" style="--bullet-color:#fc8181"><li><b>X-Frame-Options</b>: DENY</li>
+<li><b>X-Content-Type-Options</b>: nosniff</li>
+<li><b>Referrer-Policy</b>: no-referrer</li>
+<li><b>Upload Allowlist</b> — .xlsx/.pdf/.csv/.png</li>
+<li><b>Max Body Size</b>: 50 MB</li></ul>
+        </div>
+        <div class="card card-dark">
+          <h3 class="card-title" style="color:#d69e2e">Chain of Custody</h3>
+          <ul class="bullet-list white-text" style="--bullet-color:#d69e2e"><li><b>Audit Trail</b> — ใคร/ทำอะไร/เมื่อไหร่</li>
+<li><b>Chain of Custody</b> — ประวัติครบถ้วน</li>
+<li><b>/api/audit-trail/{type}/{id}</b></li>
+<li><b>SHA-256</b> file integrity verification</li>
+<li><b>File Metadata</b> — forensic checks</li></ul>
+        </div></div>
+        <div class="thai-bar">
+          <p>ภาษาไทยเต็มระบบ: UI สลับ ไทย/อังกฤษ │ ~500 คีย์แปลภาษา │ TH Sarabun New ทุกรายงาน</p>
+          <p>NLP ชื่อไทย/เบอร์/บัตร ปชช./PromptPay │ 244 ชุดทดสอบ (212 backend + 32 frontend)</p>
+        </div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-red">
+      <div class="slide-inner">
+        <h2 class="slide-title white">ทำไมต้อง Local LLM — ห้ามใช้ Cloud AI</h2>
+        <div class="two-col">
+          <div class="card card-dred">
+            <h3 class="card-title salmon">เหตุผลความจำเป็น</h3>
+            <ul class="bullet-list white-text"><li class="salmon-bullet"><b>ความลับทางราชการ</b> — ระดับ 'ลับ' / 'ลับมาก'</li>
+<li class="salmon-bullet"><b>พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล</b> (PDPA)</li>
+<li class="salmon-bullet"><b>Training Data Risk</b> — Cloud LLM อาจนำข้อมูลไปเรียนรู้</li>
+<li class="salmon-bullet"><b>Chain of Custody</b> — หลักฐานต้องไม่ผ่านระบบภายนอก</li>
+<li class="salmon-bullet"><b>ระเบียบ สตช.</b> — ข้อมูลอยู่ในโครงข่ายภายใน</li>
+<li class="salmon-bullet"><b>ป้องกันรั่วไหล</b> — เลขบัญชี, ชื่อผู้ต้องสงสัย, เส้นทางเงิน</li></ul>
+          </div>
+          <div class="card card-dred">
+            <h3 class="card-title salmon">Local LLM ทำอะไรได้</h3>
+            <ul class="bullet-list white-text"><li class="salmon-bullet"><b>สรุปคดีอัตโนมัติ</b> — พบเงินเข้า 15 บัญชี 3.2 ล.</li>
+<li class="salmon-bullet"><b>ตอบคำถาม</b> — บัญชีนี้มีธุรกรรมเกิน 1 แสน?</li>
+<li class="salmon-bullet"><b>จำแนกธุรกรรม</b> — ช่วย classify ที่ไม่มั่นใจ</li>
+<li class="salmon-bullet"><b>ตรวจจับรูปแบบ</b> — structuring, smurfing?</li>
+<li class="salmon-bullet"><b>ร่าง STR/CTR</b> narrative อัตโนมัติ</li></ul>
+            <p class="note-pink">แนะนำ: Ollama + Llama 3.1 70B / Typhoon<br>GPU: NVIDIA RTX 4090 (24GB) หรือ A6000 (48GB)<br>ติดตั้งง่าย — API เหมือน OpenAI</p>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-vdark">
+      <div class="slide-inner">
+        <h2 class="slide-title white">โครงสร้างพื้นฐาน — Phase 1 ถึง 4</h2>
+        <div class="two-col" style="margin-bottom:0.8rem">
+          <div class="card card-dark border-mint">
+            <h3 class="card-title mint">Phase 1: Standalone (ฟรี)</h3>
+            <pre class="infra-tree">PC/Mac พนักงานสอบสวน
+  └── BSIE (localhost:8757)
+        ├── FastAPI backend
+        ├── React frontend
+        └── SQLite database
+ไม่ต้องใช้ server ใดๆ</pre>
+          </div>
+          <div class="card card-dark border-sky">
+            <h3 class="card-title sky">Phase 2: สถานีตำรวจ</h3>
+            <pre class="infra-tree">Server จังหวัด
+  ├── BSIE + Nginx (HTTPS)
+  ├── PostgreSQL Database
+  ├── Local LLM (Ollama+GPU)
+  └── File Storage
+PC สอบสวน 1-30 → Browser → HTTPS</pre>
+          </div>
+        </div>
+        <div class="card card-dark border-gold full-width">
+          <h3 class="card-title gold">Phase 3-4: ระดับจังหวัด / ภาค / ประเทศ (On-Premise)</h3>
+          <div class="two-col">
+            <pre class="infra-tree">Data Center จังหวัด / ภาค
+  ├── Load Balancer (Nginx)
+  ├── BSIE Backend x2-3
+  ├── PostgreSQL (primary+replica)
+  ├── Redis (cache + session)
+  ├── NAS/SAN (evidence)
+  ├── Monitoring (Prometheus+Grafana)
+  └── Backup server</pre>
+            <pre class="infra-tree">Local LLM Cluster
+  ├── GPU Server x1-2 per ภาค
+  ├── NVIDIA A6000 x2 per server
+  └── Llama 3.1 70B + Typhoon
+
+เชื่อม VPN/HTTPS:
+  สถานี อ.เมือง → VPN
+  สถานี อ.เกาะสมุย → VPN
+  บก.จว. → VPN</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-vdark">
+      <div class="slide-inner">
+        <h2 class="slide-title white">Roadmap การพัฒนา SPNI Platform</h2>
+        <div class="road-year-marks">
+          <span>พ.ศ. 2569</span><span>2570</span><span>2571</span><span>2572+</span>
+        </div>
+        <div class="road-timeline">
+          <div class="road-axis"></div>
+          <div class="road-phases">
+        <div class="road-phase">
+          <div class="road-deliverables"><ul><li>BSIE v4.0 Pilot</li>
+<li>ทดลอง 5-10 คดีจริง</li>
+<li>เก็บ feedback</li></ul></div>
+          <div class="road-bar" style="background:#38a169">
+            <span class="road-name">Phase 1</span>
+            <span class="road-sub">Pilot</span>
+          </div>
+          <div class="road-diamond" style="background:#38a169"></div>
+          <div class="road-badge" style="border-color:#38a169;color:#38a169">ฟรี</div>
+          <div class="road-time">เดือน 1-3</div>
+        </div>
+        <div class="road-phase">
+          <div class="road-deliverables"><ul><li>Server 5 จังหวัด</li>
+<li>PostgreSQL + Multi-user</li>
+<li>Local LLM + GPU</li>
+<li>อบรม 5 จังหวัด</li></ul></div>
+          <div class="road-bar" style="background:#2b6cb0">
+            <span class="road-name">Phase 2</span>
+            <span class="road-sub">จังหวัดนำร่อง</span>
+          </div>
+          <div class="road-diamond" style="background:#2b6cb0"></div>
+          <div class="road-badge" style="border-color:#2b6cb0;color:#2b6cb0">~8 ล้าน</div>
+          <div class="road-time">เดือน 4-9</div>
+        </div>
+        <div class="road-phase">
+          <div class="road-deliverables"><ul><li>CDR Module (โมดูล 2)</li>
+<li>Shared Intelligence Layer</li>
+<li>Mobile App</li>
+<li>ขยาย 20 จังหวัด</li></ul></div>
+          <div class="road-bar" style="background:#dd6b20">
+            <span class="road-name">Phase 3</span>
+            <span class="road-sub">SPNI Foundation</span>
+          </div>
+          <div class="road-diamond" style="background:#dd6b20"></div>
+          <div class="road-badge" style="border-color:#dd6b20;color:#dd6b20">~40 ล้าน</div>
+          <div class="road-time">เดือน 10-21</div>
+        </div>
+        <div class="road-phase">
+          <div class="road-deliverables"><ul><li>Social + CCTV Module</li>
+<li>77 จว. ทั้งประเทศ</li>
+<li>Data Center x10 ภาค</li>
+<li>เชื่อม ปปง./DSI</li></ul></div>
+          <div class="road-bar" style="background:#e53e3e">
+            <span class="road-name">Phase 4</span>
+            <span class="road-sub">ระดับประเทศ</span>
+          </div>
+          <div class="road-diamond" style="background:#e53e3e"></div>
+          <div class="road-badge" style="border-color:#e53e3e;color:#e53e3e">~120 ล้าน</div>
+          <div class="road-time">ปีที่ 3+</div>
+        </div></div>
+        </div>
+        <div class="road-total">
+          <span class="road-total-label">งบประมาณรวม 3 ปี</span>
+          <span class="road-total-val">~170 ล้านบาท │ ฟรี → 8 ล้าน → 40 ล้าน → 120 ล้าน</span>
+        </div>
+        <p class="note-sm white" style="margin-top:0.5rem">Phase 1 เริ่มได้ทันที (ฟรี) → Phase 2 ของบหลัง pilot สำเร็จ → Phase 3-4 ขยายตามผลลัพธ์จริง</p>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-gold">
+      <div class="slide-inner">
+        <h2 class="slide-title dark">งบประมาณระดับประเทศ — SPNI Platform</h2>
+        <div class="budget-list">
+        <div class="budget-phase">
+          <div class="budget-header">
+            <span class="budget-phase-name" style="color:#38a169">Phase 1: Pilot (3 เดือน)</span>
+            <span class="budget-total-badge" style="background:#38a169">ฟรี</span>
+          </div>
+          <div class="budget-item"><span class="budget-desc">ใช้เครื่อง PC ที่มีอยู่ + ซอฟต์แวร์ BSIE v4.0</span><span class="budget-cost">ฟรี</span></div>
+        </div>
+        <div class="budget-phase">
+          <div class="budget-header">
+            <span class="budget-phase-name" style="color:#2b6cb0">Phase 2: จังหวัดนำร่อง 5 จังหวัด (6 เดือน)</span>
+            <span class="budget-total-badge" style="background:#2b6cb0">~8 ล้าน</span>
+          </div>
+          <div class="budget-item"><span class="budget-desc">Application Server x5 (CPU 8-core, 32GB, 1TB SSD)</span><span class="budget-cost">1,500,000 ฿</span></div><div class="budget-item"><span class="budget-desc">GPU Server สำหรับ Local LLM x5 (RTX 4090/A6000)</span><span class="budget-cost">5,000,000 ฿</span></div><div class="budget-item"><span class="budget-desc">Network / UPS / อุปกรณ์ x5 จังหวัด</span><span class="budget-cost">500,000 ฿</span></div><div class="budget-item"><span class="budget-desc">PostgreSQL Migration + พัฒนาเพิ่มเติม</span><span class="budget-cost">500,000 ฿</span></div><div class="budget-item"><span class="budget-desc">อบรมพนักงานสอบสวน 5 จังหวัด</span><span class="budget-cost">300,000 ฿</span></div>
+        </div>
+        <div class="budget-phase">
+          <div class="budget-header">
+            <span class="budget-phase-name" style="color:#dd6b20">Phase 3: SPNI Foundation + ขยาย 20 จังหวัด (12 เดือน)</span>
+            <span class="budget-total-badge" style="background:#dd6b20">~40 ล้าน</span>
+          </div>
+          <div class="budget-item"><span class="budget-desc">CDR Analysis Module (โมดูล 2)</span><span class="budget-cost">8,000,000 ฿</span></div><div class="budget-item"><span class="budget-desc">Server + GPU x20 จังหวัด</span><span class="budget-cost">20,000,000 ฿</span></div><div class="budget-item"><span class="budget-desc">Shared Intelligence Layer + Mobile App</span><span class="budget-cost">7,000,000 ฿</span></div><div class="budget-item"><span class="budget-desc">ทีมพัฒนา 5-8 คน x 12 เดือน</span><span class="budget-cost">5,000,000 ฿</span></div>
+        </div>
+        <div class="budget-phase">
+          <div class="budget-header">
+            <span class="budget-phase-name" style="color:#e53e3e">Phase 4: ทั้งประเทศ 77 จังหวัด + 10 ภาค (ปีที่ 2-3)</span>
+            <span class="budget-total-badge" style="background:#e53e3e">~120 ล้าน</span>
+          </div>
+          <div class="budget-item"><span class="budget-desc">Social Media + CCTV Module (โมดูล 3-4)</span><span class="budget-cost">30,000,000 ฿</span></div><div class="budget-item"><span class="budget-desc">Data Center ระดับภาค x10 + GPU Cluster</span><span class="budget-cost">40,000,000 ฿</span></div><div class="budget-item"><span class="budget-desc">Deploy 77 จังหวัด — server + network</span><span class="budget-cost">30,000,000 ฿</span></div><div class="budget-item"><span class="budget-desc">ทีมพัฒนา + DevOps 15 คน + อบรมทั่วประเทศ</span><span class="budget-cost">20,000,000 ฿</span></div>
+        </div></div>
+        <div class="budget-grand">
+          <span class="budget-grand-label">รวมทั้งโครงการ 3 ปี</span>
+          <span class="budget-grand-val">~170 ล้านบาท</span>
+        </div>
+      </div>
+    </section>
+    
+
+    <section class="slide">
+      <div class="slide-inner">
+        <h2 class="slide-title">จุดเด่นของงบประมาณ SPNI</h2>
+        <div class="highlights-list">
+        <div class="highlight-card">
+          <div class="highlight-bar" style="background:#38a169"></div>
+          <div class="highlight-body">
+            <h3 class="highlight-title" style="color:#38a169">ไม่มีค่า license รายปี</h3>
+            <p class="highlight-desc">ซอฟต์แวร์ทั้งหมดพัฒนาเอง + Open Source — จ่ายครั้งเดียว ใช้ตลอด<br>เปรียบเทียบ: i2 = 500,000 ฿/คน/ปี x 1,484 สถานี = 742 ล้าน/ปี</p>
+          </div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-bar" style="background:#2b6cb0"></div>
+          <div class="highlight-body">
+            <h3 class="highlight-title" style="color:#2b6cb0">ขยายได้ไม่จำกัด</h3>
+            <p class="highlight-desc">เพิ่มสถานีใหม่ = แค่เพิ่ม server ไม่ต้องจ่าย license เพิ่ม<br>รองรับ 1,484 สถานี ~15,000-20,000 พนักงานสอบสวนทั่วประเทศ</p>
+          </div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-bar" style="background:#dd6b20"></div>
+          <div class="highlight-body">
+            <h3 class="highlight-title" style="color:#dd6b20">Customizable เต็มที่</h3>
+            <p class="highlight-desc">มีโค้ดทั้งหมด — แก้ไข ปรับแต่ง เพิ่มฟีเจอร์ ได้เอง<br>ไม่ต้องพึ่งบริษัทต่างชาติ — เป็นสมบัติของ สตช.</p>
+          </div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-bar" style="background:#e53e3e"></div>
+          <div class="highlight-body">
+            <h3 class="highlight-title" style="color:#e53e3e">Data Sovereignty</h3>
+            <p class="highlight-desc">ข้อมูลทั้งหมดอยู่ใน On-Premise Server ของ สตช.<br>ไม่มีข้อมูลคดีออกนอกประเทศ — Local LLM เท่านั้น</p>
+          </div>
+        </div></div>
+      </div>
+    </section>
+    
+
+    <section class="slide">
+      <div class="slide-inner">
+        <h2 class="slide-title">เปรียบเทียบกับซอฟต์แวร์ทางการค้า</h2>
+        <div class="comp-table-wrap">
+          <table class="comp-table">
+            <thead><tr><th>คุณสมบัติ</th><th>BSIE (SPNI)</th><th>i2 Analyst's NB</th><th>Cellebrite Fin.</th></tr></thead>
+            <tbody><tr><td class="comp-label">ราคา</td><td class="comp-green">ฟรี</td><td>500,000 ฿/คน/ปี</td><td>300,000 ฿/คน/ปี</td></tr><tr><td class="comp-label">1,484 สถานี/ปี</td><td>ค่า server เท่านั้น</td><td>742+ ล้าน/ปี</td><td>445+ ล้าน/ปี</td></tr><tr><td class="comp-label">ภาษาไทย</td><td class="comp-green">&#10003; เต็มระบบ</td><td class="comp-red">&#10007;</td><td class="comp-red">&#10007;</td></tr><tr><td class="comp-label">ธนาคารไทย 8 แห่ง</td><td class="comp-green">&#10003; Auto-detect</td><td class="comp-red">&#10007; setup เอง</td><td class="comp-gold">~ บางส่วน</td></tr><tr><td class="comp-label">กราฟเครือข่าย</td><td class="comp-green">&#10003; mini i2 (5 layout)</td><td>V เต็มรูปแบบ</td><td>V</td></tr><tr><td class="comp-label">PDF/OCR ภาษาไทย</td><td class="comp-green">&#10003; EasyOCR</td><td class="comp-red">&#10007;</td><td class="comp-gold">~</td></tr><tr><td class="comp-label">รายงาน ปปง.</td><td class="comp-green">&#10003; STR/CTR</td><td class="comp-red">&#10007;</td><td class="comp-gold">~</td></tr><tr><td class="comp-label">PromptPay</td><td class="comp-green">&#10003;</td><td class="comp-red">&#10007;</td><td class="comp-red">&#10007;</td></tr><tr><td class="comp-label">Threat Hunting FATF</td><td class="comp-green">&#10003; 5 รูปแบบ</td><td class="comp-red">&#10007;</td><td class="comp-gold">~</td></tr><tr><td class="comp-label">Anomaly Detection</td><td class="comp-green">&#10003; 4 วิธี</td><td class="comp-gold">~ บางส่วน</td><td class="comp-gold">~</td></tr><tr><td class="comp-label">Local LLM AI</td><td class="comp-green">&#10003; Ollama</td><td class="comp-red">&#10007;</td><td class="comp-red">&#10007;</td></tr><tr><td class="comp-label">Customizable</td><td class="comp-green">&#10003; มีโค้ดทั้งหมด</td><td class="comp-red">&#10007; Closed</td><td class="comp-red">&#10007; Closed</td></tr><tr><td class="comp-label">Data Sovereignty</td><td class="comp-green">&#10003; On-Premise 100%</td><td class="comp-gold">~ ขึ้นกับ deploy</td><td class="comp-gold">~</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-vdark">
+      <div class="slide-inner">
+        <h2 class="slide-title white">ขนาดโปรเจค BSIE v4.0 — ตัวเลข</h2>
+        <div class="stat-grid">
+        <div class="stat-card">
+          <span class="stat-num" style="color:#38a169">161</span>
+          <span class="stat-label">Python Files</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#63b3ed">41</span>
+          <span class="stat-label">React/TS Files</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#d69e2e">~41,000</span>
+          <span class="stat-label">Lines of Code</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#2b6cb0">120+</span>
+          <span class="stat-label">API Endpoints</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#48bb78">21</span>
+          <span class="stat-label">API Routers</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#d6bcfa">34</span>
+          <span class="stat-label">Services</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#dd6b20">30</span>
+          <span class="stat-label">Core Modules</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#63b3ed">20</span>
+          <span class="stat-label">DB Tables</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#38a169">244</span>
+          <span class="stat-label">Automated Tests</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#d69e2e">500+</span>
+          <span class="stat-label">i18n Keys</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#e53e3e">8</span>
+          <span class="stat-label">ธนาคารไทย</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#805ad5">14</span>
+          <span class="stat-label">Pipeline Steps</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#dd6b20">12</span>
+          <span class="stat-label">Alert Patterns</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#e53e3e">5</span>
+          <span class="stat-label">FATF Models</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#d6bcfa">4</span>
+          <span class="stat-label">Anomaly Methods</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-num" style="color:#2b6cb0">13</span>
+          <span class="stat-label">Investigation Tabs</span>
+        </div></div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-green">
+      <div class="slide-inner">
+        <h2 class="slide-title white">ROI — ผลตอบแทนการลงทุน</h2>
+        <div class="roi-list">
+        <div class="roi-row">
+          <span class="roi-label">เวลาวิเคราะห์</span>
+          <div class="roi-bar-bg">
+            <div class="roi-bar-fill" style="width:95%;background:#fc8181"></div>
+            <span class="roi-bar-text">จาก 3-5 วัน → 30 นาที ต่อคดี</span>
+          </div>
+        </div>
+        <div class="roi-row">
+          <span class="roi-label">ค่า license</span>
+          <div class="roi-bar-bg">
+            <div class="roi-bar-fill" style="width:100%;background:#d69e2e"></div>
+            <span class="roi-bar-text">ประหยัด 742+ ล้านบาท/ปี (vs i2 1,484 สถานี)</span>
+          </div>
+        </div>
+        <div class="roi-row">
+          <span class="roi-label">ข้อผิดพลาด</span>
+          <div class="roi-bar-bg">
+            <div class="roi-bar-fill" style="width:75%;background:#63b3ed"></div>
+            <span class="roi-bar-text">ลดข้อผิดพลาดจากวิเคราะห์ด้วยมือ — ลดอุทธรณ์</span>
+          </div>
+        </div>
+        <div class="roi-row">
+          <span class="roi-label">ตรวจจับเร็ว</span>
+          <div class="roi-bar-bg">
+            <div class="roi-bar-fill" style="width:85%;background:#48bb78"></div>
+            <span class="roi-bar-text">ป้องกันความเสียหายล่วงหน้า — ฟอกเงิน, ฉ้อโกง</span>
+          </div>
+        </div>
+        <div class="roi-row">
+          <span class="roi-label">ครอบคลุม</span>
+          <div class="roi-bar-bg">
+            <div class="roi-bar-fill" style="width:80%;background:#d6bcfa"></div>
+            <span class="roi-bar-text">1,484 สถานีตำรวจ — 77 จังหวัดทั่วประเทศ</span>
+          </div>
+        </div></div>
+        <div class="roi-bottom">คืนทุนใน 1 ปี — ค่า license i2 ปีเดียว &gt; งบ SPNI ทั้ง 3 ปี</div>
+      </div>
+    </section>
+    
+
+    <section class="slide">
+      <div class="slide-inner">
+        <h2 class="slide-title">ทีมพัฒนา + ประมาณการผู้ใช้งาน</h2>
+        <div class="two-col" style="margin-bottom:0.8rem">
+          <div class="card border-green">
+            <h3 class="card-title green">Phase 1-2: ทำได้คนเดียว + AI</h3>
+            <ul class="bullet-list green-bullet"><li>ผู้พัฒนาปัจจุบัน (ร.ต.อ.ณัฐวุฒิ) + <b>Claude AI</b></li>
+<li>ผลงาน: <b>41,000 บรรทัด</b>, 244 tests, 120+ API</li>
+<li>เพียงพอสำหรับ pilot + จังหวัดนำร่อง</li></ul>
+          </div>
+          <div class="card border-orange">
+            <h3 class="card-title orange">Phase 3-4: ต้องการทีม 8-12 คน</h3>
+            <ul class="bullet-list"><li class="orange-bullet">Backend Dev <b>2-3</b> │ Frontend Dev <b>1-2</b></li>
+<li class="orange-bullet">DevOps <b>1-2</b> │ AI/ML Engineer <b>1</b></li>
+<li class="orange-bullet">QA <b>1-2</b> │ Project Manager <b>1</b></li></ul>
+          </div>
+        </div>
+        <div class="card border-blue full-width">
+          <h3 class="card-title blue">ประมาณการผู้ใช้งาน — จากจังหวัดสู่ทั้งประเทศ</h3>
+          <table class="user-table">
+            <thead><tr><th>ระดับ</th><th>ผู้ใช้พร้อมกัน</th><th>ธุรกรรม/เดือน</th><th>Storage/ปี</th></tr></thead>
+            <tbody><tr><td>Phase 1 (pilot)</td><td>1-3 คน</td><td>10,000</td><td>1 GB</td></tr><tr><td>Phase 2 (5 จังหวัด)</td><td>50-150 คน</td><td>500,000</td><td>50 GB</td></tr><tr><td>Phase 3 (20 จังหวัด)</td><td>200-600 คน</td><td>2,000,000</td><td>200 GB</td></tr><tr><td>Phase 4 (ทั้งประเทศ)</td><td>2,000-5,000 คน</td><td>10,000,000+</td><td>1+ TB</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    
+
+    <section class="slide slide-dark">
+      <div class="slide-inner closing-slide">
+        <h2 class="slide-title white mega-close">สรุปและขั้นตอนถัดไป</h2>
+        <div class="gold-line"></div>
+        <div class="close-steps">
+        <div class="close-step">
+          <span class="close-num" style="color:#48bb78">1.</span>
+          <span class="close-text">BSIE v4.0 พร้อมใช้วันนี้ — ไม่ต้องรองบประมาณ</span>
+        </div>
+        <div class="close-step">
+          <span class="close-num" style="color:#63b3ed">2.</span>
+          <span class="close-text">ทดลอง Pilot กับคดีจริง 5-10 คดี (ฟรี)</span>
+        </div>
+        <div class="close-step">
+          <span class="close-num" style="color:#d69e2e">3.</span>
+          <span class="close-text">เก็บ feedback จากพนักงานสอบสวน</span>
+        </div>
+        <div class="close-step">
+          <span class="close-num" style="color:#fc8181">4.</span>
+          <span class="close-text">เสนองบ Phase 2: ~8 ล้านบาท (5 จังหวัดนำร่อง)</span>
+        </div>
+        <div class="close-step">
+          <span class="close-num" style="color:#d6bcfa">5.</span>
+          <span class="close-text">ขยายสู่ SPNI Platform ทั้งประเทศ — 77 จังหวัด 1,484 สถานี</span>
+        </div></div>
+        <div class="close-highlight">งบ SPNI ทั้ง 3 ปี (~170 ล้าน) &lt; ค่า license i2 ปีเดียว (742+ ล้าน) → คืนทุนทันที</div>
+        <p class="close-contact">ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง │ โทร: 096-776-8757 │ BSIE v4.0 — Bank Statement Intelligence Engine</p>
+      </div>
+    </section>
+    
+</div>
+<button class="nav-btn" id="prev-btn" aria-label="Previous">&#9664;</button>
+<button class="nav-btn" id="next-btn" aria-label="Next">&#9654;</button>
+<div id="counter"></div>
+<script>
+(function(){
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let current = 0;
+
+  const progress = document.getElementById('progress');
+  const counter = document.getElementById('counter');
+
+  function show(n){
+    if(n<0||n>=total)return;
+    slides[current].classList.remove('active');
+    current = n;
+    slides[current].classList.add('active');
+    progress.style.width = ((current+1)/total*100)+'%';
+    counter.textContent = (current+1)+' / '+total;
+  }
+
+  function next(){show(current+1)}
+  function prev(){show(current-1)}
+
+  // Keyboard
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')next();
+    else if(e.key==='ArrowLeft'||e.key==='PageUp')prev();
+    else if(e.key==='Home')show(0);
+    else if(e.key==='End')show(total-1);
+    else if(e.key==='f'||e.key==='F'){
+      if(!document.fullscreenElement)document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  });
+
+  // Nav buttons
+  document.getElementById('prev-btn').onclick = prev;
+  document.getElementById('next-btn').onclick = next;
+
+  // Touch swipe (distinguish from scroll)
+  let startX=0, startY=0, startTime=0;
+  document.addEventListener('touchstart',function(e){
+    startX=e.changedTouches[0].clientX;
+    startY=e.changedTouches[0].clientY;
+    startTime=Date.now();
+  },{passive:true});
+  document.addEventListener('touchend',function(e){
+    const dx=e.changedTouches[0].clientX-startX;
+    const dy=e.changedTouches[0].clientY-startY;
+    const dt=Date.now()-startTime;
+    if(dt>500)return; // too slow
+    if(Math.abs(dx)>Math.abs(dy)*1.5 && Math.abs(dx)>50){
+      if(dx<0)next(); else prev();
+    }
+  },{passive:true});
+
+  // Init
+  show(0);
+})();
+</script>
+</body>
+</html>

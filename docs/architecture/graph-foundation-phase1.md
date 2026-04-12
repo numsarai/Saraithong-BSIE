@@ -1,5 +1,7 @@
 # BSIE Graph Foundation Phase 1
 
+> Updated for BSIE v4.0 -- the graph foundation is now fully integrated into the runtime via `routers/graph.py`, `services/graph_analysis_service.py`, the LinkChart UI, and the alert/threat-hunting subsystems.
+
 Phase 1 adds the internal graph foundation without changing BSIE parsing or
 normalization.
 

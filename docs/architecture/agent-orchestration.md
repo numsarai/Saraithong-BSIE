@@ -1,5 +1,7 @@
 # BSIE Agent Orchestration
 
+> Updated for BSIE v4.0 -- `app.py` is now ~230 lines with 21 routers under `routers/`. Subagent ownership targets individual router and service files, not a monolithic app.py.
+
 This document explains how to split BSIE work across subagents without damaging evidence integrity or creating merge conflicts.
 
 ## Goals
@@ -19,11 +21,13 @@ Research first. Then assign builders. Then validate with tests. Do not let multi
 
 The current repository shape matters more than generic agent theory:
 
-- [`/Users/saraithong/Documents/bsie/app.py`](/Users/saraithong/Documents/bsie/app.py) is the backend traffic controller.
+- `app.py` is now a thin lifecycle/middleware/router-registration shell (~230 lines).
+- **21 routers** under `routers/` own all endpoint logic (ingestion, graph, review, alerts, auth, etc.).
 - [`/Users/saraithong/Documents/bsie/pipeline/process_account.py`](/Users/saraithong/Documents/bsie/pipeline/process_account.py) is the sequential normalization/export spine.
 - [`/Users/saraithong/Documents/bsie/services/persistence_pipeline_service.py`](/Users/saraithong/Documents/bsie/services/persistence_pipeline_service.py) is the evidence-to-database contract layer.
 - [`/Users/saraithong/Documents/bsie/frontend/src/api.ts`](/Users/saraithong/Documents/bsie/frontend/src/api.ts) and [`/Users/saraithong/Documents/bsie/frontend/src/store.ts`](/Users/saraithong/Documents/bsie/frontend/src/store.ts) are the frontend integration chokepoints.
-- [`/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.tsx) is the largest shared admin surface.
+- `frontend/src/components/InvestigationDesk.tsx` is the largest shared admin surface, with sub-components extracted to `components/investigation/`.
+- `frontend/src/components/LinkChart.tsx` replaces the former GraphExplorer for interactive graph visualization.
 
 This means BSIE benefits from a small number of focused subagents, not a swarm.
 
@@ -33,13 +37,14 @@ For reusable pre-spawn checklists and fill-in prompt templates, use [`/Users/sar
 
 These files are common integration points and should usually have one editor only:
 
-- [`/Users/saraithong/Documents/bsie/app.py`](/Users/saraithong/Documents/bsie/app.py)
-- [`/Users/saraithong/Documents/bsie/persistence/models.py`](/Users/saraithong/Documents/bsie/persistence/models.py)
-- [`/Users/saraithong/Documents/bsie/persistence/schemas.py`](/Users/saraithong/Documents/bsie/persistence/schemas.py)
-- [`/Users/saraithong/Documents/bsie/pipeline/process_account.py`](/Users/saraithong/Documents/bsie/pipeline/process_account.py)
-- [`/Users/saraithong/Documents/bsie/frontend/src/api.ts`](/Users/saraithong/Documents/bsie/frontend/src/api.ts)
-- [`/Users/saraithong/Documents/bsie/frontend/src/store.ts`](/Users/saraithong/Documents/bsie/frontend/src/store.ts)
-- [`/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.tsx`](/Users/saraithong/Documents/bsie/frontend/src/components/InvestigationDesk.tsx)
+- `app.py` (lifecycle only -- routers own endpoints)
+- `routers/*.py` (each router is a shared file within its domain)
+- `persistence/models.py`
+- `persistence/schemas.py`
+- `pipeline/process_account.py`
+- `frontend/src/api.ts`
+- `frontend/src/store.ts`
+- `frontend/src/components/InvestigationDesk.tsx`
 
 ## Recommended Orchestration Sequence
 
@@ -235,9 +240,9 @@ Before editing, subagents should answer questions like:
 
 ## Do Not Do This
 
-- Do not let two builders edit [`/Users/saraithong/Documents/bsie/app.py`](/Users/saraithong/Documents/bsie/app.py) at the same time.
-- Do not let two builders edit [`/Users/saraithong/Documents/bsie/pipeline/process_account.py`](/Users/saraithong/Documents/bsie/pipeline/process_account.py) at the same time.
-- Do not let two frontend builders edit [`/Users/saraithong/Documents/bsie/frontend/src/store.ts`](/Users/saraithong/Documents/bsie/frontend/src/store.ts) or [`/Users/saraithong/Documents/bsie/frontend/src/api.ts`](/Users/saraithong/Documents/bsie/frontend/src/api.ts) concurrently.
+- Do not let two builders edit the same router file at the same time.
+- Do not let two builders edit `pipeline/process_account.py` at the same time.
+- Do not let two frontend builders edit `frontend/src/store.ts` or `frontend/src/api.ts` concurrently.
 - Do not let review-related changes mutate raw evidence rows.
 - Do not let a frontend builder invent a new API contract without a backend owner.
 - Do not let a schema change land without updating tests that prove compatibility.

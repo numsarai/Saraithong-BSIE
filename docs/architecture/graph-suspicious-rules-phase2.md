@@ -1,5 +1,7 @@
 # BSIE Graph Suspicious Analytics Phase 2
 
+> Updated for BSIE v4.0 -- the 7 graph rules now feed the alert system (`services/alert_service.py`), the Alerts tab in InvestigationDesk, and the threat hunting subsystem (`services/threat_hunting_service.py`) adds 5 additional pattern detectors (smurfing, layering, rapid movement, dormant activation, round-tripping).
+
 Phase 2 adds a reusable suspicious-analytics rule engine on top of the Phase 1
 graph foundation.
 

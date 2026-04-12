@@ -1,5 +1,7 @@
 # i2 Export Workflows
 
+> Updated for BSIE v4.0 -- i2 exports are now managed via `routers/exports.py` and `services/export_service.py`. STR/CTR regulatory exports have been added alongside the i2 outputs.
+
 This note documents the two IBM i2 Analyst's Notebook export paths that BSIE now produces from the shared graph bundle.
 
 ## Why There Are Two Outputs

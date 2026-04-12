@@ -1,5 +1,7 @@
 # Graph Export Architecture
 
+> Updated for BSIE v4.0 -- graph APIs are now served via `routers/graph.py` and `routers/exports.py`. The graph foundation also feeds the LinkChart UI, alert system, SNA analysis, and fund flow tracing.
+
 ## Purpose
 
 BSIE maintains two graph-oriented export surfaces:

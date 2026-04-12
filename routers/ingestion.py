@@ -61,6 +61,12 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
     if not file.filename:
         raise HTTPException(400, "No filename")
 
+    # HIGH-5: File type allowlist
+    ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".ofx", ".pdf", ".csv", ".png", ".jpg", ".jpeg", ".bmp"}
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"File type '{suffix}' not supported. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
+
     contents = await file.read()
     persisted = persist_upload(
         content=contents,
@@ -318,8 +324,8 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
         })
 
     except Exception as e:
-        logger.exception(f"Upload failed: {e}")
-        raise HTTPException(500, str(e))
+        logger.exception("Upload failed for file: %s", file.filename)
+        raise HTTPException(500, "File processing failed. Please try again or contact support.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

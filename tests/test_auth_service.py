@@ -41,10 +41,10 @@ def test_verify_wrong_password():
 
 def test_hash_produces_salted_format():
     hashed = hash_password("test")
-    assert "$" in hashed
-    parts = hashed.split("$", 1)
-    assert len(parts) == 2
-    assert len(parts[0]) == 32  # 16 bytes hex = 32 chars
+    assert hashed.startswith("pbkdf2$")
+    parts = hashed.split("$")
+    assert len(parts) == 3  # pbkdf2$salt$hash
+    assert len(parts[1]) == 32  # 16 bytes hex = 32 chars
 
 
 def test_hash_is_unique_per_call():
@@ -132,7 +132,9 @@ def test_ensure_default_admin_is_idempotent(tmp_path: Path):
     assert len(users) == 1
 
 
-def test_default_admin_password_verifies(tmp_path: Path):
+def test_default_admin_password_verifies(tmp_path: Path, monkeypatch):
+    # Set known password via env var for deterministic test
+    monkeypatch.setenv("BSIE_ADMIN_INITIAL_PASSWORD", "test-admin-pw-123")
     engine = _make_engine(tmp_path)
 
     with Session(engine) as session:
@@ -142,4 +144,4 @@ def test_default_admin_password_verifies(tmp_path: Path):
         admin = session.scalars(select(User).where(User.username == "admin")).first()
     assert admin is not None
     assert admin.hashed_password is not None
-    assert verify_password("admin", admin.hashed_password) is True
+    assert verify_password("test-admin-pw-123", admin.hashed_password) is True

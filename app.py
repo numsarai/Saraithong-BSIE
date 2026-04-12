@@ -127,6 +127,19 @@ class TimingMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(TimingMiddleware)
 
+# Security headers (HIGH-6 fix)
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: _Request, call_next):
+        response: _Response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Security: limit request body size (50 MB max for file uploads)
 class MaxBodySizeMiddleware(BaseHTTPMiddleware):
     MAX_BODY_SIZE = 50 * 1024 * 1024  # 50 MB

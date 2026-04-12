@@ -11,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import hashlib
+import hmac
+import logging
 import secrets
 
 from jose import jwt, JWTError
@@ -20,25 +22,41 @@ from sqlalchemy.orm import Session
 from persistence.base import utcnow
 from persistence.models import User
 
-SECRET_KEY = os.getenv("BSIE_JWT_SECRET", "bsie-dev-secret-change-in-production")
+_logger = logging.getLogger(__name__)
+
+# CRIT-2 fix: No hardcoded default — auto-generate ephemeral secret in dev
+_jwt_secret_env = os.getenv("BSIE_JWT_SECRET", "")
+if not _jwt_secret_env:
+    _jwt_secret_env = secrets.token_hex(32)
+    _logger.warning("BSIE_JWT_SECRET not set — generated ephemeral secret. Set in .env for production!")
+SECRET_KEY = _jwt_secret_env
 ALGORITHM = "HS256"
-TOKEN_EXPIRE_MINUTES = int(os.getenv("BSIE_TOKEN_EXPIRE_MINUTES", "480"))  # 8 hours default
+TOKEN_EXPIRE_MINUTES = int(os.getenv("BSIE_TOKEN_EXPIRE_MINUTES", "120"))  # 2 hours (reduced from 8)
 
 
 def hash_password(password: str) -> str:
-    """Hash password with salted SHA-256."""
+    """Hash password with PBKDF2-SHA256 (100k iterations) — HIGH-1 fix."""
+    if len(password) > 1024:
+        raise ValueError("Password too long")
     salt = secrets.token_hex(16)
-    h = hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
-    return f"{salt}${h}"
+    h = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000).hex()
+    return f"pbkdf2${salt}${h}"
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a salted SHA-256 password hash."""
+    """Verify password — supports PBKDF2 (new) and SHA-256 (legacy)."""
+    if len(plain) > 1024:
+        return False
+    if hashed.startswith("pbkdf2$"):
+        _, salt, expected = hashed.split("$", 2)
+        h = hashlib.pbkdf2_hmac("sha256", plain.encode(), salt.encode(), 100_000).hex()
+        return hmac.compare_digest(h, expected)
+    # Legacy SHA-256 fallback
     if "$" not in hashed:
         return False
     salt, expected = hashed.split("$", 1)
     h = hashlib.sha256(f"{salt}:{plain}".encode()).hexdigest()
-    return h == expected
+    return hmac.compare_digest(h, expected)
 
 
 def create_token(data: dict[str, Any], expires_minutes: int = TOKEN_EXPIRE_MINUTES) -> str:
@@ -122,14 +140,24 @@ def list_users(session: Session) -> list[dict[str, Any]]:
 
 
 def ensure_default_admin(session: Session) -> None:
-    """Create a default admin user if no users exist."""
+    """Create a default admin user if no users exist. CRIT-3 fix: random password."""
     count = session.scalar(select(User.id).limit(1))
     if count:
         return
+    # Use env var or generate random password
+    initial_pw = os.getenv("BSIE_ADMIN_INITIAL_PASSWORD", "")
+    if not initial_pw:
+        initial_pw = secrets.token_urlsafe(16)
+        _logger.warning("=" * 60)
+        _logger.warning("  DEFAULT ADMIN CREATED")
+        _logger.warning("  Username: admin")
+        _logger.warning("  Password: %s", initial_pw)
+        _logger.warning("  CHANGE THIS PASSWORD IMMEDIATELY!")
+        _logger.warning("=" * 60)
     create_user(
         session,
         username="admin",
-        password="admin",
+        password=initial_pw,
         email="admin@bsie.local",
         role="admin",
     )
@@ -170,5 +198,14 @@ async def require_auth(request: Any) -> User | None:
     user = await get_current_user_optional(request)
     if not user:
         from fastapi import HTTPException
-        raise HTTPException(401, "Authentication required. Set BSIE_AUTH_REQUIRED=false to disable.")
+        raise HTTPException(401, "Authentication required")
+    return user
+
+
+async def require_admin(request: Any) -> User | None:
+    """Dependency that enforces admin role when auth is enabled."""
+    user = await require_auth(request)
+    if user and user.role != "admin":
+        from fastapi import HTTPException
+        raise HTTPException(403, "Admin access required")
     return user

@@ -42,7 +42,7 @@ def _worker_loop() -> None:
 
         try:
             logger.info("Job queue: starting job %s", job_id)
-            func(**kwargs)
+            func(job_id=job_id, **kwargs)
             logger.info("Job queue: completed job %s", job_id)
         except Exception:
             logger.exception("Job queue: failed job %s", job_id)

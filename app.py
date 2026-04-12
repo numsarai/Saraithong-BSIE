@@ -58,6 +58,7 @@ from routers.dashboard import router as dashboard_router
 from routers.reports import router as reports_router
 from routers.fund_flow import router as fund_flow_router
 from routers.exports import router as exports_router
+from routers.llm import router as llm_router
 
 # ── Logging ──────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -204,6 +205,7 @@ app.include_router(annotations_router)
 app.include_router(workspace_router)
 app.include_router(banks_router)
 app.include_router(exports_router)
+app.include_router(llm_router)
 app.include_router(ui_router)  # UI catch-all routes last
 
 # ── Test compatibility re-exports ────────────────────────────────────────

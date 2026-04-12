@@ -49,7 +49,7 @@ router = APIRouter(prefix="/api", tags=["ingestion"])
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.post("/upload")
-async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("analyst")):
+async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("analyst"), force_redetect: str = Form("")):
     """
     Accept an Excel file, run bank + column auto-detection, and return:
     - detected bank
@@ -78,8 +78,9 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
     job_id = str(uuid.uuid4())
 
     # If file was reused and already processed, offer to skip to results
+    # (skip this if force_redetect is set — user chose "reprocess")
     is_reused = persisted.get("reused", False)
-    if is_reused:
+    if is_reused and not force_redetect:
         with get_db_session() as session:
             from persistence.models import ParserRun, StatementBatch
             from sqlalchemy import select as sa_select
@@ -421,6 +422,109 @@ async def api_confirm_mapping(request: Request):
         "message": feedback_message(bank_feedback, mapping_feedback),
         "learning_feedback_count": learning_feedback_count,
     })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Re-detect — run detection on an already-uploaded file
+# ═══════════════════════════════════════════════════════════════════════════
+
+from pydantic import BaseModel as _BaseModel
+
+class _RedetectRequest(_BaseModel):
+    file_id: str
+    file_name: str = ""
+
+@router.post("/redetect")
+async def api_redetect(body: _RedetectRequest):
+    """Re-run bank detection and column mapping on an existing file."""
+    file_record = get_file_record(body.file_id)
+    if not file_record:
+        raise HTTPException(404, "File not found")
+
+    save_path = Path(file_record.stored_path)
+    if not save_path.exists():
+        raise HTTPException(404, "File missing from storage")
+
+    job_id = str(uuid.uuid4())
+    filename = body.file_name or file_record.original_filename or save_path.name
+
+    try:
+        if save_path.suffix.lower() == ".ofx":
+            data_df = parse_ofx_file(save_path)
+            identity = infer_identity_from_ofx(save_path, data_df)
+            sample_rows = data_df.head(5).fillna("").to_dict(orient="records")
+            return JSONResponse({
+                "job_id": job_id, "file_id": body.file_id,
+                "temp_file_path": str(save_path), "file_name": filename,
+                "duplicate_file_status": "redetect", "prior_ingestions": [],
+                "detected_bank": {"bank": "OFX", "config_key": "ofx", "key": "ofx", "confidence": 1.0, "ambiguous": False, "scores": {"ofx": 1.0}, "top_candidates": ["ofx"], "evidence": {"positive": ["source:ofx"], "negative": [], "layout": "ofx"}},
+                "suggested_mapping": {}, "confidence_scores": {}, "all_columns": list(data_df.columns),
+                "unmatched_columns": [], "required_found": True, "memory_match": None, "bank_memory_match": None,
+                "sample_rows": sample_rows, "banks": get_banks(), "header_row": 0, "sheet_name": "OFX",
+                "account_guess": identity.get("account", ""), "name_guess": identity.get("name", ""),
+                "identity_guess": identity,
+            })
+
+        if save_path.suffix.lower() == ".pdf":
+            pdf_result = parse_pdf_file(save_path)
+            if pdf_result["tables_found"] == 0 or len(pdf_result["df"]) < 3:
+                pdf_result = parse_image_file(save_path)
+            data_df = pdf_result["df"]
+            if data_df.empty:
+                raise HTTPException(400, "Could not extract table from PDF")
+            data_df.columns = [str(c).strip() for c in data_df.columns]
+            header_row = int(pdf_result.get("header_row", 0))
+            sheet_name = pdf_result["source_format"]
+        elif save_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".bmp"):
+            img_result = parse_image_file(save_path)
+            data_df = img_result["df"]
+            if data_df.empty:
+                raise HTTPException(400, "Could not extract table from image")
+            data_df.columns = [str(c).strip() for c in data_df.columns]
+            header_row = int(img_result.get("header_row", 0))
+            sheet_name = "IMAGE"
+        else:
+            # Excel
+            sheet_pick = find_best_sheet_and_header(save_path)
+            header_row = int(sheet_pick["header_row"])
+            sheet_name = str(sheet_pick["sheet_name"])
+            data_df = pd.read_excel(str(save_path), sheet_name=sheet_name, header=header_row, dtype=str).dropna(how="all")
+            data_df.columns = [str(c).strip() for c in data_df.columns]
+
+        identity = infer_subject_identity_from_frames(save_path, preview_df=data_df.head(15), transaction_df=data_df)
+        bank_result = detect_bank(data_df, extra_text=f"{filename} {sheet_name}", sheet_name=sheet_name)
+        col_result = detect_columns(data_df)
+        profile = find_matching_profile(list(data_df.columns), bank=bank_result.get("config_key", "") or "")
+        bank_memory = find_matching_bank_fingerprint(list(data_df.columns), sheet_name=sheet_name)
+        sample_rows = data_df.head(5).fillna("").to_dict(orient="records")
+        auto_suggested = dict(col_result["suggested_mapping"])
+        suggested = dict(auto_suggested)
+        memory_match = None
+        if profile:
+            suggested = repair_suggested_mapping({**auto_suggested, **profile["mapping"]}, auto_suggested, list(data_df.columns))
+            memory_match = {"profile_id": profile["profile_id"], "bank": profile["bank"], "usage_count": profile["usage_count"]}
+        else:
+            suggested = repair_suggested_mapping(suggested, auto_suggested, list(data_df.columns))
+
+        return JSONResponse({
+            "job_id": job_id, "file_id": body.file_id,
+            "temp_file_path": str(save_path), "file_name": filename,
+            "duplicate_file_status": "redetect", "prior_ingestions": [],
+            "detected_bank": bank_result, "suggested_mapping": suggested,
+            "confidence_scores": col_result["confidence_scores"],
+            "all_columns": col_result["all_columns"], "unmatched_columns": col_result["unmatched_columns"],
+            "required_found": col_result["required_found"],
+            "memory_match": memory_match, "bank_memory_match": bank_memory,
+            "sample_rows": sample_rows, "banks": get_banks(),
+            "header_row": header_row, "sheet_name": sheet_name,
+            "account_guess": identity.get("account", ""), "name_guess": identity.get("name", ""),
+            "identity_guess": identity,
+        })
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Redetect failed")
+        raise HTTPException(500, f"Re-detection failed: {exc}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

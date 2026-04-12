@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Toaster } from 'sonner'
 import { Sidebar } from '@/components/Sidebar'
 import { Step1Upload }     from '@/components/steps/Step1Upload'
@@ -27,7 +27,13 @@ function LoadingFallback() {
 export default function App() {
   const step = useStore(s => s.step)
   const page = useStore(s => s.page)
+  const theme = useStore(s => s.theme)
   const StepComponent = STEPS[step - 1]
+
+  // Apply dark class on mount and when theme changes
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
 
   return (
     <div className="flex min-h-screen bg-bg text-text">
@@ -45,7 +51,7 @@ export default function App() {
                   : <StepComponent />}
         </Suspense>
       </main>
-      <Toaster theme="dark" position="bottom-right" richColors />
+      <Toaster theme={theme} position="bottom-right" richColors />
     </div>
   )
 }

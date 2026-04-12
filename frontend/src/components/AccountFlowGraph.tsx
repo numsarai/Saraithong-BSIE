@@ -2,7 +2,12 @@ import { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import cytoscape from 'cytoscape'
 import { Card, CardTitle } from '@/components/ui/card'
-import { Circle, Maximize2, Minimize2, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Maximize2, Minimize2, X, Download, Filter, Pin, Star,
+  Maximize, GitBranch, Sun, Tag, EyeOff, Eye, Paintbrush,
+  MousePointer, Expand, Shrink,
+} from 'lucide-react'
 
 interface FlowGraphProps {
   account: string
@@ -18,8 +23,20 @@ interface AggEdge {
   count: number
 }
 
+type LayoutMode = 'spread' | 'compact' | 'hierarchy' | 'peacock'
+
 function formatAmount(n: number): string {
   return Math.abs(n).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function formatAmountShort(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`
+  return n.toFixed(0)
+}
+
+function computeConditionalSize(flowTotal: number): number {
+  return Math.max(25, Math.min(70, 25 + Math.log10(Math.max(flowTotal, 1)) * 8))
 }
 
 /**
@@ -47,7 +64,6 @@ async function fetchAggregatedEdges(account: string): Promise<AggEdge[] | null> 
     const edges: AggEdge[] = []
 
     for (let i = 1; i < lines.length; i++) {
-      // Simple CSV parse (handles quoted fields with commas)
       const row = parseCsvLine(lines[i])
       if (!row || row.length < Math.max(fromIdx, toIdx, countIdx, amountIdx) + 1) continue
 
@@ -72,7 +88,6 @@ async function fetchAggregatedEdges(account: string): Promise<AggEdge[] | null> 
 
       if (!cp || cp === account) continue
 
-      // Extract name from label if available (e.g. "Sent To (3 transactions)")
       const cpName = labelIdx >= 0 ? extractNameFromLabel(row[labelIdx], cp) : cp
 
       edges.push({ counterparty: cp, counterpartyName: cpName, direction: dir, totalAmount: amount, count })
@@ -104,7 +119,6 @@ function parseCsvLine(line: string): string[] {
 }
 
 function extractNameFromLabel(label: string, fallback: string): string {
-  // Labels like "Sent To (3 transactions)" — not useful as name
   if (!label || label.includes('transactions)') || label.includes('Sent To') || label.includes('Received From')) {
     return fallback
   }
@@ -178,17 +192,21 @@ function buildElements(account: string, bankKey: string, flows: AggEdge[]) {
         nodeType: 'subject',
         bankKey: bankKey,
         logoUrl: `/api/bank-logos/${bankKey}.svg`,
+        flowTotal: flows.reduce((s, f) => s + f.totalAmount, 0),
       },
     },
   ]
 
   counterparties.forEach(([cpAcct, cpName]) => {
+    const cpFlows = flows.filter(f => f.counterparty === cpAcct)
+    const flowTotal = cpFlows.reduce((s, f) => s + f.totalAmount, 0)
     nodes.push({
       data: {
         id: cpAcct,
         label: cpName.length > 20 ? cpName.slice(0, 20) + '\u2026' : cpName,
         fullLabel: cpName,
         nodeType: 'counterparty',
+        flowTotal,
       },
     })
   })
@@ -202,10 +220,11 @@ function buildElements(account: string, bankKey: string, flows: AggEdge[]) {
           id: edgeId,
           source: f.counterparty,
           target: account,
-          label: formatAmount(f.totalAmount),
+          label: formatAmountShort(f.totalAmount),
           flowDirection: 'IN',
           amount: f.totalAmount,
           count: f.count,
+          edgeWidth: Math.max(1, Math.log10(Math.max(f.totalAmount, 1)) * 0.8),
         },
       })
     } else {
@@ -214,10 +233,11 @@ function buildElements(account: string, bankKey: string, flows: AggEdge[]) {
           id: edgeId,
           source: account,
           target: f.counterparty,
-          label: formatAmount(f.totalAmount),
+          label: formatAmountShort(f.totalAmount),
           flowDirection: 'OUT',
           amount: f.totalAmount,
           count: f.count,
+          edgeWidth: Math.max(1, Math.log10(Math.max(f.totalAmount, 1)) * 0.8),
         },
       })
     }
@@ -271,6 +291,23 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
     },
   },
   {
+    selector: 'node[pinned]',
+    style: {
+      'border-color': '#facc15',
+      'border-width': 3,
+      'border-style': 'solid',
+    } as any,
+  },
+  {
+    selector: 'node:selected',
+    style: {
+      'border-color': '#38bdf8',
+      'border-width': 3,
+      'overlay-opacity': 0.1,
+      'overlay-color': '#38bdf8',
+    },
+  },
+  {
     selector: 'node:active',
     style: { 'overlay-opacity': 0.15, 'overlay-color': '#38bdf8' },
   },
@@ -284,9 +321,9 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
       'line-color': '#16a34a',
       'target-arrow-color': '#16a34a',
       'target-arrow-shape': 'triangle',
-      'arrow-scale': 1,
+      'arrow-scale': 0.8,
       'curve-style': 'bezier',
-      width: 1.5,
+      width: 'data(edgeWidth)',
       label: 'data(label)',
       'font-size': '8px',
       'font-family': 'TH Sarabun New, Tahoma, sans-serif',
@@ -303,9 +340,9 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
       'line-color': '#dc2626',
       'target-arrow-color': '#dc2626',
       'target-arrow-shape': 'triangle',
-      'arrow-scale': 1,
+      'arrow-scale': 0.8,
       'curve-style': 'bezier',
-      width: 1.5,
+      width: 'data(edgeWidth)',
       label: 'data(label)',
       'font-size': '8px',
       'font-family': 'TH Sarabun New, Tahoma, sans-serif',
@@ -318,6 +355,9 @@ const cytoscapeStyle: cytoscape.StylesheetStyle[] = [
   },
 ]
 
+const DEFAULT_SUBJECT_SIZE = 60
+const DEFAULT_CP_SIZE = 32
+
 export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -325,6 +365,18 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
   const [flows, setFlows] = useState<AggEdge[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedCp, setSelectedCp] = useState<string | null>(null)
+
+  // New feature state
+  const [activeLayout, setActiveLayout] = useState<LayoutMode>('spread')
+  const [minAmount, setMinAmount] = useState(0)
+  const [minTxnCount, setMinTxnCount] = useState(0)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [pinnedNodes, setPinnedNodes] = useState<Set<string>>(new Set())
+  const [conditionalFormatting, setConditionalFormatting] = useState(false)
+  const [edgeLabelsVisible, setEdgeLabelsVisible] = useState(true)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedCount, setSelectedCount] = useState(0)
+  const removedElementsRef = useRef<cytoscape.CollectionReturnValue | null>(null)
 
   // Load data: prefer aggregated CSV, fallback to raw rows
   useEffect(() => {
@@ -344,75 +396,183 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
     return () => { cancelled = true }
   }, [account, rows])
 
-  const elements = useMemo(() => buildElements(account, bankKey, flows), [account, bankKey, flows])
+  // Filter flows by minAmount and minTxnCount
+  const filteredFlows = useMemo(() =>
+    flows.filter(f => f.totalAmount >= minAmount && f.count >= minTxnCount),
+    [flows, minAmount, minTxnCount]
+  )
 
-  const totalIn = useMemo(() => flows.filter(f => f.direction === 'IN').reduce((s, f) => s + f.totalAmount, 0), [flows])
-  const totalOut = useMemo(() => flows.filter(f => f.direction === 'OUT').reduce((s, f) => s + f.totalAmount, 0), [flows])
-  const cpCount = useMemo(() => new Set(flows.map(f => f.counterparty)).size, [flows])
+  const elements = useMemo(() => buildElements(account, bankKey, filteredFlows), [account, bankKey, filteredFlows])
 
-  const applyLayout = useCallback((mode: 'circle' | 'spread' | 'compact') => {
+  const totalIn = useMemo(() => filteredFlows.filter(f => f.direction === 'IN').reduce((s, f) => s + f.totalAmount, 0), [filteredFlows])
+  const totalOut = useMemo(() => filteredFlows.filter(f => f.direction === 'OUT').reduce((s, f) => s + f.totalAmount, 0), [filteredFlows])
+  const cpCount = useMemo(() => new Set(filteredFlows.map(f => f.counterparty)).size, [filteredFlows])
+
+  // Apply conditional formatting
+  const applyConditionalFormatting = useCallback((enabled: boolean) => {
     const cy = cyRef.current
     if (!cy) return
+    cy.nodes().forEach((node) => {
+      if (enabled) {
+        const flowTotal = node.data('flowTotal') as number | undefined
+        const size = computeConditionalSize(flowTotal ?? 0)
+        node.style('width', size)
+        node.style('height', size)
+      } else {
+        const isSubject = node.data('nodeType') === 'subject'
+        const defaultSize = isSubject ? DEFAULT_SUBJECT_SIZE : DEFAULT_CP_SIZE
+        node.style('width', defaultSize)
+        node.style('height', defaultSize)
+      }
+    })
+  }, [])
 
-    const center = cy.getElementById(account)
-    // Unlock all nodes for layout
-    cy.nodes().unlock()
+  const applyLayout = useCallback((mode: LayoutMode) => {
+    const cy = cyRef.current
+    if (!cy || cy.nodes().length === 0) return
+
+    setActiveLayout(mode)
+
+    // Unlock non-pinned nodes
+    cy.nodes().forEach((node) => {
+      if (!pinnedNodes.has(node.id())) node.unlock()
+    })
 
     let layoutOpts: any
-    if (mode === 'circle') {
-      // Equal radius circle around center
-      const others = cy.nodes().filter(n => n.id() !== account)
-      const count = others.length
-      const radius = Math.min(400, 150 + count * 2)
-      const cx = 400
-      const cyy = 400
-      center.position({ x: cx, y: cyy })
-      others.forEach((node, i) => {
-        const angle = (2 * Math.PI * i) / count - Math.PI / 2
-        node.position({
-          x: cx + radius * Math.cos(angle),
-          y: cyy + radius * Math.sin(angle),
-        })
-      })
-      center.lock()
-      cy.fit(undefined, 30)
-      return
-    } else if (mode === 'spread') {
-      // Force-directed with strong repulsion — no overlap
-      layoutOpts = {
-        name: 'cose',
-        animate: false,
-        nodeOverlap: 80,
-        idealEdgeLength: () => 120,
-        nodeRepulsion: () => 800000,
-        gravity: 0.15,
-        numIter: 500,
-        padding: 40,
-        nodeDimensionsIncludeLabels: true,
-      }
-    } else {
-      // Compact — allow overlap, tight packing
-      layoutOpts = {
-        name: 'cose',
-        animate: false,
-        nodeOverlap: 4,
-        idealEdgeLength: () => 50,
-        nodeRepulsion: () => 50000,
-        gravity: 0.8,
-        numIter: 300,
-        padding: 20,
-        nodeDimensionsIncludeLabels: false,
-      }
+    switch (mode) {
+      case 'spread':
+        layoutOpts = {
+          name: 'cose', animate: true, animationDuration: 400,
+          nodeOverlap: 80, idealEdgeLength: () => 120,
+          nodeRepulsion: () => 800000, gravity: 0.15, numIter: 500,
+          padding: 40, nodeDimensionsIncludeLabels: true,
+        }
+        break
+      case 'compact':
+        layoutOpts = {
+          name: 'cose', animate: true, animationDuration: 400,
+          nodeOverlap: 20, idealEdgeLength: () => 50,
+          nodeRepulsion: () => 50000, gravity: 0.8, numIter: 300,
+          padding: 20, nodeDimensionsIncludeLabels: true,
+        }
+        break
+      case 'hierarchy':
+        layoutOpts = {
+          name: 'breadthfirst', directed: true, spacingFactor: 1.2,
+          animate: true, animationDuration: 400, padding: 40,
+          nodeDimensionsIncludeLabels: true,
+        }
+        break
+      case 'peacock':
+        layoutOpts = {
+          name: 'concentric',
+          concentric: (node: cytoscape.NodeSingular) => node.degree(false),
+          levelWidth: () => 2, animate: true, animationDuration: 400,
+          padding: 40, nodeDimensionsIncludeLabels: true,
+        }
+        break
     }
 
-    const layout = cy.layout(layoutOpts)
-    layout.on('layoutstop', () => {
-      center.lock()
-      cy.fit(undefined, 30)
+    cy.layout(layoutOpts).run()
+
+    // Re-lock pinned nodes after layout settles
+    setTimeout(() => {
+      cy.nodes().forEach((node) => {
+        if (pinnedNodes.has(node.id())) node.lock()
+      })
+    }, 500)
+  }, [pinnedNodes])
+
+  // Toggle pin
+  const togglePin = useCallback((nodeId: string) => {
+    const cy = cyRef.current
+    if (!cy) return
+    setPinnedNodes((prev) => {
+      const next = new Set(prev)
+      const node = cy.getElementById(nodeId)
+      if (next.has(nodeId)) {
+        next.delete(nodeId)
+        node.data('pinned', false)
+        node.unlock()
+      } else {
+        next.add(nodeId)
+        node.data('pinned', true)
+        node.lock()
+      }
+      return next
     })
-    layout.run()
+  }, [])
+
+  // Toggle edge labels
+  const handleToggleEdgeLabels = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const next = !edgeLabelsVisible
+    setEdgeLabelsVisible(next)
+    cy.edges().style('label', next ? 'data(label)' : '')
+  }, [edgeLabelsVisible])
+
+  // Toggle conditional formatting
+  const handleToggleConditionalFormatting = useCallback(() => {
+    const next = !conditionalFormatting
+    setConditionalFormatting(next)
+    applyConditionalFormatting(next)
+  }, [conditionalFormatting, applyConditionalFormatting])
+
+  // Toggle select mode
+  const handleToggleSelectMode = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const next = !selectMode
+    setSelectMode(next)
+    if (!next) {
+      cy.nodes().unselect()
+      setSelectedCount(0)
+    }
+    cy.boxSelectionEnabled(next)
+    cy.userPanningEnabled(!next)
+  }, [selectMode])
+
+  // Hide selected nodes
+  const handleHideSelected = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const selected = cy.nodes(':selected')
+    if (selected.length === 0) return
+    const toRemove = selected.union(selected.connectedEdges())
+    const removed = cy.remove(toRemove)
+    if (removedElementsRef.current) {
+      removedElementsRef.current = removedElementsRef.current.union(removed)
+    } else {
+      removedElementsRef.current = removed
+    }
+    setSelectedCount(0)
+  }, [])
+
+  // Show all hidden nodes
+  const handleShowAll = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy || !removedElementsRef.current) return
+    removedElementsRef.current.restore()
+    removedElementsRef.current = null
+    if (conditionalFormatting) applyConditionalFormatting(true)
+    if (!edgeLabelsVisible) cy.edges().style('label', '')
+  }, [conditionalFormatting, applyConditionalFormatting, edgeLabelsVisible])
+
+  const handleFit = useCallback(() => { cyRef.current?.fit(undefined, 30) }, [])
+
+  const handleExportPng = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    const graphBg = getComputedStyle(document.documentElement).getPropertyValue('--color-graph-bg').trim() || '#0f172a'
+    const png = cy.png({ scale: 2, bg: graphBg })
+    const a = document.createElement('a')
+    a.href = png
+    a.download = `flow_graph_${account}.png`
+    a.click()
   }, [account])
 
+  // Initialize cytoscape
   useEffect(() => {
     if (!containerRef.current || elements.length === 0) return
 
@@ -421,115 +581,190 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
       elements,
       style: cytoscapeStyle,
       layout: {
-        name: 'cose',
-        animate: false,
-        nodeOverlap: 80,
-        idealEdgeLength: () => 120,
-        nodeRepulsion: () => 800000,
-        gravity: 0.15,
-        numIter: 500,
-        padding: 40,
-        nodeDimensionsIncludeLabels: true,
+        name: 'cose', animate: false,
+        nodeOverlap: 80, idealEdgeLength: () => 120,
+        nodeRepulsion: () => 800000, gravity: 0.15,
+        numIter: 500, padding: 40, nodeDimensionsIncludeLabels: true,
       } as any,
       userZoomingEnabled: true,
       userPanningEnabled: true,
       boxSelectionEnabled: false,
-      minZoom: 0.1,
+      minZoom: 0.05,
       maxZoom: 5,
     })
 
-    cy.on('layoutstop', () => {
-      cy.fit(undefined, 30)
-    })
+    cy.on('layoutstop', () => { cy.fit(undefined, 30) })
 
-    // Click node to show transaction detail
     cy.on('tap', 'node[nodeType="counterparty"]', (evt) => {
       const nodeId = evt.target.id()
       setSelectedCp(prev => prev === nodeId ? null : nodeId)
     })
-    // Click background to deselect
     cy.on('tap', (evt) => {
-      if (evt.target === cy) setSelectedCp(null)
+      if (evt.target === cy) {
+        setSelectedCp(null)
+        setTimeout(() => setSelectedCount(cy.nodes(':selected').length), 0)
+      }
+    })
+    cy.on('select unselect', 'node', () => {
+      setSelectedCount(cy.nodes(':selected').length)
     })
 
     cyRef.current = cy
-
-    return () => {
-      cy.destroy()
-      cyRef.current = null
-    }
+    return () => { cy.destroy(); cyRef.current = null }
   }, [elements, account])
 
   // Transactions for selected counterparty
   const selectedDetail = useMemo(() => {
     if (!selectedCp) return null
-    const cpFlows = flows.filter(f => f.counterparty === selectedCp)
+    const cpFlows = filteredFlows.filter(f => f.counterparty === selectedCp)
     const cpName = cpFlows[0]?.counterpartyName || selectedCp
     const inFlow = cpFlows.find(f => f.direction === 'IN')
     const outFlow = cpFlows.find(f => f.direction === 'OUT')
 
-    // Filter raw transaction rows for this counterparty
     const txns = rows.filter(r => {
       const cp = String(r.counterparty_account_normalized || r.counterparty_account || r.from_account || r.to_account || '').trim()
       return cp === selectedCp
-    }).slice(0, 50) // Limit to 50 rows for display
+    }).slice(0, 50)
 
     return { cpName, inFlow, outFlow, txns, totalTxns: cpFlows.reduce((s, f) => s + f.count, 0) }
-  }, [selectedCp, flows, rows])
+  }, [selectedCp, filteredFlows, rows])
 
   if (loading || flows.length === 0) return null
 
+  const graphHeight = isFullscreen ? '100%' : Math.min(900, 450 + cpCount * 2)
+
+  const wrapperClassName = isFullscreen
+    ? 'fixed inset-0 z-50 bg-surface flex flex-col p-4'
+    : ''
+
   return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <Card className={isFullscreen ? wrapperClassName : 'p-4'}>
+      {/* Stats bar */}
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <CardTitle className="text-text">{t('results.flowGraph.title')}</CardTitle>
-        <div className="flex items-center gap-3">
-          <div className="flex gap-1 rounded-lg border border-border bg-surface2 p-0.5">
-            <button
-              onClick={() => applyLayout('circle')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-muted hover:text-text hover:bg-accent/10 transition-colors cursor-pointer"
-              title={t('results.flowGraph.layoutCircle')}
-            >
-              <Circle size={12} />
-              {t('results.flowGraph.layoutCircle')}
-            </button>
-            <button
-              onClick={() => applyLayout('spread')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-muted hover:text-text hover:bg-accent/10 transition-colors cursor-pointer"
-              title={t('results.flowGraph.layoutSpread')}
-            >
-              <Maximize2 size={12} />
-              {t('results.flowGraph.layoutSpread')}
-            </button>
-            <button
-              onClick={() => applyLayout('compact')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-muted hover:text-text hover:bg-accent/10 transition-colors cursor-pointer"
-              title={t('results.flowGraph.layoutCompact')}
-            >
-              <Minimize2 size={12} />
-              {t('results.flowGraph.layoutCompact')}
-            </button>
-          </div>
-          <div className="flex gap-3 text-xs">
-            <span className="text-green-400">
-              {t('results.flowGraph.totalIn')}: <strong>{formatAmount(totalIn)}</strong>
-            </span>
-            <span className="text-red-400">
-              {t('results.flowGraph.totalOut')}: <strong>{formatAmount(totalOut)}</strong>
-            </span>
-            <span className="text-muted">
-              {cpCount} {t('results.flowGraph.counterparties')}
-            </span>
-          </div>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="text-green-400">
+            {t('results.flowGraph.totalIn')}: <strong>{formatAmount(totalIn)}</strong>
+          </span>
+          <span className="text-red-400">
+            {t('results.flowGraph.totalOut')}: <strong>{formatAmount(totalOut)}</strong>
+          </span>
+          <span className="text-muted">
+            {cpCount} {t('results.flowGraph.counterparties')}
+          </span>
+          {pinnedNodes.size > 0 && <span className="text-yellow-400">{pinnedNodes.size} pinned</span>}
+          {selectMode && selectedCount > 0 && <span className="text-sky-400">{selectedCount} selected</span>}
         </div>
       </div>
-      <div
-        ref={containerRef}
-        className="w-full rounded-lg border border-border bg-[#0f172a]"
-        style={{ height: Math.min(900, 450 + cpCount * 2) }}
-      />
 
-      {selectedDetail && (
+      {/* Graph container with floating toolbar */}
+      <div className={`relative ${isFullscreen ? 'flex-1' : ''}`}>
+        <div
+          ref={containerRef}
+          className="w-full rounded-lg border border-border bg-[var(--color-graph-bg)]"
+          style={{ height: graphHeight }}
+        />
+
+        {/* Floating toolbar inside canvas */}
+        <div className="absolute top-2 left-2 right-2 flex flex-wrap items-center gap-1.5 bg-slate-900/85 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-slate-700/50">
+          {/* Layouts */}
+          <Button
+            variant={activeLayout === 'spread' ? 'outline' : 'ghost'} size="sm"
+            onClick={() => applyLayout('spread')} title={t('results.flowGraph.layoutSpread')}
+          >
+            <Maximize size={13} />{t('results.flowGraph.layoutSpread')}
+          </Button>
+          <Button
+            variant={activeLayout === 'compact' ? 'outline' : 'ghost'} size="sm"
+            onClick={() => applyLayout('compact')} title={t('results.flowGraph.layoutCompact')}
+          >
+            <Minimize2 size={13} />{t('results.flowGraph.layoutCompact')}
+          </Button>
+          <Button
+            variant={activeLayout === 'hierarchy' ? 'outline' : 'ghost'} size="sm"
+            onClick={() => applyLayout('hierarchy')} title={t('results.flowGraph.layoutHierarchy')}
+          >
+            <GitBranch size={13} />{t('results.flowGraph.layoutHierarchy')}
+          </Button>
+          <Button
+            variant={activeLayout === 'peacock' ? 'outline' : 'ghost'} size="sm"
+            onClick={() => applyLayout('peacock')} title={t('results.flowGraph.layoutPeacock')}
+          >
+            <Sun size={13} />{t('results.flowGraph.layoutPeacock')}
+          </Button>
+
+          <div className="border-l border-slate-600 h-5 mx-0.5" />
+
+          {/* Filters */}
+          <div className="flex items-center gap-1">
+            <Filter size={11} className="text-slate-400" />
+            <span className="text-[10px] text-slate-400">{t('results.flowGraph.minAmount')}:</span>
+            <input
+              type="number" value={minAmount || ''} placeholder="0"
+              onChange={e => setMinAmount(Number(e.target.value) || 0)}
+              className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-[11px] text-slate-200 w-16 outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-slate-400">{t('results.flowGraph.minTxnCount')}:</span>
+            <input
+              type="number" value={minTxnCount || ''} placeholder="0"
+              onChange={e => setMinTxnCount(Number(e.target.value) || 0)}
+              className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-[11px] text-slate-200 w-16 outline-none"
+            />
+          </div>
+
+          <div className="border-l border-slate-600 h-5 mx-0.5" />
+
+          {/* Display toggles */}
+          <Button variant={edgeLabelsVisible ? 'outline' : 'ghost'} size="sm" onClick={handleToggleEdgeLabels}>
+            {edgeLabelsVisible ? <Tag size={13} /> : <EyeOff size={13} />}
+          </Button>
+          <Button variant={conditionalFormatting ? 'outline' : 'ghost'} size="sm" onClick={handleToggleConditionalFormatting}>
+            <Paintbrush size={13} />
+          </Button>
+
+          <div className="border-l border-slate-600 h-5 mx-0.5" />
+
+          {/* Pin */}
+          <Button
+            variant={selectedCp && pinnedNodes.has(selectedCp) ? 'outline' : 'ghost'} size="sm"
+            onClick={() => selectedCp && togglePin(selectedCp)} disabled={!selectedCp}
+          >
+            {selectedCp && pinnedNodes.has(selectedCp)
+              ? <Star size={13} className="text-yellow-400" />
+              : <Pin size={13} />
+            }
+          </Button>
+
+          {/* Select mode */}
+          <Button variant={selectMode ? 'outline' : 'ghost'} size="sm" onClick={handleToggleSelectMode}>
+            <MousePointer size={13} />
+          </Button>
+          {selectMode && (
+            <>
+              <Button variant="ghost" size="sm" onClick={handleHideSelected} disabled={selectedCount === 0}>
+                <EyeOff size={13} />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleShowAll} disabled={removedElementsRef.current == null}>
+                <Eye size={13} />
+              </Button>
+            </>
+          )}
+
+          <div className="border-l border-slate-600 h-5 mx-0.5" />
+
+          {/* Actions */}
+          <Button variant="ghost" size="sm" onClick={handleFit}><Maximize2 size={13} /></Button>
+          <Button variant="ghost" size="sm" onClick={handleExportPng}><Download size={13} /></Button>
+          <Button variant="ghost" size="sm" onClick={() => setIsFullscreen(f => !f)}>
+            {isFullscreen ? <Shrink size={13} /> : <Expand size={13} />}
+          </Button>
+        </div>
+      </div>
+
+      {/* Selected counterparty detail */}
+      {selectedDetail && !isFullscreen && (
         <div className="mt-3 rounded-lg border border-accent/30 bg-surface2 p-4">
           <div className="flex items-center justify-between mb-3">
             <div>

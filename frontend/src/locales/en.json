@@ -17,17 +17,19 @@
       "bankManager": "Bank Manager"
     },
     "developerLabel": "Program Owner / Developer",
-    "contact": "Contact"
+    "contact": "Contact",
+    "lightMode": "Light",
+    "darkMode": "Dark"
   },
   "step1": {
     "title": "Upload Bank Statement",
     "description": "Supports Thai bank Excel statements, OFX files, PDFs, and images (JPG/PNG).",
-    "analysing": "Analysing file\u2026",
+    "analysing": "Analysing file…",
     "dropHere": "Drop your statement file here",
     "or": "or",
     "browse": "browse",
     "toSelect": "to select",
-    "fileTypes": ".xlsx / .xls / .ofx / .pdf / .jpg / .png \u00b7 Investigation-ready import",
+    "fileTypes": ".xlsx / .xls / .ofx / .pdf / .jpg / .png · Investigation-ready import",
     "fileTypeError": "Only .xlsx, .xls, .ofx, .pdf, .jpg, .jpeg, .png, or .bmp files are accepted",
     "uploadSuccess": "File uploaded and analysed",
     "alreadyProcessed": "This file was already processed — showing previous results",
@@ -76,7 +78,7 @@
     "unmapped": "-- unmapped --",
     "required": "Required",
     "confirmMapping": "Confirm Mapping",
-    "confirming": "Confirming\u2026"
+    "confirming": "Confirming…"
   },
   "step3": {
     "title": "Configure Pipeline",
@@ -92,12 +94,12 @@
     "account": "Account",
     "via": "via",
     "name": "Name",
-    "checkingRememberedName": "Checking remembered account name from previous imports\u2026",
+    "checkingRememberedName": "Checking remembered account name from previous imports…",
     "rememberedName": "Remembered from previous imports:",
     "rememberedNameHint": "You can edit this before running.",
     "back": "Back",
     "runPipeline": "Run Pipeline",
-    "starting": "Starting\u2026",
+    "starting": "Starting…",
     "identitySource": {
       "filename": "filename",
       "workbookHeader": "workbook header",
@@ -107,9 +109,9 @@
   },
   "step4": {
     "title": "Processing Pipeline",
-    "waiting": "Waiting to start\u2026",
-    "running": "Running\u2026",
-    "waitingForPipeline": "Waiting for pipeline to start\u2026",
+    "waiting": "Waiting to start…",
+    "running": "Running…",
+    "waitingForPipeline": "Waiting for pipeline to start…",
     "pipelineComplete": "Pipeline complete!",
     "pipelineFailed": "Pipeline failed: "
   },
@@ -128,7 +130,7 @@
     "noOverrides": "No scoped overrides have been saved for account",
     "userSummary": "Short summary for user",
     "balanceReconciliation": "Balance Reconciliation",
-    "balanceReconciliationHint": "Compares each row\u2019s statement balance against a running computed balance to identify discrepancies.",
+    "balanceReconciliationHint": "Compares each row’s statement balance against a running computed balance to identify discrepancies.",
     "fileOrder": "File Order",
     "chronological": "Chronological",
     "recommendedView": "Recommended view:",
@@ -221,7 +223,6 @@
       "totalIn": "Total Received",
       "totalOut": "Total Sent",
       "counterparties": "counterparties",
-      "layoutCircle": "Circle",
       "layoutSpread": "Spread",
       "layoutCompact": "Compact",
       "detailAccount": "Account",
@@ -231,7 +232,11 @@
       "colDir": "Direction",
       "colType": "Type",
       "colDesc": "Description",
-      "detailLimited": "Showing first 50 transactions only"
+      "detailLimited": "Showing first 50 transactions only",
+      "layoutHierarchy": "Hierarchy",
+      "layoutPeacock": "Peacock",
+      "minAmount": "Min amount",
+      "minTxnCount": "Min txn count"
     },
     "insights": {
       "title": "Investigation Insights"
@@ -254,7 +259,7 @@
     "caseFolder": "Case Folder",
     "folderPath": "Folder Path",
     "folderPlaceholder": "/absolute/path/to/case-folder",
-    "processing": "Processing\u2026",
+    "processing": "Processing…",
     "runBulkIntake": "Run Bulk Intake",
     "scanSubfolders": "Scan subfolders recursively",
     "runId": "Run ID",
@@ -357,7 +362,7 @@
       "amountModeDebitCredit": "Debit / Credit (separate columns)"
     },
     "aliasHint": "Add all possible column header names this bank uses. BSIE will fuzzy-match these to auto-detect and map columns.",
-    "noAliasField": "No aliases \u2014 field will not be detected",
+    "noAliasField": "No aliases — field will not be detected",
     "aliasPlaceholder": "Type alias and press Enter",
     "fields": {
       "date": "Date",
@@ -402,7 +407,8 @@
       "alerts": "Alerts",
       "crossAccount": "Cross-Account",
       "linkChart": "Link Chart",
-      "exports": "Exports"
+      "exports": "Exports",
+      "llm": "AI Analysis"
     },
     "timelineEmpty": "No transaction data available for the selected filters. Try adjusting date range or account.",
     "crossAccount": {
@@ -448,7 +454,7 @@
     }
   },
   "common": {
-    "loading": "Loading\u2026",
+    "loading": "Loading…",
     "error": "Error",
     "save": "Save",
     "cancel": "Cancel",
@@ -470,7 +476,23 @@
     "selected": "Selected",
     "expanded": "Expanded",
     "clickToExpand": "Click to expand neighbors",
-    "hint": "Enter an account number and click Explore to start building the link chart"
+    "hint": "Enter an account number and click Explore to start building the link chart",
+    "minTxnCount": "Min txn count",
+    "addAccount": "Add Account",
+    "rootAccounts": "Root Accounts",
+    "n2n": "N2N",
+    "n2nSelectB": "Select 2nd node",
+    "n2nIn": "Total In",
+    "n2nOut": "Total Out",
+    "n2nTxns": "transactions",
+    "n2nDate": "Date",
+    "n2nAmount": "Amount",
+    "n2nDir": "Dir",
+    "n2nLimited": "Showing first 30 only",
+    "n2nHintA": "Click a connected node to see details",
+    "loading": "Loading",
+    "nodeInfoRoot": "Root",
+    "nodeInfoConnections": "Connections"
   },
   "dashboard": {
     "title": "BSIE Dashboard",
@@ -500,5 +522,20 @@
       "txnCount": "Transactions"
     },
     "noData": "No data available"
+  },
+  "llm": {
+    "title": "AI Analysis Assistant",
+    "hint": "Ask about transactions, suspicious patterns, or case summaries",
+    "placeholder": "Type your question...",
+    "offline": "Ollama not running — please run ollama serve",
+    "thinking": "Analyzing...",
+    "clear": "Clear history",
+    "contextAccount": "Current account",
+    "txns": "transactions",
+    "quick": {
+      "summarize": "Summarize",
+      "suspicious": "Detect anomalies"
+    },
+    "attachFile": "Attach file (image, PDF, Excel, CSV)"
   }
 }

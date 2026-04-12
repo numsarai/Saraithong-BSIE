@@ -42,6 +42,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { TimelineChart } from '@/components/TimelineChart'
 import { LinkChart } from '@/components/LinkChart'
+import { LlmChat } from '@/components/LlmChat'
 import { toast } from 'sonner'
 import { fmt, fmtDate } from '@/lib/utils'
 import { normalizeOperatorName, useStore } from '@/store'
@@ -49,7 +50,7 @@ import { DatabaseTab } from '@/components/investigation/DatabaseTab'
 import { AlertsTab } from '@/components/investigation/AlertsTab'
 import { CrossAccountTab } from '@/components/investigation/CrossAccountTab'
 
-const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'link-chart', 'timeline', 'duplicates', 'matches', 'audit', 'exports'] as const
+const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'link-chart', 'timeline', 'duplicates', 'matches', 'audit', 'exports', 'llm'] as const
 
 type TabId = (typeof TAB_IDS)[number]
 
@@ -166,6 +167,7 @@ export function InvestigationDesk() {
     { id: 'matches' as const, label: t('investigation.tabs.matches') },
     { id: 'audit' as const, label: t('investigation.tabs.audit') },
     { id: 'exports' as const, label: t('investigation.tabs.exports') },
+    { id: 'llm' as const, label: t('investigation.tabs.llm') },
   ]
 
   const AUDIT_QUICK_FILTERS = [
@@ -822,6 +824,10 @@ export function InvestigationDesk() {
 
       {tab === 'link-chart' && (
         <LinkChart />
+      )}
+
+      {tab === 'llm' && (
+        <LlmChat />
       )}
 
       {tab === 'timeline' && (

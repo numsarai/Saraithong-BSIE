@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { uploadFile } from '@/api'
 import { normalizeOperatorName, useStore } from '@/store'
 import { Button } from '@/components/ui/button'
+import { LlmChat } from '@/components/LlmChat'
 
 interface PriorResult {
   parser_run_id: string
@@ -71,14 +72,31 @@ export function Step1Upload() {
     toast.success(t('step1.alreadyProcessed'))
   }
 
-  const handleReprocess = () => {
+  const handleReprocess = useCallback(async () => {
     if (!priorChoice) return
-    // Use existing upload data but proceed to Step 2 for re-mapping and re-processing
-    setUploadResult(priorChoice.data, priorChoice.fileName)
-    setStep(2)
+    // Re-detect: call /api/redetect with the stored file path
+    setUploading(true)
     setPriorChoice(null)
-    toast.success(t('step1.reprocessing'))
-  }
+    try {
+      const resp = await fetch('/api/redetect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_id: priorChoice.data.file_id,
+          file_name: priorChoice.fileName,
+        }),
+      })
+      if (!resp.ok) throw new Error(await resp.text())
+      const data = await resp.json()
+      setUploadResult(data, priorChoice.fileName)
+      setStep(2)
+      toast.success(t('step1.reprocessing'))
+    } catch (e: any) {
+      toast.error(`Reprocess failed: ${e.message}`)
+    } finally {
+      setUploading(false)
+    }
+  }, [priorChoice, setUploadResult, setStep, t])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -98,6 +116,7 @@ export function Step1Upload() {
   })
 
   return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
     <div className="max-w-xl">
       <h2 className="text-lg font-bold mb-1 text-text">{t('step1.title')}</h2>
       <p className="text-muted text-sm mb-6">{t('step1.description')}</p>
@@ -153,6 +172,12 @@ export function Step1Upload() {
           </div>
         </div>
       )}
+    </div>
+
+    {/* LLM Chat — right column */}
+    <div className="lg:sticky lg:top-7">
+      <LlmChat compact />
+    </div>
     </div>
   )
 }

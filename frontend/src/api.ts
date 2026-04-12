@@ -1,7 +1,8 @@
-export async function uploadFile(file: File, uploaded_by?: string) {
+export async function uploadFile(file: File, uploaded_by?: string, force_redetect?: boolean) {
   const fd = new FormData()
   fd.append('file', file)
   if (uploaded_by) fd.append('uploaded_by', uploaded_by)
+  if (force_redetect) fd.append('force_redetect', '1')
   const r = await fetch('/api/upload', { method: 'POST', body: fd })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
@@ -272,6 +273,34 @@ export async function getMatchedTransactions(accountA: string, accountB: string)
 
 export async function traceFundPath(from: string, to: string, maxHops = 4) {
   const r = await fetch(`/api/fund-flow/trace?from_account=${from}&to_account=${to}&max_hops=${maxHops}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+// ── LLM ──────────────────────────────────────────────────────────────────
+
+export async function getLlmStatus() {
+  const r = await fetch('/api/llm/status')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function llmChat(message: string, opts?: { account?: string; transactions?: any[]; model?: string }) {
+  const r = await fetch('/api/llm/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, ...opts }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function llmSummarize(transactions: any[], account?: string, model?: string) {
+  const r = await fetch('/api/llm/summarize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transactions, account, model }),
+  })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }

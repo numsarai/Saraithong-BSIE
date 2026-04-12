@@ -50,7 +50,6 @@ def dispatch_pipeline(
     enqueue_job(
         job_id,
         run_pipeline_sync,
-        job_id=job_id,
         upload_path_str=upload_path_str,
         bank_key=bank_key,
         account=account,

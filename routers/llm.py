@@ -1,0 +1,219 @@
+"""
+LLM Router — API endpoints for local LLM interaction with DB access.
+
+All endpoints require Ollama to be running on localhost:11434.
+The LLM automatically queries the BSIE database for context.
+No data leaves the machine.
+"""
+
+import logging
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
+
+from services.llm_service import (
+    chat,
+    chat_with_file,
+    check_ollama_status,
+    classify_transaction,
+    get_account_summary,
+    get_all_accounts_summary,
+    summarize_account,
+)
+
+logger = logging.getLogger("bsie.llm.router")
+router = APIRouter(prefix="/api/llm", tags=["llm"])
+
+
+class ChatRequest(BaseModel):
+    message: str
+    account: str = ""
+    transactions: list[dict] = []
+    model: str = "gemma4:latest"
+
+
+class SummarizeRequest(BaseModel):
+    account: str
+    model: str = "gemma4:latest"
+
+
+class ClassifyRequest(BaseModel):
+    transaction: dict = {}
+    model: str = "gemma4:latest"
+
+
+@router.get("/status")
+async def api_llm_status():
+    """Check Ollama connection and available models."""
+    return await check_ollama_status()
+
+
+@router.get("/accounts")
+async def api_llm_accounts():
+    """List all accounts in the database with summary stats."""
+    return get_all_accounts_summary()
+
+
+@router.get("/account/{account}")
+async def api_llm_account_summary(account: str):
+    """Get detailed summary for a specific account from the database."""
+    return get_account_summary(account)
+
+
+@router.post("/chat")
+async def api_llm_chat(req: ChatRequest):
+    """
+    Chat with the LLM. When an account is specified, the system
+    automatically queries the database for that account's transactions
+    and summary — no need to pass transactions manually.
+    """
+    try:
+        result = await chat(
+            req.message,
+            account=req.account,
+            transactions=req.transactions if req.transactions else None,
+            model=req.model,
+        )
+        return result
+    except ConnectionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.post("/summarize")
+async def api_llm_summarize(req: SummarizeRequest):
+    """Summarize an account — auto-pulls data from database."""
+    try:
+        result = await summarize_account(req.account, model=req.model)
+        return result
+    except ConnectionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.post("/classify")
+async def api_llm_classify(req: ClassifyRequest):
+    """Classify a single transaction as normal/suspicious/review."""
+    if not req.transaction:
+        raise HTTPException(status_code=400, detail="ต้องระบุข้อมูลธุรกรรม")
+    try:
+        result = await classify_transaction(req.transaction, model=req.model)
+        return result
+    except ConnectionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/bmp"}
+ALLOWED_DOC_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "text/csv",
+}
+ALLOWED_TYPES = ALLOWED_IMAGE_TYPES | ALLOWED_DOC_TYPES
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
+
+@router.post("/analyze-file")
+async def api_llm_analyze_file(
+    file: UploadFile = File(...),
+    message: str = Form(default="วิเคราะห์เอกสารนี้ สรุปข้อมูลที่พบ"),
+    model: str = Form(default="gemma4:e4b"),
+):
+    """
+    Upload a file for LLM analysis.
+
+    - **Images** (PNG, JPEG, WebP, BMP): sent directly to Gemma 4 multimodal vision.
+    - **PDF**: first page rendered to image, then sent to vision.
+    - **Excel/CSV**: parsed to text rows, then sent as text context.
+    """
+    from services.llm_service import chat_with_file, chat
+
+    content_type = file.content_type or ""
+    filename = file.filename or ""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+    # Infer type from extension if content_type is generic
+    if content_type == "application/octet-stream" or content_type not in ALLOWED_TYPES:
+        ext_map = {
+            "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "webp": "image/webp", "bmp": "image/bmp",
+            "pdf": "application/pdf",
+            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "xls": "application/vnd.ms-excel",
+            "csv": "text/csv",
+        }
+        content_type = ext_map.get(ext, content_type)
+
+    if content_type not in ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"ไม่รองรับไฟล์ประเภท {content_type} — รองรับ: รูปภาพ, PDF, Excel, CSV",
+        )
+
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="ไฟล์ใหญ่เกิน 20 MB")
+
+    try:
+        if content_type in ALLOWED_IMAGE_TYPES:
+            # Direct multimodal vision
+            result = await chat_with_file(message, file_bytes, content_type, model=model)
+
+        elif content_type == "application/pdf":
+            # Render first page of PDF to image, then send to vision
+            import fitz  # PyMuPDF
+
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            page = doc[0]
+            pix = page.get_pixmap(dpi=200)
+            img_bytes = pix.tobytes("png")
+            doc.close()
+            result = await chat_with_file(
+                f"{message}\n(ไฟล์ PDF: {filename}, {doc.page_count} หน้า — แสดงหน้าแรก)",
+                img_bytes, "image/png", model=model,
+            )
+
+        else:
+            # Excel/CSV — parse to text and use text chat
+            import io
+            text_rows: list[str] = []
+
+            if content_type == "text/csv" or ext == "csv":
+                import csv
+                reader = csv.reader(io.StringIO(file_bytes.decode("utf-8", errors="replace")))
+                for i, row in enumerate(reader):
+                    if i >= 60:
+                        text_rows.append(f"... (แสดง 60 แถวแรก)")
+                        break
+                    text_rows.append(" | ".join(row))
+            else:
+                import openpyxl
+                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+                ws = wb.active
+                if ws:
+                    for i, row in enumerate(ws.iter_rows(values_only=True)):
+                        if i >= 60:
+                            text_rows.append(f"... (แสดง 60 แถวแรก)")
+                            break
+                        text_rows.append(" | ".join(str(c or "") for c in row))
+                wb.close()
+
+            file_text = f"ไฟล์: {filename}\n\n" + "\n".join(text_rows)
+            result = await chat(
+                f"{message}\n\nข้อมูลจากไฟล์:\n{file_text}",
+                auto_context=False, model=model,
+            )
+
+        return result
+    except ConnectionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    except Exception as exc:
+        logger.exception("LLM analyze-file error")
+        raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาด: {exc}")

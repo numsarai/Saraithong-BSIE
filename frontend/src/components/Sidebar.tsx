@@ -9,7 +9,7 @@ import {
   APP_SUBTITLE,
   APP_VERSION,
 } from '@/config/appMeta'
-import { Upload, Search, Settings, Cpu, BarChart2, Building2, FolderTree, Database, Globe, LayoutDashboard, Menu, X } from 'lucide-react'
+import { Upload, Search, Settings, Cpu, BarChart2, Building2, FolderTree, Database, Globe, LayoutDashboard, Menu, X, Moon, SunMedium } from 'lucide-react'
 import { useState } from 'react'
 
 export function Sidebar() {
@@ -17,11 +17,13 @@ export function Sidebar() {
   const step = useStore(s => s.step)
   const page = useStore(s => s.page)
   const locale = useStore(s => s.locale)
+  const theme = useStore(s => s.theme)
   const operatorName = useStore(s => s.operatorName)
   const setPage = useStore(s => s.setPage)
   const setOperatorName = useStore(s => s.setOperatorName)
   const setStep = useStore(s => s.setStep)
   const setLocale = useStore(s => s.setLocale)
+  const setTheme = useStore(s => s.setTheme)
 
   const STEPS = [
     { n: 1, label: t('sidebar.steps.upload'),    icon: Upload },
@@ -112,29 +114,39 @@ export function Sidebar() {
 
       {/* Divider + controls */}
       <div className="mt-auto pt-4 border-t border-border">
-        {/* Language toggle */}
-        <div className="flex items-center gap-1.5 px-2 mb-3">
-          <Globe size={12} className="text-muted shrink-0" />
-          <div className="flex rounded-md border border-border overflow-hidden text-[10px] font-semibold">
-            <button
-              onClick={() => setLocale('th')}
-              className={cn(
-                'px-2 py-0.5 transition-colors cursor-pointer',
-                locale === 'th' ? 'bg-accent text-white' : 'bg-surface2 text-muted hover:text-text',
-              )}
-            >
-              TH
-            </button>
-            <button
-              onClick={() => setLocale('en')}
-              className={cn(
-                'px-2 py-0.5 transition-colors cursor-pointer',
-                locale === 'en' ? 'bg-accent text-white' : 'bg-surface2 text-muted hover:text-text',
-              )}
-            >
-              EN
-            </button>
+        {/* Language + Theme toggles */}
+        <div className="flex items-center gap-2.5 px-2 mb-3">
+          <div className="flex items-center gap-1.5">
+            <Globe size={12} className="text-muted shrink-0" />
+            <div className="flex rounded-md border border-border overflow-hidden text-[10px] font-semibold">
+              <button
+                onClick={() => setLocale('th')}
+                className={cn(
+                  'px-2 py-0.5 transition-colors cursor-pointer',
+                  locale === 'th' ? 'bg-accent text-white' : 'bg-surface2 text-muted hover:text-text',
+                )}
+              >
+                TH
+              </button>
+              <button
+                onClick={() => setLocale('en')}
+                className={cn(
+                  'px-2 py-0.5 transition-colors cursor-pointer',
+                  locale === 'en' ? 'bg-accent text-white' : 'bg-surface2 text-muted hover:text-text',
+                )}
+              >
+                EN
+              </button>
+            </div>
           </div>
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="flex items-center gap-1 rounded-md border border-border bg-surface2 px-2 py-0.5 text-[10px] font-semibold text-muted hover:text-text transition-colors cursor-pointer"
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          >
+            {theme === 'dark' ? <SunMedium size={12} /> : <Moon size={12} />}
+            {theme === 'dark' ? 'Light' : 'Dark'}
+          </button>
         </div>
 
         <button

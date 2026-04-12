@@ -5,10 +5,12 @@ import i18n from '@/i18n'
 export type Tab = 'transactions' | 'entities' | 'links'
 export type Page = 'main' | 'dashboard' | 'bank-manager' | 'bulk-intake' | 'investigation'
 export type Locale = 'th' | 'en'
+export type Theme = 'light' | 'dark'
 export const DEFAULT_OPERATOR_NAME = 'analyst'
 
 const OPERATOR_STORAGE_KEY = 'bsie.operator_name'
 const LOCALE_STORAGE_KEY = 'bsie.language'
+const THEME_STORAGE_KEY = 'bsie.theme'
 
 function getBrowserStorage(): Storage | null {
   if (typeof window === 'undefined') return null
@@ -24,6 +26,23 @@ function readStoredOperatorName() {
   if (!storage) return DEFAULT_OPERATOR_NAME
   const stored = storage.getItem(OPERATOR_STORAGE_KEY)
   return stored?.trim() || DEFAULT_OPERATOR_NAME
+}
+
+function readStoredTheme(): Theme {
+  const storage = getBrowserStorage()
+  if (!storage) return 'dark'
+  const stored = storage.getItem(THEME_STORAGE_KEY)
+  return stored === 'light' ? 'light' : 'dark'
+}
+
+function persistTheme(theme: Theme) {
+  const storage = getBrowserStorage()
+  if (!storage) return
+  storage.setItem(THEME_STORAGE_KEY, theme)
+  // Apply class to documentElement
+  if (typeof document !== 'undefined') {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }
 }
 
 function readStoredLocale(): Locale {
@@ -58,6 +77,7 @@ export interface AppState {
   page: Page
   step: number
   locale: Locale
+  theme: Theme
   operatorName: string
   jobId: string | null
   fileId: string | null
@@ -90,6 +110,7 @@ export interface AppState {
   bulkSummary: any | null
   setStep: (step: number) => void
   setLocale: (locale: Locale) => void
+  setTheme: (theme: Theme) => void
   setOperatorName: (operatorName: string) => void
   setUploadResult: (data: any, filename: string) => void
   setConfirmedMapping: (mapping: Record<string, string | null>) => void
@@ -147,12 +168,17 @@ const workflowInitialState = {
 export const useStore = create<AppState>((set) => ({
   ...workflowInitialState,
   locale: readStoredLocale(),
+  theme: readStoredTheme(),
   operatorName: readStoredOperatorName(),
   setStep: (step) => set({ step }),
   setLocale: (locale) => set(() => {
     persistLocale(locale)
     i18n.changeLanguage(locale)
     return { locale }
+  }),
+  setTheme: (theme) => set(() => {
+    persistTheme(theme)
+    return { theme }
   }),
   setOperatorName: (operatorName) => set(() => {
     const nextOperatorName = String(operatorName || '').slice(0, 80)

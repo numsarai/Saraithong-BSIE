@@ -44,26 +44,24 @@ def dispatch_pipeline(
     header_row: int = 0,
     sheet_name: str = "",
 ) -> None:
-    """Dispatch the pipeline using the local background thread."""
-    logger.info("Dispatching pipeline via local background thread")
-    t = threading.Thread(
-        target=run_pipeline_sync,
-        kwargs={
-            "job_id": job_id,
-            "upload_path_str": upload_path_str,
-            "bank_key": bank_key,
-            "account": account,
-            "name": name,
-            "confirmed_mapping": confirmed_mapping,
-            "file_id": file_id,
-            "parser_run_id": parser_run_id,
-            "operator": operator,
-            "header_row": header_row,
-            "sheet_name": sheet_name,
-        },
-        daemon=True,
+    """Dispatch the pipeline via the serialized job queue (prevents DB lock)."""
+    from services.job_queue_service import enqueue_job
+    logger.info("Dispatching pipeline via job queue")
+    enqueue_job(
+        job_id,
+        run_pipeline_sync,
+        job_id=job_id,
+        upload_path_str=upload_path_str,
+        bank_key=bank_key,
+        account=account,
+        name=name,
+        confirmed_mapping=confirmed_mapping,
+        file_id=file_id,
+        parser_run_id=parser_run_id,
+        operator=operator,
+        header_row=header_row,
+        sheet_name=sheet_name,
     )
-    t.start()
 
 
 # ---------------------------------------------------------------------------

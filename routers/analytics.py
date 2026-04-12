@@ -14,6 +14,8 @@ from services.bulk_matching_service import bulk_cross_match
 from services.sna_service import compute_sna_metrics
 from services.file_metadata_service import extract_file_metadata
 from services.insights_service import generate_account_insights
+from services.threat_hunting_service import run_threat_hunt
+from services.regulatory_export_service import generate_str_report, generate_ctr_report
 from services.case_tapestry_service import build_case_tapestry
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
@@ -105,4 +107,34 @@ async def api_bulk_cross_match(request: Request):
             date_from=date_from,
             date_to=date_to,
         )
+    return JSONResponse(result)
+
+
+@router.get("/threat-hunt")
+async def api_threat_hunt(account: str = ""):
+    """Run advanced financial crime threat hunting patterns."""
+    with get_db_session() as session:
+        result = run_threat_hunt(session, account)
+    return JSONResponse(result)
+
+
+@router.post("/str-report")
+async def api_str_report(request: Request):
+    """Generate Suspicious Transaction Report (STR) for AMLO."""
+    payload = await request.json()
+    account = str(payload.get("account", ""))
+    reason = str(payload.get("reason", ""))
+    analyst = str(payload.get("analyst", "analyst"))
+    if not account:
+        return JSONResponse({"error": "account required"}, status_code=400)
+    with get_db_session() as session:
+        result = generate_str_report(session, account, reason=reason, analyst=analyst)
+    return JSONResponse(result)
+
+
+@router.get("/ctr-report")
+async def api_ctr_report(account: str = "", analyst: str = "analyst"):
+    """Generate Currency Transaction Report (CTR) for transactions >= 200,000 THB."""
+    with get_db_session() as session:
+        result = generate_ctr_report(session, account, analyst=analyst)
     return JSONResponse(result)

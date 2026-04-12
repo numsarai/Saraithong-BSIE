@@ -483,21 +483,28 @@ def _write_transactions_multisheet(
         cover_sheet["B3"].font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, color="475569")
         source_bank_name = str(context.get("bank_name") or "")
         source_subject_name = str(context.get("subject_name") or "") or "Unknown subject"
+        # Use Excel formulas for dynamic values instead of hardcoded numbers
+        all_txn_sheet = WORKBOOK_SHEET_NAMES["all_transactions"]
         cover_items = [
             ("Subject Account Name", source_subject_name),
             ("Subject Account Number", str(context.get("account_number") or "")),
             ("Bank", source_bank_name),
             ("Original File", str(context.get("original_filename") or "")),
             ("Date Range", str(context.get("date_range") or "")),
-            ("Transaction Count", str(context.get("transaction_count") or 0)),
+            ("Transaction Count", None),  # Will use formula
             ("Program Owner / Developer", APP_OWNER_NAME or APP_DEVELOPER_NAME),
             ("Contact", APP_CONTACT_PHONE),
         ]
         for index, (label, value) in enumerate(cover_items, start=5):
             cover_sheet[f"B{index}"] = label
             cover_sheet[f"B{index}"].font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="64748B")
-            cover_sheet[f"C{index}"] = value
+            if value is not None:
+                cover_sheet[f"C{index}"] = value
             cover_sheet[f"C{index}"].font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, color="0F172A")
+        # Transaction Count uses formula referencing All_Transactions sheet
+        txn_count_row = 10  # "Transaction Count" is 6th item (start=5, index 5+5=10)
+        cover_sheet[f"C{txn_count_row}"] = f"=COUNTA('{all_txn_sheet}'!A:A)-1"
+        cover_sheet[f"C{txn_count_row}"].font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, color="0F172A")
         cover_sheet["B13"] = "Report Notes"
         cover_sheet["B13"].font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="1E293B")
         notes_font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, color="334155")
@@ -585,6 +592,28 @@ def _write_transactions_multisheet(
                         cell.font = data_font
                         if row_fill:
                             cell.fill = row_fill
+
+            # Add summary row with formulas for amount columns
+            if ws.max_row > 1:
+                summary_row = ws.max_row + 2
+                amount_col = None
+                for ci, col_name in enumerate(col_names, 1):
+                    if col_name.lower() in ("amount", "transaction_amount"):
+                        amount_col = ci
+                        break
+                if amount_col:
+                    amount_letter = ws.cell(row=1, column=amount_col).column_letter
+                    ws.cell(row=summary_row, column=1).value = "TOTAL"
+                    ws.cell(row=summary_row, column=1).font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True)
+                    ws.cell(row=summary_row, column=amount_col).value = f"=SUM({amount_letter}2:{amount_letter}{ws.max_row})"
+                    ws.cell(row=summary_row, column=amount_col).font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True)
+                    ws.cell(row=summary_row, column=amount_col).number_format = '#,##0.00'
+
+                    count_cell = ws.cell(row=summary_row + 1, column=1)
+                    count_cell.value = "COUNT"
+                    count_cell.font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="64748B")
+                    ws.cell(row=summary_row + 1, column=amount_col).value = f"=COUNTA({amount_letter}2:{amount_letter}{ws.max_row})"
+                    ws.cell(row=summary_row + 1, column=amount_col).font = Font(name=REPORT_FONT_NAME, size=REPORT_FONT_SIZE, bold=True, color="64748B")
 
             # Auto-filter on header row
             if ws.max_row >= 1 and ws.max_column >= 1:

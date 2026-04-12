@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { deleteOverride, generateAccountReport, getOverrides, getResults, getResultsTimeline, saveOverride } from '@/api'
+import { deleteOverride, generateAccountReport, getAccountInsights, getOverrides, getResults, getResultsTimeline, saveOverride } from '@/api'
 import { normalizeOperatorName, useStore } from '@/store'
 import { BankLogo } from '@/components/BankLogo'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -62,6 +62,13 @@ export function Step5Results() {
     staleTime: 60_000,
   })
   const timelineItems = timelineData?.items || []
+  const { data: insightsData } = useQuery({
+    queryKey: ['account-insights', account],
+    queryFn: () => getAccountInsights(account),
+    enabled: !!account,
+    staleTime: 60_000,
+  })
+  const insights = insightsData?.insights || []
 
   const meta = results?.meta || txnData?.meta || {}
   const rows = txnData?.rows || results?.transactions || []
@@ -344,6 +351,28 @@ export function Step5Results() {
 
       {timelineItems.length > 0 && (
         <TimeWheel transactions={timelineItems} />
+      )}
+
+      {insights.length > 0 && (
+        <Card className="border-amber-800/30 bg-amber-900/10 p-4">
+          <CardTitle className="mb-2 text-amber-400">{t('results.insights.title')}</CardTitle>
+          <div className="space-y-2">
+            {insights.map((insight: any, i: number) => {
+              const sevBg = insight.severity === 'high' ? 'bg-red-900/40 text-red-400'
+                : insight.severity === 'medium' ? 'bg-yellow-900/40 text-yellow-400'
+                : 'bg-blue-900/40 text-blue-400'
+              return (
+                <div key={i} className="rounded-lg border border-border bg-surface2/50 px-3 py-2 text-xs">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${sevBg}`}>{insight.severity}</span>
+                    <span className="font-semibold text-text">{insight.title_th || insight.title}</span>
+                  </div>
+                  <p className="text-muted">{insight.description}</p>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
       )}
 
       <Card className="border-accent/20 bg-accent/[0.06] p-4">

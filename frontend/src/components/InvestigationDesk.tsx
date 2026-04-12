@@ -33,7 +33,6 @@ import {
   getTimelineAggregate,
   getAlerts,
   getAlertSummary,
-  reviewAlert as reviewAlertApi,
   getAccountFlows,
   getMatchedTransactions,
   traceFundPath,
@@ -46,6 +45,9 @@ import { LinkChart } from '@/components/LinkChart'
 import { toast } from 'sonner'
 import { fmt, fmtDate } from '@/lib/utils'
 import { normalizeOperatorName, useStore } from '@/store'
+import { DatabaseTab } from '@/components/investigation/DatabaseTab'
+import { AlertsTab } from '@/components/investigation/AlertsTab'
+import { CrossAccountTab } from '@/components/investigation/CrossAccountTab'
 
 const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'link-chart', 'timeline', 'duplicates', 'matches', 'audit', 'exports'] as const
 
@@ -790,290 +792,32 @@ export function InvestigationDesk() {
       )}
 
       {tab === 'alerts' && (
-        <div className="space-y-4">
-          {/* Summary cards */}
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3">
-            <StatCard label={t('investigation.alerts.total')} value={alertSummary.total ?? 0} />
-            <div className="rounded-xl border border-red-800/40 bg-red-900/20 px-3 py-2 text-center">
-              <div className="text-lg font-bold text-red-400">{alertSummary.critical_count ?? 0}</div>
-              <div className="text-[10px] text-red-400/70 uppercase font-semibold">{t('investigation.alerts.critical')}</div>
-            </div>
-            <div className="rounded-xl border border-orange-800/40 bg-orange-900/20 px-3 py-2 text-center">
-              <div className="text-lg font-bold text-orange-400">{alertSummary.high_count ?? 0}</div>
-              <div className="text-[10px] text-orange-400/70 uppercase font-semibold">{t('investigation.alerts.high')}</div>
-            </div>
-            <StatCard label={t('investigation.alerts.newAlerts')} value={alertSummary.new_count ?? 0} />
-          </div>
-
-          {/* Alert list */}
-          {alertItems.length > 0 ? (
-            <Card>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border text-muted text-left">
-                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.severity')}</th>
-                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.ruleType')}</th>
-                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.summary')}</th>
-                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.confidence')}</th>
-                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.status')}</th>
-                      <th className="px-2 py-2 font-semibold">{t('investigation.alerts.actions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {alertItems.map((alert: any) => {
-                      const sevColor = alert.severity === 'critical' ? 'text-red-400 bg-red-900/30'
-                        : alert.severity === 'high' ? 'text-orange-400 bg-orange-900/30'
-                        : alert.severity === 'medium' ? 'text-yellow-400 bg-yellow-900/30'
-                        : 'text-blue-400 bg-blue-900/30'
-                      const statusColor = alert.status === 'new' ? 'text-red-400'
-                        : alert.status === 'acknowledged' ? 'text-yellow-400'
-                        : 'text-green-400'
-                      return (
-                        <tr key={alert.id} className="border-b border-border/50 hover:bg-accent/5">
-                          <td className="px-2 py-1.5">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${sevColor}`}>
-                              {alert.severity}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5 text-text2 font-mono">{alert.rule_type}</td>
-                          <td className="px-2 py-1.5 text-text2 max-w-[300px] truncate">{alert.summary}</td>
-                          <td className="px-2 py-1.5 text-muted">{(alert.confidence * 100).toFixed(0)}%</td>
-                          <td className="px-2 py-1.5">
-                            <span className={`font-semibold ${statusColor}`}>{alert.status}</span>
-                          </td>
-                          <td className="px-2 py-1.5">
-                            {alert.status === 'new' && (
-                              <Button
-                                variant="ghost"
-                                onClick={async () => {
-                                  await reviewAlertApi(alert.id, 'acknowledged', operatorName)
-                                  alertsQuery.refetch()
-                                  alertSummaryQuery.refetch()
-                                }}
-                              >
-                                {t('investigation.alerts.acknowledge')}
-                              </Button>
-                            )}
-                            {alert.status === 'acknowledged' && (
-                              <Button
-                                variant="ghost"
-                                onClick={async () => {
-                                  await reviewAlertApi(alert.id, 'resolved', operatorName)
-                                  alertsQuery.refetch()
-                                  alertSummaryQuery.refetch()
-                                }}
-                              >
-                                {t('investigation.alerts.resolve')}
-                              </Button>
-                            )}
-                            {alert.status === 'resolved' && (
-                              <span className="text-green-400 text-[10px]">{t('investigation.alerts.resolved')}</span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          ) : (
-            <Card className="p-8 text-center text-muted text-sm">
-              {alertsQuery.isLoading ? t('common.loading') : t('investigation.alerts.noAlerts')}
-            </Card>
-          )}
-        </div>
+        <AlertsTab
+          alertItems={alertItems}
+          alertSummary={alertSummary}
+          operatorName={operatorName}
+          isLoading={alertsQuery.isLoading}
+          refetchAlerts={() => alertsQuery.refetch()}
+          refetchAlertSummary={() => alertSummaryQuery.refetch()}
+        />
       )}
 
       {tab === 'cross-account' && (
-        <div className="space-y-4">
-          {/* Account selector */}
-          <Card className="space-y-3">
-            <CardTitle>{t('investigation.crossAccount.selectAccount')}</CardTitle>
-            <div className="flex gap-3 items-end flex-wrap">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase text-muted font-semibold">{t('investigation.crossAccount.account')}</label>
-                <input
-                  value={crossAccountSelected}
-                  onChange={e => { setCrossAccountSelected(e.target.value.replace(/\D/g, '')); setCrossAccountTarget('') }}
-                  placeholder="1234567890"
-                  className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none w-40"
-                />
-              </div>
-              {crossAccountSelected && crossFlowQuery.data && (
-                <div className="text-xs text-muted">
-                  <span className="text-text font-semibold">{crossFlowQuery.data.name || crossFlowQuery.data.account}</span>
-                  {crossFlowQuery.data.bank && <span className="ml-1">({crossFlowQuery.data.bank})</span>}
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Flow summary */}
-          {crossFlowQuery.data && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Inbound */}
-              <Card className="border-green-800/30">
-                <CardTitle className="text-green-400 text-sm mb-2">
-                  {t('investigation.crossAccount.inbound')} ({crossFlowQuery.data.inbound_count}) — {t('results.flowGraph.totalIn')}: {Number(crossFlowQuery.data.total_in).toLocaleString('th-TH', {minimumFractionDigits: 2})}
-                </CardTitle>
-                <div className="max-h-60 overflow-y-auto">
-                  <table className="w-full text-xs">
-                    <tbody>
-                      {(crossFlowQuery.data.inbound || []).map((f: any) => (
-                        <tr
-                          key={f.account}
-                          className={`border-b border-border/30 hover:bg-green-900/10 cursor-pointer ${crossAccountTarget === f.account ? 'bg-green-900/20' : ''}`}
-                          onClick={() => setCrossAccountTarget(f.account)}
-                        >
-                          <td className="px-2 py-1 font-mono text-green-400">{f.account}</td>
-                          <td className="px-2 py-1 text-text2 truncate max-w-[120px]">{f.name}</td>
-                          <td className="px-2 py-1 text-green-400 font-semibold text-right">{Number(f.total).toLocaleString('th-TH')}</td>
-                          <td className="px-2 py-1 text-muted text-right">{f.count}x</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-
-              {/* Outbound */}
-              <Card className="border-red-800/30">
-                <CardTitle className="text-red-400 text-sm mb-2">
-                  {t('investigation.crossAccount.outbound')} ({crossFlowQuery.data.outbound_count}) — {t('results.flowGraph.totalOut')}: {Number(crossFlowQuery.data.total_out).toLocaleString('th-TH', {minimumFractionDigits: 2})}
-                </CardTitle>
-                <div className="max-h-60 overflow-y-auto">
-                  <table className="w-full text-xs">
-                    <tbody>
-                      {(crossFlowQuery.data.outbound || []).map((f: any) => (
-                        <tr
-                          key={f.account}
-                          className={`border-b border-border/30 hover:bg-red-900/10 cursor-pointer ${crossAccountTarget === f.account ? 'bg-red-900/20' : ''}`}
-                          onClick={() => setCrossAccountTarget(f.account)}
-                        >
-                          <td className="px-2 py-1 font-mono text-red-400">{f.account}</td>
-                          <td className="px-2 py-1 text-text2 truncate max-w-[120px]">{f.name}</td>
-                          <td className="px-2 py-1 text-red-400 font-semibold text-right">{Number(f.total).toLocaleString('th-TH')}</td>
-                          <td className="px-2 py-1 text-muted text-right">{f.count}x</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            </div>
-          )}
-
-          {/* Pairwise transactions */}
-          {crossAccountTarget && crossMatchQuery.data?.items?.length > 0 && (
-            <Card>
-              <CardTitle className="text-sm mb-2">
-                {t('investigation.crossAccount.pairwise')}: {crossAccountSelected} ↔ {crossAccountTarget}
-              </CardTitle>
-              <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-surface2">
-                    <tr className="border-b border-border text-muted">
-                      <th className="px-2 py-1.5 text-left">{t('results.flowGraph.colDate')}</th>
-                      <th className="px-2 py-1.5 text-right">{t('results.flowGraph.colAmount')}</th>
-                      <th className="px-2 py-1.5 text-left">{t('results.flowGraph.colDir')}</th>
-                      <th className="px-2 py-1.5 text-left">{t('results.flowGraph.colType')}</th>
-                      <th className="px-2 py-1.5 text-left">{t('results.flowGraph.colDesc')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {crossMatchQuery.data.items.map((txn: any, i: number) => {
-                      const isIn = txn.direction === 'IN'
-                      return (
-                        <tr key={i} className="border-b border-border/50 hover:bg-accent/5">
-                          <td className="px-2 py-1 text-text2">{txn.date}</td>
-                          <td className={`px-2 py-1 text-right font-mono font-medium ${isIn ? 'text-green-400' : 'text-red-400'}`}>
-                            {isIn ? '+' : '-'}{Math.abs(txn.amount).toLocaleString('th-TH', {minimumFractionDigits: 2})}
-                          </td>
-                          <td className="px-2 py-1">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${isIn ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>
-                              {txn.direction}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1 text-muted">{txn.transaction_type}</td>
-                          <td className="px-2 py-1 text-text2 truncate max-w-[200px]">{txn.description}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
-
-          {/* Path Finder */}
-          <Card className="space-y-3">
-            <CardTitle className="text-sm">{t('investigation.crossAccount.pathFinder')}</CardTitle>
-            <div className="flex gap-3 items-end flex-wrap">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase text-muted font-semibold">{t('investigation.crossAccount.from')}</label>
-                <input
-                  value={pathFrom}
-                  onChange={e => setPathFrom(e.target.value.replace(/\D/g, ''))}
-                  placeholder="1234567890"
-                  className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none w-36"
-                />
-              </div>
-              <span className="text-muted text-lg pb-2">→</span>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase text-muted font-semibold">{t('investigation.crossAccount.to')}</label>
-                <input
-                  value={pathTo}
-                  onChange={e => setPathTo(e.target.value.replace(/\D/g, ''))}
-                  placeholder="9876543210"
-                  className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none w-36"
-                />
-              </div>
-              <Button
-                variant="success"
-                onClick={() => pathTraceQuery.refetch()}
-                disabled={!pathFrom || !pathTo || pathTraceQuery.isFetching}
-              >
-                {pathTraceQuery.isFetching ? t('common.loading') : t('investigation.crossAccount.trace')}
-              </Button>
-            </div>
-
-            {pathTraceQuery.data && (
-              <div className="mt-3">
-                {pathTraceQuery.data.found ? (
-                  <div className="space-y-2">
-                    <p className="text-xs text-green-400 font-semibold">
-                      {t('investigation.crossAccount.pathsFound')}: {pathTraceQuery.data.path_count}
-                    </p>
-                    {pathTraceQuery.data.paths.map((path: any, pi: number) => (
-                      <div key={pi} className="rounded-lg border border-border bg-surface2/50 p-3">
-                        <div className="flex items-center gap-1 flex-wrap text-xs mb-2">
-                          {path.hops.map((hop: string, hi: number) => (
-                            <span key={hi} className="flex items-center gap-1">
-                              <span className="px-2 py-0.5 rounded-full bg-accent/20 text-accent font-mono font-semibold">{hop}</span>
-                              {hi < path.hops.length - 1 && <span className="text-red-400">→</span>}
-                            </span>
-                          ))}
-                          <span className="ml-2 text-muted">({path.hop_count} {t('investigation.crossAccount.hops')})</span>
-                        </div>
-                        <div className="flex gap-3 text-[10px] text-muted">
-                          {path.amounts.map((a: any, ai: number) => (
-                            <span key={ai}>
-                              {a.from.slice(-4)}→{a.to.slice(-4)}: <strong className="text-text">{Number(a.total).toLocaleString('th-TH')}</strong> ({a.count}x)
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted">{t('investigation.crossAccount.noPath')}</p>
-                )}
-              </div>
-            )}
-          </Card>
-        </div>
+        <CrossAccountTab
+          crossAccountSelected={crossAccountSelected}
+          setCrossAccountSelected={setCrossAccountSelected}
+          crossAccountTarget={crossAccountTarget}
+          setCrossAccountTarget={setCrossAccountTarget}
+          pathFrom={pathFrom}
+          setPathFrom={setPathFrom}
+          pathTo={pathTo}
+          setPathTo={setPathTo}
+          crossFlowData={crossFlowQuery.data}
+          crossMatchData={crossMatchQuery.data}
+          pathTraceData={pathTraceQuery.data}
+          isPathTraceFetching={pathTraceQuery.isFetching}
+          refetchPathTrace={() => pathTraceQuery.refetch()}
+        />
       )}
 
       {tab === 'link-chart' && (
@@ -1314,166 +1058,34 @@ export function InvestigationDesk() {
       )}
 
       {tab === 'database' && (
-        <Card className="space-y-4">
-          <CardTitle>Database Readiness</CardTitle>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {Object.entries(dbStatus?.key_record_counts || {}).map(([key, value]) => (
-              <FieldBlock key={key} label={key.replaceAll('_', ' ')} value={value} />
-            ))}
-          </div>
-          <div className="rounded-xl border border-border bg-surface2 p-4 text-sm text-text2 space-y-2">
-            <div>สถานะปัจจุบันของโปรเจคนี้เป็นระบบฐานข้อมูลถาวรแล้ว และตอนนี้รองรับทั้ง ingest ซ้ำ, duplicate detection, parser run history, transaction search, review, audit log, และ reproducible export jobs.</div>
-            <div>runtime ของโปรเจคนี้ถูกยุบให้เป็น local SQLite แบบถาวรแล้ว จึงไม่ต้องพึ่ง worker แยก, Redis, หรือ PostgreSQL สำหรับการใช้งานปกติในเครื่อง.</div>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-            <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
-              <div className="text-sm font-semibold text-text">Backup / Reset / Restore</div>
-              <div className="grid gap-3 md:grid-cols-[auto_minmax(120px,160px)_auto] md:items-end">
-                <label className="flex items-center gap-2 text-sm text-text">
-                  <input
-                    type="checkbox"
-                    checked={backupEnabled}
-                    onChange={(event) => setBackupEnabled(event.target.checked)}
-                    className="h-4 w-4 rounded border-border bg-surface2"
-                  />
-                  Scheduled backup enabled
-                </label>
-                <TextInput
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={backupIntervalHours}
-                  onChange={(event) => setBackupIntervalHours(event.target.value)}
-                  placeholder="Interval hours"
-                />
-                <Button variant="outline" onClick={handleSaveBackupSettings}>Save Schedule</Button>
-              </div>
-              <div className="grid gap-3 md:grid-cols-[auto_minmax(120px,160px)] md:items-end">
-                <label className="flex items-center gap-2 text-sm text-text">
-                  <input
-                    type="checkbox"
-                    checked={backupRetentionEnabled}
-                    onChange={(event) => setBackupRetentionEnabled(event.target.checked)}
-                    className="h-4 w-4 rounded border-border bg-surface2"
-                  />
-                  Retention enabled
-                </label>
-                <TextInput
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={backupRetainCount}
-                  onChange={(event) => setBackupRetainCount(event.target.value)}
-                  placeholder="Keep last N backups"
-                />
-              </div>
-              <div className="text-xs text-text2">
-                Current schedule source: <span className="font-mono">{backupSettingsQuery.data?.source || backupsQuery.data?.settings?.source || '—'}</span>{' '}
-                · effective format: <span className="font-mono">{backupSettingsQuery.data?.effective_backup_format || '—'}</span>{' '}
-                · retention: <span className="font-mono">{backupSettingsQuery.data?.retention_enabled ? `keep ${backupSettingsQuery.data?.retain_count}` : 'off'}</span>
-              </div>
-              <TextInput
-                value={adminNote}
-                onChange={(event) => setAdminNote(event.target.value)}
-                placeholder="Operation note for backup / reset / restore"
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={handleCreateBackup}>Create Backup</Button>
-                <Button variant="ghost" onClick={() => window.location.assign(`/api/download-backup/${encodeURIComponent(selectedBackupFilename)}?download_name=${encodeURIComponent(selectedBackupFilename)}`)} disabled={!selectedBackupFilename}>
-                  Download Selected Backup
-                </Button>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2 rounded-lg border border-border bg-surface2 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted">Reset Database</div>
-                  <div className="text-xs text-text2">Type: <span className="font-mono">{backupsQuery.data?.reset_confirmation_text || 'RESET BSIE DATABASE'}</span></div>
-                  <TextInput
-                    value={resetConfirmText}
-                    onChange={(event) => setResetConfirmText(event.target.value)}
-                    placeholder="Confirmation text"
-                  />
-                  <Button variant="danger" onClick={handleResetDatabase}>Reset Current Database</Button>
-                </div>
-                <div className="space-y-2 rounded-lg border border-border bg-surface2 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted">Restore Backup</div>
-                  <div className="text-xs text-text2">Type: <span className="font-mono">{backupsQuery.data?.restore_confirmation_text || 'RESTORE BSIE DATABASE'}</span></div>
-                  <TextInput
-                    value={restoreConfirmText}
-                    onChange={(event) => setRestoreConfirmText(event.target.value)}
-                    placeholder="Confirmation text"
-                  />
-                  <Button variant="success" onClick={handleRestoreDatabase} disabled={!selectedBackupFilename}>Restore Selected Backup</Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-text">Available Backups</div>
-                <Badge variant={backups.length > 0 ? 'green' : 'blue'}>{backups.length}</Badge>
-              </div>
-              <div className="max-h-[360px] overflow-auto rounded-lg border border-border">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-surface2 text-left text-xs uppercase tracking-wide text-muted">
-                    <tr>
-                      <th className="px-3 py-2">Backup</th>
-                      <th className="px-3 py-2">Rows</th>
-                      <th className="px-3 py-2">When</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {backups.length === 0 ? (
-                      <tr>
-                        <td className="px-3 py-4 text-muted" colSpan={3}>No backups yet.</td>
-                      </tr>
-                    ) : backups.map((backup: any) => (
-                      <tr
-                        key={backup.filename}
-                        className={[
-                          'cursor-pointer border-t border-border/60',
-                          selectedBackupFilename === backup.filename ? 'bg-accent/10' : 'hover:bg-surface2/80',
-                        ].join(' ')}
-                        onClick={() => setSelectedBackupFilename(backup.filename)}
-                      >
-                        <td className="px-3 py-2">
-                          <div className="font-medium text-text">{backup.filename}</div>
-                          <div className="text-xs text-muted">{backup.note || '—'}</div>
-                        </td>
-                        <td className="px-3 py-2">{formatValue(backup.total_rows)}</td>
-                        <td className="px-3 py-2 text-xs text-text2">{formatValue(backup.created_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {selectedBackup && (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <FieldBlock label="Selected Backup" value={selectedBackup.filename} mono />
-                  <FieldBlock label="Created By" value={selectedBackup.created_by} />
-                  <FieldBlock label="Database Backend" value={selectedBackup.database_backend} />
-                  <FieldBlock label="Backup Format" value={selectedBackup.backup_format} />
-                  <FieldBlock label="Total Rows" value={selectedBackup.total_rows} />
-                </div>
-              )}
-              {backupPreview && (
-                <div className="space-y-3 rounded-lg border border-border bg-surface2 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted">Restore Preview</div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <FieldBlock label="Will Replace Current Data" value={backupPreview.will_replace_current_data ? 'Yes' : 'No'} />
-                    <FieldBlock label="Schema Version" value={backupPreview.schema_version} />
-                    <FieldBlock label="Backup Format" value={backupPreview.backup_format} />
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    {Object.entries(backupPreview.delta_table_counts || {}).slice(0, 9).map(([key, value]) => (
-                      <FieldBlock key={key} label={`${key} delta`} value={value} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </Card>
+        <DatabaseTab
+          dbStatus={dbStatus}
+          backups={backups}
+          selectedBackupFilename={selectedBackupFilename}
+          setSelectedBackupFilename={setSelectedBackupFilename}
+          selectedBackup={selectedBackup}
+          backupPreview={backupPreview}
+          backupEnabled={backupEnabled}
+          setBackupEnabled={setBackupEnabled}
+          backupIntervalHours={backupIntervalHours}
+          setBackupIntervalHours={setBackupIntervalHours}
+          backupRetentionEnabled={backupRetentionEnabled}
+          setBackupRetentionEnabled={setBackupRetentionEnabled}
+          backupRetainCount={backupRetainCount}
+          setBackupRetainCount={setBackupRetainCount}
+          adminNote={adminNote}
+          setAdminNote={setAdminNote}
+          resetConfirmText={resetConfirmText}
+          setResetConfirmText={setResetConfirmText}
+          restoreConfirmText={restoreConfirmText}
+          setRestoreConfirmText={setRestoreConfirmText}
+          backupSettingsData={backupSettingsQuery.data}
+          backupsData={backupsQuery.data}
+          onSaveBackupSettings={handleSaveBackupSettings}
+          onCreateBackup={handleCreateBackup}
+          onResetDatabase={handleResetDatabase}
+          onRestoreDatabase={handleRestoreDatabase}
+        />
       )}
 
       {fileDetail && (

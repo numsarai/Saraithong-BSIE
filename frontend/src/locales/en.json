@@ -233,6 +233,9 @@
       "colDesc": "Description",
       "detailLimited": "Showing first 50 transactions only"
     },
+    "insights": {
+      "title": "Investigation Insights"
+    },
     "timeline": {
       "title": "Transaction Timeline",
       "barMode": "Bar",

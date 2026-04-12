@@ -1,0 +1,24 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff lint
+        entry: ruff check --select E,W,F --ignore E501 --fix
+        language: system
+        types: [python]
+        pass_filenames: true
+
+      - id: ruff-format
+        name: Ruff format check
+        entry: ruff format --check
+        language: system
+        types: [python]
+        pass_filenames: true
+
+      - id: pytest-quick
+        name: Quick pytest
+        entry: python -m pytest tests/ -x -q --timeout=60
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

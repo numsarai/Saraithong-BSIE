@@ -148,14 +148,14 @@ def generate():
     # 2. SPNI VISION
     # ════════════════════════════════════════════════════════════
     s = S(NAVY)
-    _title(s, "SPNI Platform — ภาพรวม 4 โมดูล", WHITE)
-    _sub(s, "แพลตฟอร์มรวมเครื่องมือสืบสวนสอบสวนสำหรับ สตช. ทั้งประเทศ", RGBColor(0xBE,0xE3,0xF8))
+    _title(s, "ระบบ SPNI — ภาพรวม 4 ส่วนงาน", WHITE)
+    _sub(s, "ระบบรวมเครื่องมือช่วยงานสืบสวนสอบสวน สำหรับ สตช. ทั้งประเทศ", RGBColor(0xBE,0xE3,0xF8))
 
     mods = [
-        ("โมดูล 1", "BSIE — การเงิน", "v4.0 พร้อมใช้ ★", MINT),
-        ("โมดูล 2", "CDR — โทรศัพท์", "วางแผน", DGRAY),
-        ("โมดูล 3", "Social Media Intel", "วางแผน", DGRAY),
-        ("โมดูล 4", "CCTV — ภาพ/วีดีโอ", "วางแผน", DGRAY),
+        ("โมดูล 1", "วิเคราะห์การเงิน", "v4.0 พร้อมใช้ ★", MINT),
+        ("โมดูล 2", "วิเคราะห์โทรศัพท์", "วางแผน", DGRAY),
+        ("โมดูล 3", "สื่อสังคมออนไลน์", "วางแผน", DGRAY),
+        ("โมดูล 4", "กล้องวงจรปิด", "วางแผน", DGRAY),
     ]
     mw = (CW - GAP * 3) / 4
     for i, (num, name, status, bg_c) in enumerate(mods):
@@ -170,9 +170,9 @@ def generate():
 
     # Shared layer
     _rect(s, MX, Inches(3.45), CW, Inches(1.6), CDARK)
-    _txt(s, MX, Inches(3.5), CW, Inches(0.35), "Shared Intelligence Layer", 16, WHITE, True, PP_ALIGN.CENTER)
-    tags = [("Entity Registry", GREEN), ("Link Analysis", BLUE), ("Case Mgmt", ORANGE),
-            ("Local LLM AI", RED), ("Evidence Chain", PURPLE), ("Regulatory", GOLD)]
+    _txt(s, MX, Inches(3.5), CW, Inches(0.35), "ชั้นแบ่งปันข่าวกรองกลาง", 16, WHITE, True, PP_ALIGN.CENTER)
+    tags = [("ทะเบียนบุคคล", GREEN), ("วิเคราะห์ความเชื่อมโยง", BLUE), ("จัดการคดี", ORANGE),
+            ("AI ภายในเครื่อง", RED), ("สายโซ่หลักฐาน", PURPLE), ("รายงาน กม.", GOLD)]
     tw_tag = (CW - Inches(0.6) - GAP * 5) / 6
     for i, (name, clr) in enumerate(tags):
         x = MX + Inches(0.3) + i * (tw_tag + GAP)
@@ -180,15 +180,15 @@ def generate():
         _txt(s, x, Inches(4.02), tw_tag, Inches(0.42), name, 10, WHITE, True, PP_ALIGN.CENTER)
 
     _txt(s, MX, Inches(4.65), CW, Inches(0.35),
-         "ทุกโมดูลเชื่อมข้อมูลข้ามกัน — บุคคลเดียวกันพบข้ามบัญชี + CDR + Social + CCTV", 12, RGBColor(0xBE,0xE3,0xF8), False, PP_ALIGN.CENTER)
+         "ทุกส่วนงานเชื่อมข้อมูลกัน — ค้นพบคนเดียวกันจากบัญชีธนาคาร + โทรศัพท์ + สื่อสังคม + กล้องวงจรปิด", 12, RGBColor(0xBE,0xE3,0xF8), False, PP_ALIGN.CENTER)
 
     # Infra
     _rect(s, MX, Inches(5.3), CW, Inches(0.55), DGRAY)
     _txt(s, MX, Inches(5.33), CW, Inches(0.5),
-         "Infrastructure: On-Premise Server │ Local LLM (Ollama) │ PostgreSQL │ VPN/HTTPS │ ห้าม Cloud AI", 12, WHITE, False, PP_ALIGN.CENTER)
+         "โครงสร้างพื้นฐาน: เซิร์ฟเวอร์ภายในหน่วยงาน │ AI ในเครื่อง │ ฐานข้อมูล │ เครือข่ายปลอดภัย │ ห้ามใช้ AI ภายนอก", 12, WHITE, False, PP_ALIGN.CENTER)
 
     _txt(s, MX, Inches(6.2), CW, Inches(0.7),
-         "ทำไมเริ่มจาก BSIE?\n"
+         "ทำไมเริ่มจากระบบการเงิน?\n"
          "1) คดีการเงินมากที่สุด  2) ข้อมูลมีโครงสร้างชัดเจน  3) เห็นผลเร็ว — 3 วัน→30 นาที  4) พื้นฐานสำหรับโมดูลอื่น  5) ไม่มีเครื่องมือฟรีที่ดีในตลาด",
          11, SUBTLE, False, PP_ALIGN.CENTER)
 
@@ -202,11 +202,11 @@ def generate():
     _rect(s, MX, BODY_TOP, hw, ch, WHITE, RED)
     _card_title(s, MX, BODY_TOP, hw, "ปัญหาที่พบ", RED)
     _bullets(s, MX+PAD, BODY_TOP+Inches(0.5), hw-PAD*2, ch-Inches(0.6), [
-        "วิเคราะห์ Statement **ด้วยมือ** ใช้เวลา **3-5 วัน**ต่อคดี",
+        "วิเคราะห์รายการเดินบัญชี**ด้วยมือ** ใช้เวลา **3-5 วัน**ต่อคดี",
         "ดูได้**ทีละบัญชี** ไม่เห็น**ภาพรวมเครือข่าย**",
         "ใช้ Excel ธรรมดา ไม่มีเครื่องมือ**วิเคราะห์เฉพาะทาง**",
-        "i2 Analyst's Notebook ราคา **500,000+ บาท/license/ปี** ไม่รองรับไทย",
-        "ไม่มีมาตรฐาน**รายงาน ปปง.** (STR/CTR)",
+        "โปรแกรม i2 ราคา **500,000+ บาท/สิทธิ์/ปี** ไม่รองรับภาษาไทย",
+        "ไม่มีมาตรฐาน**รายงานส่ง ปปง.**",
         "ไม่มีระบบ**แจ้งเตือนอัตโนมัติ** — พลาดได้ง่าย",
         "ข้อมูลกระจาย**หลาย Excel** ไม่เชื่อมโยงข้ามบัญชี",
         "**ไม่มีเครื่องมือฟรี**ที่ดีสำหรับตำรวจไทย",
@@ -218,19 +218,19 @@ def generate():
     _bullets(s, rx+PAD, BODY_TOP+Inches(0.5), hw-PAD*2, ch-Inches(0.6), [
         "ประมวลผลอัตโนมัติ **ภายใน 30 นาที**",
         "เชื่อมโยงข้ามบัญชี **เห็นเครือข่าย**ทั้งหมด",
-        "กราฟเครือข่าย Timeline **แจ้งเตือน 12 รูปแบบ**",
-        "มี **mini i2 Analyst's Notebook** ในตัว — **ฟรี**",
-        "สร้างรายงาน **PDF/Excel/STR/CTR** ตามมาตรฐาน",
-        "**ตรวจจับ 5 รูปแบบฟอกเงิน** FATF อัตโนมัติ",
-        "วิเคราะห์ทางสถิติ: **Z-score, IQR, Benford's Law**",
-        "ฟรี — **ไม่มีค่า license** รองรับ**ทั้งประเทศ**",
+        "แผนภาพเครือข่าย แสดงลำดับเวลา **แจ้งเตือน 12 รูปแบบ**",
+        "มี**แผนภาพเครือข่ายแบบ i2** ในตัว — **ฟรี**",
+        "สร้าง**รายงานพร้อมส่ง ปปง.** ตามมาตรฐาน",
+        "**ตรวจจับ 5 รูปแบบฟอกเงิน**ตามมาตรฐานสากลอัตโนมัติ",
+        "วิเคราะห์ทางสถิติ: **ค่าเบี่ยงเบน, ค่าผิดปกติ, กฎตัวเลขหลักแรก**",
+        "ฟรี — **ไม่มีค่าสิทธิ์รายปี** รองรับ**ทั้งประเทศ**",
     ])
 
     # ════════════════════════════════════════════════════════════
     # 4. ARCHITECTURE — System
     # ════════════════════════════════════════════════════════════
     s = S(VDARK)
-    _title(s, "สถาปัตยกรรมระบบ BSIE v4.0", WHITE)
+    _title(s, "โครงสร้างระบบ BSIE v4.0", WHITE)
 
     layer_h = Inches(1.05)
     layer_gap = Inches(0.15)
@@ -238,7 +238,7 @@ def generate():
 
     # Frontend
     _rect(s, MX, y0, CW, layer_h, RGBColor(0x20,0x40,0x70))
-    _txt(s, MX+PAD, y0+Inches(0.05), Inches(1.5), Inches(0.3), "Frontend", 14, GOLD, True)
+    _txt(s, MX+PAD, y0+Inches(0.05), Inches(1.5), Inches(0.3), "ส่วนแสดงผล (หน้าจอ)", 14, GOLD, True)
     fe = ["React 19", "TypeScript", "Vite", "Tailwind CSS", "Zustand", "Cytoscape.js", "Recharts", "react-i18next"]
     for i, name in enumerate(fe):
         x = MX + Inches(1.8) + i * Inches(1.3)
@@ -248,9 +248,9 @@ def generate():
     # Backend
     y1 = y0 + layer_h + layer_gap
     _rect(s, MX, y1, CW, layer_h, RGBColor(0x15,0x35,0x25))
-    _txt(s, MX+PAD, y1+Inches(0.05), Inches(1.5), Inches(0.3), "Backend", 14, MINT, True)
+    _txt(s, MX+PAD, y1+Inches(0.05), Inches(1.5), Inches(0.3), "ส่วนประมวลผล (เซิร์ฟเวอร์)", 14, MINT, True)
     _txt(s, MX+Inches(1.8), y1+Inches(0.08), Inches(8), Inches(0.3),
-         "Python 3.12 │ FastAPI │ 21 Routers │ 34 Services │ 120+ Endpoints", 12, WHITE)
+         "Python 3.12 │ FastAPI │ 21 ชุดคำสั่ง │ 34 บริการ │ 120+ จุดเชื่อมต่อ", 12, WHITE)
     be = ["ingestion", "search", "graph", "alerts", "fund_flow", "analytics", "reports", "auth", "exports", "workspace"]
     for i, name in enumerate(be):
         x = MX + Inches(1.8) + i * Inches(1.03)
@@ -260,58 +260,58 @@ def generate():
     # Core + Services
     y2 = y1 + layer_h + layer_gap
     _rect(s, MX, y2, hw, layer_h, RGBColor(0x35,0x25,0x15))
-    _txt(s, MX+PAD, y2+Inches(0.05), hw-PAD*2, Inches(0.3), "Processing Core — 30 modules", 13, GOLD, True)
+    _txt(s, MX+PAD, y2+Inches(0.05), hw-PAD*2, Inches(0.3), "แกนหลักประมวลผล — 30 ชุดโปรแกรม", 13, GOLD, True)
     _txt(s, MX+PAD, y2+Inches(0.38), hw-PAD*2, Inches(0.6),
-         "bank_detector, column_detector, nlp_engine, normalizer,\n"
-         "classifier, link_builder, graph_rules, pdf_loader,\n"
-         "image_loader (OCR), exporter, llm_agent ...", 10, WHITE)
+         "ตรวจจับธนาคาร, จับคู่คอลัมน์, วิเคราะห์ภาษา,\n"
+         "จัดรูปแบบข้อมูล, จำแนกประเภท, สร้างความเชื่อมโยง,\n"
+         "อ่าน PDF/รูปภาพ, ส่งออกรายงาน, AI ช่วยวิเคราะห์ ...", 10, WHITE)
 
     _rect(s, MX+hw+GAP, y2, hw, layer_h, RGBColor(0x25,0x15,0x35))
-    _txt(s, MX+hw+GAP+PAD, y2+Inches(0.05), hw-PAD*2, Inches(0.3), "34 Services", 13, LILAC, True)
+    _txt(s, MX+hw+GAP+PAD, y2+Inches(0.05), hw-PAD*2, Inches(0.3), "34 บริการย่อย", 13, LILAC, True)
     _txt(s, MX+hw+GAP+PAD, y2+Inches(0.38), hw-PAD*2, Inches(0.6),
-         "alert, anomaly_detection, sna, threat_hunting,\n"
-         "fund_flow, auth, regulatory_export, report,\n"
-         "insights, case_tapestry, job_queue, audit ...", 10, WHITE)
+         "แจ้งเตือน, ตรวจจับผิดปกติ, วิเคราะห์เครือข่าย,\n"
+         "ล่าภัยคุกคาม, ติดตามเส้นทางเงิน, ยืนยันตัวตน,\n"
+         "รายงาน ปปง., สรุปผล, คิวงาน, ตรวจสอบย้อนหลัง ...", 10, WHITE)
 
     # Database + AI
     y3 = y2 + layer_h + layer_gap
     _rect(s, MX, y3, hw, Inches(0.8), RGBColor(0x15,0x25,0x15))
-    _txt(s, MX+PAD, y3+Inches(0.05), hw-PAD*2, Inches(0.3), "Database: SQLAlchemy 2 + SQLite WAL", 13, MINT, True)
+    _txt(s, MX+PAD, y3+Inches(0.05), hw-PAD*2, Inches(0.3), "ฐานข้อมูล: 20 ตาราง พร้อมอัปเกรด", 13, MINT, True)
     _txt(s, MX+PAD, y3+Inches(0.38), hw-PAD*2, Inches(0.35),
-         "20 tables │ Alembic migrations │ Optimized pragmas │ → PostgreSQL (Phase 2)", 10, WHITE)
+         "20 ตาราง │ ระบบอัปเกรดอัตโนมัติ │ ปรับแต่งความเร็ว │ อัปเกรดเป็นฐานข้อมูลใหญ่ (เฟส 2)", 10, WHITE)
 
     _rect(s, MX+hw+GAP, y3, hw, Inches(0.8), RGBColor(0x25,0x15,0x15))
-    _txt(s, MX+hw+GAP+PAD, y3+Inches(0.05), hw-PAD*2, Inches(0.3), "AI/ML: Local LLM + NLP", 13, SALMON, True)
+    _txt(s, MX+hw+GAP+PAD, y3+Inches(0.05), hw-PAD*2, Inches(0.3), "ปัญญาประดิษฐ์: AI ภายในเครื่อง", 13, SALMON, True)
     _txt(s, MX+hw+GAP+PAD, y3+Inches(0.38), hw-PAD*2, Inches(0.35),
-         "EasyOCR (Thai+EN) │ NLP Engine (ชื่อ/เบอร์/บัตร ปชช./PromptPay) │ Ollama", 10, WHITE)
+         "อ่านภาพ/สแกน (ไทย+อังกฤษ) │ ดึงชื่อ/เบอร์/บัตร ปชช./พร้อมเพย์อัตโนมัติ", 10, WHITE)
 
     # ════════════════════════════════════════════════════════════
     # 5. DATABASE ERD
     # ════════════════════════════════════════════════════════════
     s = S(VDARK)
-    _title(s, "ฐานข้อมูล — 20 Tables", WHITE)
+    _title(s, "ฐานข้อมูล — 20 ตาราง", WHITE)
 
     tables = [
-        ("FileRecord", "ไฟล์อัพโหลด + SHA-256", GREEN),
+        ("FileRecord", "ไฟล์ที่อัพโหลด + ตรวจสอบความถูกต้อง", GREEN),
         ("ParserRun", "ประวัติการประมวลผล", GREEN),
-        ("Account", "บัญชีทุกแห่ง (normalized)", BLUE),
-        ("Transaction", "ธุรกรรม 30+ fields", BLUE),
+        ("Account", "บัญชีทุกแห่ง (จัดรูปแบบแล้ว)", BLUE),
+        ("Transaction", "ธุรกรรม 30+ ข้อมูล", BLUE),
         ("StatementBatch", "ชุดรายการเดินบัญชี", GREEN),
-        ("RawImportRow", "ข้อมูลดิบ forensic", GREEN),
+        ("RawImportRow", "ข้อมูลดิบสำหรับนิติวิทยาศาสตร์", GREEN),
         ("Entity", "บุคคล/นิติบุคคล", PURPLE),
-        ("AccountEntityLink", "เชื่อม Account↔Entity", PURPLE),
+        ("AccountEntityLink", "เชื่อมบัญชี↔บุคคล", PURPLE),
         ("TransactionMatch", "จับคู่ข้ามบัญชี", ORANGE),
-        ("Alert", "แจ้งเตือน + severity", RED),
+        ("Alert", "แจ้งเตือน + ระดับความรุนแรง", RED),
         ("DuplicateGroup", "กลุ่มข้อมูลซ้ำ", ORANGE),
-        ("ReviewDecision", "การตัดสินใจ analyst", GOLD),
-        ("AuditLog", "Audit Trail ทุก action", GOLD),
+        ("ReviewDecision", "การตัดสินใจของนักวิเคราะห์", GOLD),
+        ("AuditLog", "ร่องรอยตรวจสอบทุกการกระทำ", GOLD),
         ("ExportJob", "งานส่งออกรายงาน", SKY),
-        ("User", "ผู้ใช้ JWT + RBAC", SALMON),
-        ("AdminSetting", "ตั้งค่า + Workspace", TXTL),
-        ("GraphAnnotation", "บันทึกบน node", LILAC),
+        ("User", "ผู้ใช้งาน + ระดับสิทธิ์", SALMON),
+        ("AdminSetting", "ตั้งค่า + พื้นที่ทำงาน", TXTL),
+        ("GraphAnnotation", "บันทึกบนจุดกราฟ", LILAC),
         ("CaseTag", "แท็กคดี", MINT),
-        ("CaseTagLink", "เชื่อม tag↔วัตถุ", MINT),
-        ("MappingProfile", "โปรไฟล์ mapping", GREEN),
+        ("CaseTagLink", "เชื่อมแท็ก↔ข้อมูล", MINT),
+        ("MappingProfile", "แบบแผนจับคู่คอลัมน์", GREEN),
     ]
     cw_db = (CW - GAP * 3) / 4
     for i, (name, desc, clr) in enumerate(tables):
@@ -323,30 +323,30 @@ def generate():
         _txt(s, x + Inches(0.12), y + Inches(0.42), cw_db - Inches(0.24), Inches(0.35), desc, 10, WHITE)
 
     _txt(s, MX, Inches(6.5), CW, Inches(0.3),
-         "25+ Indexes │ Unique constraints │ Foreign keys │ JSON columns │ Alembic migrations",
+         "25+ ดัชนีค้นหาเร็ว │ ป้องกันข้อมูลซ้ำ │ เชื่อมโยงตาราง │ ข้อมูลยืดหยุ่น │ อัปเกรดอัตโนมัติ",
          11, SUBTLE, False, PP_ALIGN.CENTER)
 
     # ════════════════════════════════════════════════════════════
     # 6. PIPELINE 14 STEPS
     # ════════════════════════════════════════════════════════════
     s = S(VDARK)
-    _title(s, "Processing Pipeline — 14 ขั้นตอน", WHITE)
+    _title(s, "ขั้นตอนการประมวลผล — 14 ขั้นตอน", WHITE)
 
     steps = [
-        ("1", "Load File", "Excel/PDF/Image/OFX", GREEN),
-        ("2", "Detect Bank", "8 ธนาคาร auto", GREEN),
-        ("3", "Detect Cols", "Fuzzy 3-tier", BLUE),
-        ("4", "Load Memory", "Profile ที่จำไว้", BLUE),
-        ("5", "Apply Map", "แปลงคอลัมน์", SKY),
-        ("6", "Normalize", "วันที่/เงิน/ทิศทาง", SKY),
-        ("7", "Parse Acct", "แยกเลข normalize", ORANGE),
-        ("8", "Extract Desc", "แยกรายละเอียด", ORANGE),
-        ("9", "NLP Enrich", "ชื่อ/เบอร์/ID/PP", PURPLE),
-        ("10", "Classify", "IN/OUT/TRANSFER", PURPLE),
-        ("11", "Build Links", "from→to accounts", GOLD),
-        ("12", "Overrides", "แก้ไขจาก analyst", GOLD),
-        ("13", "Build Entity", "สร้าง Entity list", SALMON),
-        ("14", "Export", "Account Package", SALMON),
+        ("1", "โหลดไฟล์", "ทุกรูปแบบไฟล์", GREEN),
+        ("2", "ตรวจจับธนาคาร", "8 ธนาคารอัตโนมัติ", GREEN),
+        ("3", "จับคู่คอลัมน์", "จับคู่อัจฉริยะ 3 ชั้น", BLUE),
+        ("4", "โหลดแบบแผน", "จำรูปแบบที่เคยใช้", BLUE),
+        ("5", "จัดรูปข้อมูล", "แปลงให้ตรงรูปแบบ", SKY),
+        ("6", "ปรับมาตรฐาน", "วันที่/จำนวนเงิน/เข้า-ออก", SKY),
+        ("7", "แยกเลขบัญชี", "แยกและจัดรูปแบบ", ORANGE),
+        ("8", "แยกรายละเอียด", "แยกรายละเอียด", ORANGE),
+        ("9", "ดึงชื่อ/เบอร์/ID", "ชื่อไทย/เบอร์/บัตร ปชช.", PURPLE),
+        ("10", "จำแนกประเภท", "เงินเข้า/เงินออก/โอน", PURPLE),
+        ("11", "สร้างเชื่อมโยง", "จากบัญชี→ไปบัญชี", GOLD),
+        ("12", "แก้ไขด้วยมือ", "แก้ไขจากผู้วิเคราะห์", GOLD),
+        ("13", "สร้างทะเบียนบุคคล", "สร้าง Entity list", SALMON),
+        ("14", "ส่งออกรายงาน", "ชุดข้อมูลบัญชี", SALMON),
     ]
     sw_step = (CW - GAP * 6) / 7
     for i, (num, name, desc, clr) in enumerate(steps):
@@ -363,7 +363,7 @@ def generate():
     # 7. DATA INTAKE
     # ════════════════════════════════════════════════════════════
     s = S(LGRAY)
-    _title(s, "การนำเข้าข้อมูล — ครบทุกรูปแบบ")
+    _title(s, "การนำเข้าข้อมูล — รองรับทุกรูปแบบ")
 
     intake = [
         ("8 ธนาคารไทย Auto-detect", [
@@ -380,12 +380,12 @@ def generate():
             "**OFX** — ธนาคารออนไลน์",
             "**SHA-256** ตรวจจับไฟล์ซ้ำอัตโนมัติ",
         ]),
-        ("Smart Column Mapping", [
-            "**3-tier Fuzzy** — exact → alias → fuzzy",
-            "**Self-learning** — จำ profile ที่เคย mapping",
-            "**Body keywords** — ตรวจจากเนื้อหาไฟล์",
-            "**Re-process** — mapping ผิด? ทำใหม่ได้",
-            "**NLP** — ชื่อไทย, เบอร์, บัตร ปชช., PromptPay",
+        ("จับคู่คอลัมน์อัจฉริยะ", [
+            "**จับคู่อัจฉริยะ 3 ชั้น** — ตรง → ชื่อคล้าย → คล้ายคลึง",
+            "**เรียนรู้เอง** — จำรูปแบบที่เคยใช้",
+            "**ตรวจเนื้อหา** — อ่านข้อความในไฟล์ช่วยตัดสิน",
+            "**ทำใหม่ได้** — จับคู่ผิด? สั่งประมวลผลซ้ำ",
+            "**ดึงข้อมูลอัตโนมัติ** — ชื่อไทย, เบอร์โทร, บัตร ปชช., พร้อมเพย์",
         ]),
     ]
     for i, (t_, items) in enumerate(intake):
@@ -398,61 +398,61 @@ def generate():
     # 8. LINK CHART
     # ════════════════════════════════════════════════════════════
     s = S(NAVY)
-    _title(s, "กราฟเครือข่าย — mini i2 Analyst's Notebook", WHITE)
-    _sub(s, "Link Chart 815 บรรทัด — Interactive Multi-hop Expand ไม่จำกัดความลึก", RGBColor(0xBE,0xE3,0xF8))
+    _title(s, "แผนภาพเครือข่ายการเงิน — แบบ i2", WHITE)
+    _sub(s, "แผนภาพเชื่อมโยงแบบโต้ตอบ — กดขยายได้ไม่จำกัด", RGBColor(0xBE,0xE3,0xF8))
 
     ch = Inches(5.1)
     _rect(s, MX, Inches(1.3), hw, ch, CDARK)
-    _card_title(s, MX, Inches(1.3), hw, "Multi-hop Link Chart", GOLD)
+    _card_title(s, MX, Inches(1.3), hw, "แผนภาพเชื่อมโยงแบบโต้ตอบ", GOLD)
     _bullets(s, MX+PAD, Inches(1.85), hw-PAD*2, ch-Inches(0.7), [
-        "กดขยายเครือข่าย**ทีละชั้น ไม่จำกัดความลึก**",
-        "**5 Layout**: Circle, Spread, Compact, Hierarchy, Peacock",
-        "**Conditional Formatting** — ขนาด node ตามยอดเงิน",
-        "สี border ตาม**ระดับความเสี่ยง**จาก alert",
-        "**Edge labels** แสดง/ซ่อนยอดเงินบน edge",
-        "**Pin / Hide / Multi-select** จัดระเบียบกราฟ",
-        "**Focus History** — ดูประวัติการสำรวจ node",
-        "**Export PNG** สำหรับใช้ในรายงาน",
+        "กดที่บัญชีใดก็ได้ **ขยายเห็นเครือข่ายต่อได้เรื่อยๆ**",
+        "**5 รูปแบบการจัด**: วงกลม, กระจาย, กระชับ, ลำดับชั้น, พัด",
+        "**ขนาดจุดตามยอดเงิน** — ยอดมาก จุดใหญ่",
+        "**สีขอบตามระดับเสี่ยง** — แดง = น่าสงสัยมาก",
+        "**แสดงยอดเงิน**บนเส้นเชื่อมได้",
+        "**ปักหมุด / ซ่อน / เลือกหลายจุด** จัดระเบียบได้",
+        "**ประวัติการค้นหา** — ย้อนดูจุดที่เคยดูได้",
+        "**บันทึกเป็นรูปภาพ** ใส่รายงานได้ทันที",
     ], clr=WHITE, bc=GOLD, sz=12)
 
     rx = MX + hw + GAP
     _rect(s, rx, Inches(1.3), hw, ch, CDARK)
-    _card_title(s, rx, Inches(1.3), hw, "SNA + Path Tracing", GOLD)
+    _card_title(s, rx, Inches(1.3), hw, "วิเคราะห์เครือข่าย + ติดตามเส้นทางเงิน", GOLD)
     _bullets(s, rx+PAD, Inches(1.85), hw-PAD*2, ch-Inches(0.7), [
-        "**Degree Centrality** — บัญชีเชื่อมต่อมากสุด",
-        "**Betweenness** — บัญชี**ตัวกลาง** (broker)",
-        "**Closeness** — เข้าถึงทุกจุดเร็วสุด",
-        "**BFS Path Finder** — ตามเงิน A→B→C→D **4 ทอด**",
-        "**Graph Annotations** — จดบันทึกบน node ได้",
-        "**Tags**: ผู้ต้องสงสัย, พยาน, เหยื่อ, ตรวจสอบเพิ่ม",
-        "**Workspace** — บันทึก/โหลด chart state",
-        "**Entity Profile** — หน้ารวมข้อมูลบุคคล/บัญชี",
+        "**บัญชีที่เชื่อมต่อมากที่สุด** — ศูนย์กลางเครือข่าย",
+        "**บัญชีตัวกลาง** — คนกลางที่เงินผ่านบ่อย",
+        "**บัญชีที่เข้าถึงทุกคนเร็วที่สุด**",
+        "**ติดตามเส้นทางเงิน** — ตามได้สูงสุด **4 ทอด**",
+        "**จดบันทึก** — เขียนโน้ตบนจุดบัญชีได้",
+        "**ติดป้าย**: ผู้ต้องสงสัย, พยาน, เหยื่อ, ตรวจสอบเพิ่ม",
+        "**พื้นที่ทำงาน** — บันทึกแผนภาพไว้ดูทีหลังได้",
+        "**ประวัติบุคคล** — หน้ารวมข้อมูลทุกบัญชีของคนเดียวกัน",
     ], clr=WHITE, bc=GOLD, sz=12)
 
     # ════════════════════════════════════════════════════════════
     # 9. VISUALIZATION
     # ════════════════════════════════════════════════════════════
     s = S(LGRAY)
-    _title(s, "การแสดงผล — Timeline, Heatmap, Dashboard")
+    _title(s, "การแสดงผลข้อมูล — กราฟเวลา, แผนที่ความร้อน, หน้าสรุป")
 
     viz = [
-        ("Timeline Chart", BLUE, [
-            "**Recharts** — Bar + Dot mode",
-            "Granularity: **วัน / สัปดาห์ / เดือน**",
+        ("กราฟเวลา", BLUE, [
+            "**แท่งกราฟ + จุด** แสดงธุรกรรมตามวัน",
+            "เลือกดูได้: **รายวัน / รายสัปดาห์ / รายเดือน**",
             "ดูรูปแบบธุรกรรมตามเวลา",
-            "**ตรวจจับช่วงเวลาผิดปกติ**",
+            "**พบช่วงเวลาที่มีธุรกรรมผิดปกติ**",
         ]),
-        ("Time Wheel (Heatmap)", PURPLE, [
-            "**Custom SVG** — Hour × Day",
-            "24 ชม. × 7 วัน = **168 ช่อง**",
-            "สีตามความถี่ธุรกรรม",
-            "**ตรวจจับเวลาผิดปกติ** (ตี 2-5)",
+        ("แผนที่ความร้อน", PURPLE, [
+            "**แสดงผลตาม ชั่วโมง × วัน**",
+            "ครอบคลุม **24 ชม. × 7 วัน = 168 ช่อง**",
+            "**สีเข้ม = ธุรกรรมถี่** สีอ่อน = น้อย",
+            "**ตรวจจับเวลาผิดปกติ** เช่น ตี 2-5",
         ]),
-        ("Dashboard", GREEN, [
-            "**สรุปภาพรวม** — สถิติ, เงินเข้า/ออก",
-            "**Recent Activity** — ธุรกรรมล่าสุด",
-            "**Top Accounts** — บัญชียอดสูงสุด",
-            "**Code-split** — React.lazy + Suspense",
+        ("หน้าสรุปภาพรวม", GREEN, [
+            "**สรุปภาพรวม** — จำนวนเงินเข้า/ออก, สถิติ",
+            "**ธุรกรรมล่าสุด** — ดูรายการใหม่ได้ทันที",
+            "**บัญชียอดสูงสุด** — เรียงตามจำนวนเงิน",
+            "**โหลดเร็ว** — แสดงผลเฉพาะส่วนที่ต้องการ",
         ]),
     ]
     for i, (t_, clr, items) in enumerate(viz):
@@ -468,27 +468,27 @@ def generate():
     _title(s, "ระบบแจ้งเตือนอัตโนมัติ — 12 รูปแบบ", WHITE)
 
     alert_data = [
-        ("7 กฎกราฟเครือข่าย", [
-            "**Repeated Transfers** — คู่เดิม ≥3 ครั้ง",
-            "**Fan-in** — เงินเข้าจาก ≥3 แหล่ง",
-            "**Fan-out** — เงินออกไป ≥3 เป้า",
-            "**Circular Paths** — เงินวน A⇄B",
-            "**Pass-through** — รับแล้วโอนต่อทันที",
-            "**High-degree Hub** — เชื่อม ≥6 บัญชี",
-            "**Repeated Counterparty** — คนเดิมหลายวัน",
+        ("7 กฎตรวจจับจากเครือข่าย", [
+            "**โอนซ้ำ** — บัญชีคู่เดิมโอนกัน 3+ ครั้ง",
+            "**เงินเข้าหลายทาง** — รับจาก 3+ บัญชี",
+            "**เงินออกหลายทาง** — โอนไป 3+ บัญชี",
+            "**เงินวนกลับ** — A โอนให้ B แล้ว B โอนกลับ",
+            "**บัญชีผ่านมือ** — รับแล้วโอนต่อทันที",
+            "**บัญชีศูนย์กลาง** — เชื่อมกับ 6+ บัญชี",
+            "**คู่ค้าซ้ำ** — เจอคนเดิมหลายวัน",
         ]),
-        ("5 รูปแบบฟอกเงิน FATF", [
-            "**Smurfing** — แบ่งรายการย่อย หลีกเลี่ยงเกณฑ์",
-            "**Layering** — สร้างชั้นธุรกรรมซ้อนทับ",
-            "**Rapid Movement** — เข้า-ออกภายใน 24 ชม.",
-            "**Dormant Activation** — บัญชีนิ่ง→ใช้ทันที",
-            "**Round-tripping** — เงินวนกลับแหล่งเดิม",
+        ("5 รูปแบบฟอกเงินตามมาตรฐานสากล", [
+            "**แบ่งรายการย่อย** — โอนทีละน้อยหลายครั้ง หลีกเลี่ยงเกณฑ์",
+            "**สร้างชั้นซ้อน** — โอนผ่านหลายบัญชีเพื่อปิดบัง",
+            "**เงินเข้า-ออกเร็ว** — เข้ามาแล้วออกภายใน 24 ชม.",
+            "**บัญชีนิ่งแล้วตื่น** — ไม่ใช้นานแล้วมีเงินเข้าทันที",
+            "**เงินวนกลับ** — ส่งออกไปแล้ววนกลับมาที่เดิม",
         ]),
-        ("4 วิธีทางสถิติ", [
-            "**Z-score** — เบี่ยงเบน >Nσ",
-            "**IQR** — Q1-1.5×IQR ถึง Q3+1.5×IQR",
-            "**Benford's Law** — หลักแรกผิดปกติ",
-            "**Moving Average** — เบี่ยงจากค่าเฉลี่ย 30 รายการ",
+        ("4 วิธีตรวจจับทางคณิตศาสตร์", [
+            "**ค่าเบี่ยงเบน** — ยอดเงินผิดปกติจากค่าเฉลี่ย",
+            "**ค่าผิดปกติ** — ยอดเงินที่สูง/ต่ำกว่าพิสัยปกติ",
+            "**กฎตัวเลขหลักแรก** — ตัวเลขตั้งต้นไม่เป็นธรรมชาติ",
+            "**ค่าเฉลี่ยเคลื่อนที่** — เปรียบเทียบกับ 30 รายการก่อน",
         ]),
     ]
     for i, (t_, items) in enumerate(alert_data):
@@ -501,35 +501,35 @@ def generate():
     # 11. CROSS-ACCOUNT + REPORTS
     # ════════════════════════════════════════════════════════════
     s = S(LGRAY)
-    _title(s, "การวิเคราะห์ข้ามบัญชี + Investigation Desk + รายงาน")
+    _title(s, "การวิเคราะห์ข้ามบัญชี + โต๊ะทำงานสืบสวน + รายงาน")
 
     _rect(s, MX, BODY_TOP, hw, Inches(2.7), WHITE, BLUE)
-    _card_title(s, MX, BODY_TOP, hw, "Cross-Account Analysis", BLUE)
+    _card_title(s, MX, BODY_TOP, hw, "วิเคราะห์ข้ามบัญชี", BLUE)
     _bullets(s, MX+PAD, BODY_TOP+Inches(0.5), hw-PAD*2, Inches(2.0), [
-        "**Fund Flow** — เงินเข้า/ออกของบัญชีใดก็ได้",
-        "**Pairwise** — ธุรกรรมทั้งหมดระหว่าง 2 บัญชี",
-        "**BFS Path Finder** — A→B→C→D สูงสุด **4 ทอด**",
-        "**Bulk Cross-Match** — จับคู่ข้ามทุกบัญชีพร้อมกัน",
-        "**Multi-period** — เปรียบเทียบ 2 ช่วงเวลา",
+        "**ดูเส้นทางเงิน** — ดูเงินเข้า/ออกของบัญชีใดก็ได้",
+        "**เปรียบเทียบคู่** — ดูธุรกรรมทั้งหมดระหว่าง 2 บัญชี",
+        "**ติดตามเส้นทาง** — ตามเงินจาก A ไป B ไป C ได้ถึง **4 ทอด**",
+        "**จับคู่ข้ามบัญชี** — ตรวจทุกบัญชีพร้อมกันในครั้งเดียว",
+        "**เปรียบเทียบช่วงเวลา** — เทียบ 2 ช่วงเวลาหาความต่าง",
     ], sz=12)
 
     rx = MX + hw + GAP
     _rect(s, rx, BODY_TOP, hw, Inches(2.7), WHITE, PURPLE)
-    _card_title(s, rx, BODY_TOP, hw, "Investigation Desk — 13 แท็บ", PURPLE)
+    _card_title(s, rx, BODY_TOP, hw, "โต๊ะทำงานสืบสวน — 13 เครื่องมือ", PURPLE)
     _bullets(s, rx+PAD, BODY_TOP+Inches(0.5), hw-PAD*2, Inches(2.0), [
-        "**Database** │ Files │ Parser Runs │ **Accounts** │ **Search**",
-        "**Alerts** │ **Cross-Account** │ **Link Chart** │ **Timeline**",
-        "Duplicates │ Matches │ **Audit** │ **Exports**",
+        "ฐานข้อมูล │ ไฟล์ │ ประมวลผล │ **บัญชี** │ **ค้นหา**",
+        "**แจ้งเตือน** │ **ข้ามบัญชี** │ **แผนภาพเชื่อมโยง** │ **ลำดับเวลา**",
+        "ข้อมูลซ้ำ │ จับคู่ │ **ตรวจสอบย้อนหลัง** │ **ส่งออก**",
     ], sz=12, bc=PURPLE)
 
     # Reports
     _rect(s, MX, BODY_TOP+Inches(2.95), CW, Inches(3.1), WHITE, GOLD)
-    _card_title(s, MX, BODY_TOP+Inches(2.95), CW, "รายงานพร้อมใช้งาน — 6 รูปแบบ", GOLD)
+    _card_title(s, MX, BODY_TOP+Inches(2.95), CW, "รายงานพร้อมใช้ — 6 รูปแบบ", GOLD)
     reports = [
         ("Excel (.xlsx)", "14+ ชีท, TH Sarabun New, สีตามประเภท, สูตร =SUM/=COUNTA, auto-filter"),
         ("PDF", "ปก + สถิติ + คู่สัญญา + alerts + ธุรกรรม + ช่องลงนาม"),
-        ("i2 Chart (.anx)", "เปิดใน Analyst's Notebook ได้ทันที — XML format"),
-        ("i2 Import (.csv+.ximp)", "CSV data 29 คอลัมน์ + XML spec สำหรับ import"),
+        ("แผนภาพ i2 (.anx)", "เปิดใน Analyst's Notebook ได้ทันที — XML format"),
+        ("นำเข้า i2 (.csv+.ximp)", "ข้อมูล 29 คอลัมน์ + ไฟล์นำเข้า i2"),
         ("STR / CTR", "รูปแบบรายงาน ปปง. พร้อมส่ง — regulatory compliance"),
         ("CSV", "transactions, entities, links, reconciliation, graph data"),
     ]
@@ -544,28 +544,28 @@ def generate():
     # 12. SECURITY
     # ════════════════════════════════════════════════════════════
     s = S(VDARK)
-    _title(s, "ความปลอดภัย, Chain of Custody, ภาษาไทย", WHITE)
+    _title(s, "ความปลอดภัย, สายโซ่หลักฐาน, ภาษาไทย", WHITE)
 
     sec = [
-        ("Authentication", SKY, [
-            "**JWT** tokens + 3 ระดับ: Admin/Analyst/Viewer",
-            "**PBKDF2-SHA256** 100,000 iterations",
-            "**Rate Limiting** — 10 req/min login",
-            "**Configurable** — BSIE_AUTH_REQUIRED env",
+        ("ยืนยันตัวตน", SKY, [
+            "**ล็อกอินด้วยรหัส** + 3 ระดับ: ผู้ดูแล/นักวิเคราะห์/ผู้ชม",
+            "**เข้ารหัสรหัสผ่าน** 100,000 รอบ (ปลอดภัยสูง)",
+            "**จำกัดการล็อกอินผิด** — ป้องกันเดารหัส",
+            "**ตั้งค่าได้** — เปิด/ปิดระบบยืนยันตัวตน",
         ]),
-        ("Security Headers", SALMON, [
-            "**X-Frame-Options**: DENY",
-            "**X-Content-Type-Options**: nosniff",
-            "**Referrer-Policy**: no-referrer",
-            "**Upload Allowlist** — .xlsx/.pdf/.csv/.png",
-            "**Max Body Size**: 50 MB",
+        ("ป้องกันการโจมตี", SALMON, [
+            "**ป้องกันฝังในเว็บอื่น**",
+            "**ป้องกันปลอมแปลงไฟล์**",
+            "**ไม่เปิดเผยที่มา**",
+            "**จำกัดประเภทไฟล์** — เฉพาะ Excel/PDF/CSV/รูปภาพ",
+            "**จำกัดขนาดไฟล์** — ไม่เกิน 50 MB",
         ]),
-        ("Chain of Custody", GOLD, [
-            "**Audit Trail** — ใคร/ทำอะไร/เมื่อไหร่",
-            "**Chain of Custody** — ประวัติครบถ้วน",
-            "**/api/audit-trail/{type}/{id}**",
-            "**SHA-256** file integrity verification",
-            "**File Metadata** — forensic checks",
+        ("สายโซ่หลักฐาน", GOLD, [
+            "**ร่องรอยตรวจสอบ** — บันทึกว่าใคร/ทำอะไร/เมื่อไหร่",
+            "**สายโซ่หลักฐาน** — ประวัติครบถ้วนใช้เป็นหลักฐานได้",
+            "**เรียกดูประวัติ** ผ่านระบบได้ทุกเมื่อ",
+            "**ตรวจสอบความถูกต้อง** ของไฟล์หลักฐาน",
+            "**ตรวจข้อมูลไฟล์** — ใช้ทางนิติวิทยาศาสตร์",
         ]),
     ]
     for i, (t_, clr, items) in enumerate(sec):
@@ -577,64 +577,58 @@ def generate():
     # Thai bar
     _rect(s, MX, Inches(5.7), CW, Inches(0.8), DGRAY, GOLD)
     _txt(s, MX+PAD, Inches(5.75), CW-PAD*2, Inches(0.7),
-         "ภาษาไทยเต็มระบบ: UI สลับ ไทย/อังกฤษ │ ~500 คีย์แปลภาษา │ TH Sarabun New ทุกรายงาน\n"
-         "NLP ชื่อไทย/เบอร์/บัตร ปชช./PromptPay │ 244 ชุดทดสอบ (212 backend + 32 frontend)",
+         "ภาษาไทยเต็มระบบ: สลับ ไทย/อังกฤษ ได้ทั้งระบบ │ แปลแล้วกว่า 500 จุด │ ฟอนต์ TH Sarabun New ทุกรายงาน\n"
+         "ดึงชื่อไทย/เบอร์โทร/บัตร ปชช./พร้อมเพย์อัตโนมัติ │ ทดสอบแล้ว 244 ชุด",
          11, WHITE, False, PP_ALIGN.CENTER)
 
     # ════════════════════════════════════════════════════════════
     # 13. LOCAL LLM
     # ════════════════════════════════════════════════════════════
     s = S(DRED)
-    _title(s, "ทำไมต้อง Local LLM — ห้ามใช้ Cloud AI", WHITE)
+    _title(s, "ทำไมต้องใช้ AI ภายในเครื่อง — ห้ามใช้ AI ภายนอก", WHITE)
 
     ch = Inches(5.3)
     _rect(s, MX, BODY_TOP, hw, ch, RGBColor(0x74,0x2A,0x2A))
     _card_title(s, MX, BODY_TOP, hw, "เหตุผลความจำเป็น", SALMON)
     _bullets(s, MX+PAD, BODY_TOP+Inches(0.5), hw-PAD*2, ch-Inches(0.7), [
         "**ความลับทางราชการ** — ระดับ 'ลับ' / 'ลับมาก'",
-        "**พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล** (PDPA)",
-        "**Training Data Risk** — Cloud LLM อาจนำข้อมูลไปเรียนรู้",
-        "**Chain of Custody** — หลักฐานต้องไม่ผ่านระบบภายนอก",
-        "**ระเบียบ สตช.** — ข้อมูลอยู่ในโครงข่ายภายใน",
-        "**ป้องกันรั่วไหล** — เลขบัญชี, ชื่อผู้ต้องสงสัย, เส้นทางเงิน",
+        "**พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล**",
+        "**เสี่ยงถูกนำข้อมูลไปเรียนรู้** — AI ภายนอกอาจเอาข้อมูลคดีไปใช้",
+        "**สายโซ่หลักฐาน** — หลักฐานต้องไม่ผ่านระบบภายนอก",
+        "**ระเบียบ สตช.** — ข้อมูลสืบสวนต้องอยู่ในเครือข่ายภายใน",
+        "**ป้องกันข้อมูลรั่วไหล** — เลขบัญชี, ชื่อผู้ต้องสงสัย, เส้นทางเงิน",
     ], clr=WHITE, bc=SALMON, sz=13)
 
     rx = MX + hw + GAP
     _rect(s, rx, BODY_TOP, hw, ch, RGBColor(0x74,0x2A,0x2A))
-    _card_title(s, rx, BODY_TOP, hw, "Local LLM ทำอะไรได้", SALMON)
+    _card_title(s, rx, BODY_TOP, hw, "AI ภายในเครื่องทำอะไรได้", SALMON)
     _bullets(s, rx+PAD, BODY_TOP+Inches(0.5), hw-PAD*2, Inches(3.3), [
-        "**สรุปคดีอัตโนมัติ** — พบเงินเข้า 15 บัญชี 3.2 ล.",
-        "**ตอบคำถาม** — บัญชีนี้มีธุรกรรมเกิน 1 แสน?",
-        "**จำแนกธุรกรรม** — ช่วย classify ที่ไม่มั่นใจ",
-        "**ตรวจจับรูปแบบ** — structuring, smurfing?",
-        "**ร่าง STR/CTR** narrative อัตโนมัติ",
+        "**สรุปคดีให้อัตโนมัติ** — เช่น 'พบเงินเข้าจาก 15 บัญชี รวม 3.2 ล้านบาท'",
+        "**ตอบคำถาม** — เช่น 'บัญชีนี้มีธุรกรรมเกิน 1 แสนกี่รายการ?'",
+        "**จำแนกธุรกรรม** — ช่วยตัดสินรายการที่ระบบไม่มั่นใจ",
+        "**ตรวจจับรูปแบบ** — มีการแบ่งรายการย่อยหรือไม่?",
+        "**ร่างรายงาน ปปง.** ให้อัตโนมัติ",
     ], clr=WHITE, bc=SALMON, sz=13)
     _txt(s, rx+PAD, BODY_TOP+Inches(4.1), hw-PAD*2, Inches(1.0),
-         "แนะนำ: Ollama + Llama 3.1 70B / Typhoon\n"
-         "GPU: NVIDIA RTX 4090 (24GB) หรือ A6000 (48GB)\n"
-         "ติดตั้งง่าย — API เหมือน OpenAI", 11, RGBColor(0xFE,0xBD,0xBD))
+         "แนะนำ: ใช้โปรแกรม Ollama + โมเดล Llama 3.1 หรือ Typhoon (เข้าใจภาษาไทย)\n"
+         "ต้องมีการ์ดจอ: NVIDIA RTX 4090 หรือ A6000\n"
+         "ติดตั้งง่าย — ใช้งานได้ทันที", 11, RGBColor(0xFE,0xBD,0xBD))
 
     # ════════════════════════════════════════════════════════════
     # 14. INFRASTRUCTURE
     # ════════════════════════════════════════════════════════════
     s = S(VDARK)
-    _title(s, "โครงสร้างพื้นฐาน — Phase 1 ถึง 4", WHITE)
+    _title(s, "โครงสร้างพื้นฐาน — เฟส 1 ถึง 4", WHITE)
 
     inf = [
-        ("Phase 1: Standalone (ฟรี)", MINT,
-         "PC/Mac พนักงานสอบสวน\n"
-         "  └── BSIE (localhost:8757)\n"
-         "        ├── FastAPI backend\n"
-         "        ├── React frontend\n"
-         "        └── SQLite database\n"
-         "ไม่ต้องใช้ server ใดๆ"),
-        ("Phase 2: สถานีตำรวจ", SKY,
-         "Server จังหวัด\n"
-         "  ├── BSIE + Nginx (HTTPS)\n"
-         "  ├── PostgreSQL Database\n"
-         "  ├── Local LLM (Ollama+GPU)\n"
-         "  └── File Storage\n"
-         "PC สอบสวน 1-30 → Browser → HTTPS"),
+        ("เฟส 1: เครื่องเดี่ยว (ฟรี)", MINT,
+         "ใช้คอมพิวเตอร์ที่มี → เปิดระบบ BSIE\n"
+         "ทำงานบนเครื่องเดียว ไม่ต้องต่อเน็ต\n"
+         "ไม่ต้องซื้อเซิร์ฟเวอร์"),
+        ("เฟส 2: ใช้ร่วมกันทั้งจังหวัด", SKY,
+         "ตั้งเซิร์ฟเวอร์กลางจังหวัด ปลอดภัยด้วยรหัสลับ\n"
+         "ฐานข้อมูลใหญ่ + AI ภายในเครื่อง + การ์ดจอ\n"
+         "พนักงานสอบสวน 1-30 คน → เปิดผ่านเบราว์เซอร์"),
     ]
     for i, (t_, clr, desc) in enumerate(inf):
         x = MX + i * (hw + GAP)
@@ -643,7 +637,7 @@ def generate():
         _txt(s, x+PAD, BODY_TOP+Inches(0.5), hw-PAD*2, Inches(1.9), desc, 11, WHITE)
 
     _rect(s, MX, BODY_TOP+Inches(2.85), CW, Inches(3.0), DGRAY, GOLD)
-    _card_title(s, MX, BODY_TOP+Inches(2.85), CW, "Phase 3-4: ระดับจังหวัด / ภาค / ประเทศ (On-Premise)", GOLD)
+    _card_title(s, MX, BODY_TOP+Inches(2.85), CW, "เฟส 3-4: ระดับจังหวัด / ภาค / ประเทศ (เซิร์ฟเวอร์ภายในหน่วยงาน)", GOLD)
     _txt(s, MX+PAD, BODY_TOP+Inches(3.4), hw-PAD, Inches(2.2),
          "Data Center จังหวัด / ภาค\n"
          "  ├── Load Balancer (Nginx)\n"
@@ -667,7 +661,7 @@ def generate():
     # 15. ROADMAP — Horizontal Timeline
     # ════════════════════════════════════════════════════════════
     s = S(VDARK)
-    _title(s, "Roadmap การพัฒนา SPNI Platform", WHITE)
+    _title(s, "แผนพัฒนาระบบ SPNI", WHITE)
 
     TL_Y = Inches(2.55)  # timeline center
 
@@ -683,11 +677,11 @@ def generate():
 
     # Phase bars
     phases_tl = [
-        ("Phase 1\nPilot", "เดือน 1-3", MX, Inches(2.3), GREEN, "ฟรี",
+        ("เฟส 1\nทดลอง", "เดือน 1-3", MX, Inches(2.3), GREEN, "ฟรี",
          ["BSIE v4.0 Pilot", "ทดลอง 5-10 คดีจริง", "เก็บ feedback"]),
-        ("Phase 2\nจังหวัดนำร่อง", "เดือน 4-9", MX+Inches(2.5), Inches(2.8), BLUE, "~8 ล้าน",
+        ("เฟส 2\nจังหวัดนำร่อง", "เดือน 4-9", MX+Inches(2.5), Inches(2.8), BLUE, "~8 ล้าน",
          ["Server 5 จังหวัด", "PostgreSQL + Multi-user", "Local LLM + GPU", "อบรม 5 จังหวัด"]),
-        ("Phase 3\nSPNI Foundation", "เดือน 10-21", MX+Inches(5.5), Inches(3.8), ORANGE, "~40 ล้าน",
+        ("เฟส 3\nขยายระบบ", "เดือน 10-21", MX+Inches(5.5), Inches(3.8), ORANGE, "~40 ล้าน",
          ["CDR Module (โมดูล 2)", "Shared Intelligence Layer", "Mobile App", "ขยาย 20 จังหวัด"]),
         ("Phase 4\nระดับประเทศ", "ปีที่ 3+", MX+Inches(9.5), Inches(2.63), RED, "~120 ล้าน",
          ["Social + CCTV Module", "77 จว. ทั้งประเทศ", "Data Center ×10 ภาค", "เชื่อม ปปง./DSI"]),
@@ -728,37 +722,37 @@ def generate():
          "~170 ล้านบาท │ ฟรี → 8 ล้าน → 40 ล้าน → 120 ล้าน", 14, GOLD, True, PP_ALIGN.RIGHT)
 
     _txt(s, MX, Inches(6.9), CW, Inches(0.3),
-         "Phase 1 เริ่มได้ทันที (ฟรี)  →  Phase 2 ของบหลัง pilot สำเร็จ  →  Phase 3-4 ขยายตามผลลัพธ์จริง",
+         "เฟส 1 เริ่มได้ทันที (ฟรี) → เฟส 2 ของบหลังทดลองสำเร็จ → เฟส 3-4 ขยายตามผลลัพธ์จริง",
          11, SUBTLE, False, PP_ALIGN.CENTER)
 
     # ════════════════════════════════════════════════════════════
     # 16. BUDGET NATIONAL
     # ════════════════════════════════════════════════════════════
     s = S(GOLD)
-    _title(s, "งบประมาณระดับประเทศ — SPNI Platform", VDARK)
+    _title(s, "งบประมาณระดับประเทศ — ระบบ SPNI", VDARK)
 
     budget_phases = [
-        ("Phase 1: Pilot (3 เดือน)", [
+        ("เฟส 1: ทดลอง (3 เดือน)", [
             ("ใช้เครื่อง PC ที่มีอยู่ + ซอฟต์แวร์ BSIE v4.0", "ฟรี"),
         ], "ฟรี", GREEN),
-        ("Phase 2: จังหวัดนำร่อง 5 จังหวัด (6 เดือน)", [
-            ("Application Server ×5 (CPU 8-core, 32GB, 1TB SSD)", "1,500,000 ฿"),
-            ("GPU Server สำหรับ Local LLM ×5 (RTX 4090/A6000)", "5,000,000 ฿"),
+        ("เฟส 2: นำร่อง 5 จังหวัด (6 เดือน)", [
+            ("เซิร์ฟเวอร์หลัก ×5 (CPU 8-core, 32GB, 1TB SSD)", "1,500,000 ฿"),
+            ("เซิร์ฟเวอร์ AI + การ์ดจอ ×5 (RTX 4090/A6000)", "5,000,000 ฿"),
             ("Network / UPS / อุปกรณ์ ×5 จังหวัด", "500,000 ฿"),
-            ("PostgreSQL Migration + พัฒนาเพิ่มเติม", "500,000 ฿"),
+            ("อัปเกรดฐานข้อมูล + พัฒนาเพิ่ม", "500,000 ฿"),
             ("อบรมพนักงานสอบสวน 5 จังหวัด", "300,000 ฿"),
         ], "~8 ล้าน", BLUE),
-        ("Phase 3: SPNI Foundation + ขยาย 20 จังหวัด (12 เดือน)", [
-            ("CDR Analysis Module (โมดูล 2)", "8,000,000 ฿"),
+        ("เฟส 3: ขยาย 20 จังหวัด + โมดูล 2 (12 เดือน)", [
+            ("ระบบวิเคราะห์โทรศัพท์ (ส่วนงาน 2)", "8,000,000 ฿"),
             ("Server + GPU ×20 จังหวัด", "20,000,000 ฿"),
-            ("Shared Intelligence Layer + Mobile App", "7,000,000 ฿"),
+            ("ระบบข่าวกรองกลาง + แอปมือถือ", "7,000,000 ฿"),
             ("ทีมพัฒนา 5-8 คน × 12 เดือน", "5,000,000 ฿"),
         ], "~40 ล้าน", ORANGE),
-        ("Phase 4: ทั้งประเทศ 77 จังหวัด + 10 ภาค (ปีที่ 2-3)", [
-            ("Social Media + CCTV Module (โมดูล 3-4)", "30,000,000 ฿"),
-            ("Data Center ระดับภาค ×10 + GPU Cluster", "40,000,000 ฿"),
-            ("Deploy 77 จังหวัด — server + network", "30,000,000 ฿"),
-            ("ทีมพัฒนา + DevOps 15 คน + อบรมทั่วประเทศ", "20,000,000 ฿"),
+        ("เฟส 4: ทั้งประเทศ 77 จังหวัด + 10 ภาค (ปีที่ 2-3)", [
+            ("ระบบสื่อสังคม + กล้องวงจรปิด (ส่วนงาน 3-4)", "30,000,000 ฿"),
+            ("ศูนย์ข้อมูลระดับภาค ×10 + GPU Cluster", "40,000,000 ฿"),
+            ("ติดตั้ง 77 จังหวัด — server + network", "30,000,000 ฿"),
+            ("ทีมพัฒนา 15 คน + อบรมทั่วประเทศ", "20,000,000 ฿"),
         ], "~120 ล้าน", RED),
     ]
     y = BODY_TOP - Inches(0.1)
@@ -785,10 +779,10 @@ def generate():
     _title(s, "จุดเด่นของงบประมาณ SPNI")
 
     highlights = [
-        ("ไม่มีค่า license รายปี", "ซอฟต์แวร์ทั้งหมดพัฒนาเอง + Open Source — จ่ายครั้งเดียว ใช้ตลอด\nเปรียบเทียบ: i2 = 500,000 ฿/คน/ปี × 1,484 สถานี = 742 ล้าน/ปี", GREEN),
+        ("ไม่มีค่าสิทธิ์ใช้งานรายปี", "ซอฟต์แวร์ทั้งหมดพัฒนาเอง + Open Source — จ่ายครั้งเดียว ใช้ตลอด\nเปรียบเทียบ: i2 = 500,000 ฿/คน/ปี × 1,484 สถานี = 742 ล้าน/ปี", GREEN),
         ("ขยายได้ไม่จำกัด", "เพิ่มสถานีใหม่ = แค่เพิ่ม server ไม่ต้องจ่าย license เพิ่ม\nรองรับ 1,484 สถานี ~15,000-20,000 พนักงานสอบสวนทั่วประเทศ", BLUE),
-        ("Customizable เต็มที่", "มีโค้ดทั้งหมด — แก้ไข ปรับแต่ง เพิ่มฟีเจอร์ ได้เอง\nไม่ต้องพึ่งบริษัทต่างชาติ — เป็นสมบัติของ สตช.", ORANGE),
-        ("Data Sovereignty", "ข้อมูลทั้งหมดอยู่ใน On-Premise Server ของ สตช.\nไม่มีข้อมูลคดีออกนอกประเทศ — Local LLM เท่านั้น", RED),
+        ("ปรับแต่งได้ตามต้องการ", "มีโค้ดทั้งหมด — แก้ไข ปรับแต่ง เพิ่มฟีเจอร์ ได้เอง\nไม่ต้องพึ่งบริษัทต่างชาติ — เป็นสมบัติของ สตช.", ORANGE),
+        ("อธิปไตยข้อมูล", "ข้อมูลทั้งหมดอยู่ในเซิร์ฟเวอร์ภายในหน่วยงานของ สตช.\nไม่มีข้อมูลคดีออกนอกประเทศ — Local LLM เท่านั้น", RED),
     ]
     for i, (t_, desc, clr) in enumerate(highlights):
         y = BODY_TOP + i * Inches(1.4)
@@ -801,14 +795,14 @@ def generate():
     # 18. COMPARISON
     # ════════════════════════════════════════════════════════════
     s = S(LGRAY)
-    _title(s, "เปรียบเทียบกับซอฟต์แวร์ทางการค้า")
+    _title(s, "เปรียบเทียบกับโปรแกรมที่ขายในตลาด")
 
     rows = [
         ("คุณสมบัติ", "BSIE (SPNI)", "i2 Analyst's NB", "Cellebrite Fin."),
         ("ราคา", "ฟรี", "500,000 ฿/คน/ปี", "300,000 ฿/คน/ปี"),
-        ("1,484 สถานี/ปี", "ค่า server เท่านั้น", "742+ ล้าน/ปี", "445+ ล้าน/ปี"),
+        ("ค่าใช้จ่าย 1,484 สถานี/ปี", "ค่า server เท่านั้น", "742+ ล้าน/ปี", "445+ ล้าน/ปี"),
         ("ภาษาไทย", "✓ เต็มระบบ", "✗", "✗"),
-        ("ธนาคารไทย 8 แห่ง", "✓ Auto-detect", "✗ setup เอง", "~ บางส่วน"),
+        ("ธนาคารไทย 8 แห่ง", "✓ ตรวจจับอัตโนมัติ", "✗ setup เอง", "~ บางส่วน"),
         ("กราฟเครือข่าย", "✓ mini i2 (5 layout)", "✓ เต็มรูปแบบ", "✓"),
         ("PDF/OCR ภาษาไทย", "✓ EasyOCR", "✗", "~"),
         ("รายงาน ปปง.", "✓ STR/CTR", "✗", "~"),
@@ -816,8 +810,8 @@ def generate():
         ("Threat Hunting FATF", "✓ 5 รูปแบบ", "✗", "~"),
         ("Anomaly Detection", "✓ 4 วิธี", "~ บางส่วน", "~"),
         ("Local LLM AI", "✓ Ollama", "✗", "✗"),
-        ("Customizable", "✓ มีโค้ดทั้งหมด", "✗ Closed", "✗ Closed"),
-        ("Data Sovereignty", "✓ On-Premise 100%", "~ ขึ้นกับ deploy", "~"),
+        ("ปรับแต่ง", "✓ มีโค้ดทั้งหมด", "✗ แก้ไขไม่ได้", "✗ แก้ไขไม่ได้"),
+        ("อธิปไตยข้อมูล", "✓ ภายในหน่วย 100%", "~ ขึ้นกับ deploy", "~"),
     ]
     col_ws = [Inches(3.2), Inches(3.0), Inches(3.0), Inches(3.0)]
     col_xs = [MX]
@@ -847,17 +841,17 @@ def generate():
     # 19. PROJECT STATS
     # ════════════════════════════════════════════════════════════
     s = S(VDARK)
-    _title(s, "ขนาดโปรเจค BSIE v4.0 — ตัวเลข", WHITE)
+    _title(s, "ขนาดระบบ BSIE v4.0 — ตัวเลข", WHITE)
 
     stats = [
-        ("161", "Python Files", GREEN), ("41", "React/TS Files", SKY),
-        ("~41,000", "Lines of Code", GOLD), ("120+", "API Endpoints", BLUE),
-        ("21", "API Routers", MINT), ("34", "Services", LILAC),
-        ("30", "Core Modules", ORANGE), ("20", "DB Tables", SKY),
-        ("244", "Automated Tests", GREEN), ("500+", "i18n Keys", GOLD),
-        ("8", "ธนาคารไทย", RED), ("14", "Pipeline Steps", PURPLE),
-        ("12", "Alert Patterns", ORANGE), ("5", "FATF Models", RED),
-        ("4", "Anomaly Methods", LILAC), ("13", "Investigation Tabs", BLUE),
+        ("161", "ไฟล์โปรแกรมหลัก", GREEN), ("41", "ไฟล์หน้าจอแสดงผล", SKY),
+        ("~41,000", "บรรทัดโค้ด", GOLD), ("120+", "จุดเชื่อมต่อ", BLUE),
+        ("21", "ชุดคำสั่ง", MINT), ("34", "บริการย่อย", LILAC),
+        ("30", "ชุดประมวลผล", ORANGE), ("20", "ตารางข้อมูล", SKY),
+        ("244", "ชุดทดสอบอัตโนมัติ", GREEN), ("500+", "จุดแปลภาษา", GOLD),
+        ("8", "ธนาคารไทย", RED), ("14", "ขั้นตอนประมวลผล", PURPLE),
+        ("12", "รูปแบบแจ้งเตือน", ORANGE), ("5", "แบบจำลองฟอกเงิน", RED),
+        ("4", "วิธีตรวจจับผิดปกติ", LILAC), ("13", "เครื่องมือสืบสวน", BLUE),
     ]
     sw_stat = (CW - GAP * 3) / 4
     sh_stat = Inches(1.15)
@@ -876,10 +870,10 @@ def generate():
     _title(s, "ROI — ผลตอบแทนการลงทุน", WHITE)
 
     roi = [
-        ("เวลาวิเคราะห์", "จาก 3-5 วัน → 30 นาที ต่อคดี", 0.95, SALMON),
-        ("ค่า license", "ประหยัด 742+ ล้านบาท/ปี (vs i2 1,484 สถานี)", 1.0, GOLD),
-        ("ข้อผิดพลาด", "ลดข้อผิดพลาดจากวิเคราะห์ด้วยมือ — ลดอุทธรณ์", 0.75, SKY),
-        ("ตรวจจับเร็ว", "ป้องกันความเสียหายล่วงหน้า — ฟอกเงิน, ฉ้อโกง", 0.85, MINT),
+        ("เวลาวิเคราะห์", "จาก 3-5 วัน เหลือ 30 นาที ต่อคดี", 0.95, SALMON),
+        ("ค่า license", "ประหยัด 742+ ล้านบาท/ปี (เทียบค่า i2 สำหรับ 1,484 สถานี)", 1.0, GOLD),
+        ("ข้อผิดพลาด", "ลดข้อผิดพลาดจากวิเคราะห์ด้วยมือ — ลดการอุทธรณ์คดี", 0.75, SKY),
+        ("ตรวจจับเร็ว", "ตรวจพบเร็ว ป้องกันความเสียหายล่วงหน้า", 0.85, MINT),
         ("ครอบคลุม", "1,484 สถานีตำรวจ — 77 จังหวัดทั่วประเทศ", 0.80, LILAC),
     ]
     for i, (label, desc, pct, clr) in enumerate(roi):
@@ -891,7 +885,7 @@ def generate():
 
     _rect(s, MX, Inches(6.3), CW, Inches(0.6), DGREEN)
     _txt(s, MX, Inches(6.33), CW, Inches(0.55),
-         "คืนทุนใน 1 ปี — ค่า license i2 ปีเดียว > งบ SPNI ทั้ง 3 ปี", 17, WHITE, True, PP_ALIGN.CENTER)
+         "คืนทุนใน 1 ปี — ค่าสิทธิ์ i2 ปีเดียว มากกว่างบ SPNI ทั้ง 3 ปี", 17, WHITE, True, PP_ALIGN.CENTER)
 
     # ════════════════════════════════════════════════════════════
     # 21. TEAM + USERS
@@ -900,7 +894,7 @@ def generate():
     _title(s, "ทีมพัฒนา + ประมาณการผู้ใช้งาน")
 
     _rect(s, MX, BODY_TOP, hw, Inches(2.3), WHITE, GREEN)
-    _card_title(s, MX, BODY_TOP, hw, "Phase 1-2: ทำได้คนเดียว + AI", GREEN)
+    _card_title(s, MX, BODY_TOP, hw, "เฟส 1-2: ทำได้คนเดียว + AI ช่วย", GREEN)
     _bullets(s, MX+PAD, BODY_TOP+Inches(0.5), hw-PAD*2, Inches(1.5), [
         "ผู้พัฒนาปัจจุบัน (ร.ต.อ.ณัฐวุฒิ) + **Claude AI**",
         "ผลงาน: **41,000 บรรทัด**, 244 tests, 120+ API",
@@ -909,11 +903,11 @@ def generate():
 
     rx = MX + hw + GAP
     _rect(s, rx, BODY_TOP, hw, Inches(2.3), WHITE, ORANGE)
-    _card_title(s, rx, BODY_TOP, hw, "Phase 3-4: ต้องการทีม 8-12 คน", ORANGE)
+    _card_title(s, rx, BODY_TOP, hw, "เฟส 3-4: ต้องการทีม 8-12 คน", ORANGE)
     _bullets(s, rx+PAD, BODY_TOP+Inches(0.5), hw-PAD*2, Inches(1.5), [
-        "Backend Dev **2-3** │ Frontend Dev **1-2**",
-        "DevOps **1-2** │ AI/ML Engineer **1**",
-        "QA **1-2** │ Project Manager **1**",
+        "โปรแกรมเมอร์ฝั่งเซิร์ฟเวอร์ **2-3** │ ฝั่งหน้าจอ **1-2**",
+        "ดูแลระบบ **1-2** │ วิศวกร AI **1**",
+        "ทดสอบ **1-2** │ ผู้จัดการโครงการ **1**",
     ], sz=12, bc=ORANGE)
 
     # User estimation
@@ -948,10 +942,10 @@ def generate():
 
     closing = [
         ("1.", "BSIE v4.0 พร้อมใช้วันนี้ — ไม่ต้องรองบประมาณ", MINT),
-        ("2.", "ทดลอง Pilot กับคดีจริง 5-10 คดี (ฟรี)", SKY),
-        ("3.", "เก็บ feedback จากพนักงานสอบสวน", GOLD),
-        ("4.", "เสนองบ Phase 2: ~8 ล้านบาท (5 จังหวัดนำร่อง)", SALMON),
-        ("5.", "ขยายสู่ SPNI Platform ทั้งประเทศ — 77 จังหวัด 1,484 สถานี", LILAC),
+        ("2.", "ทดลองใช้กับคดีจริง 5-10 คดี (ฟรี)", SKY),
+        ("3.", "เก็บความเห็นจากพนักงานสอบสวน", GOLD),
+        ("4.", "เสนองบเฟส 2: ~8 ล้านบาท (5 จังหวัดนำร่อง)", SALMON),
+        ("5.", "ขยายสู่ระบบ SPNI ทั้งประเทศ — 77 จังหวัด 1,484 สถานี", LILAC),
     ]
     for i, (num, text, clr) in enumerate(closing):
         y = Inches(1.6) + i * Inches(0.8)
@@ -960,7 +954,7 @@ def generate():
 
     _rect(s, MX, Inches(5.7), CW, Inches(0.7), CDARK)
     _txt(s, MX, Inches(5.73), CW, Inches(0.65),
-         "งบ SPNI ทั้ง 3 ปี (~170 ล้าน)  <  ค่า license i2 ปีเดียว (742+ ล้าน)  →  คืนทุนทันที",
+         "งบ SPNI ทั้ง 3 ปี (~170 ล้าน) น้อยกว่า ค่าสิทธิ์ i2 ปีเดียว (742+ ล้าน) คืนทุนทันที",
          15, GOLD, True, PP_ALIGN.CENTER)
 
     _txt(s, MX, Inches(6.7), CW, Inches(0.35),

@@ -127,6 +127,19 @@ class TimingMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(TimingMiddleware)
 
+# Security: limit request body size (50 MB max for file uploads)
+class MaxBodySizeMiddleware(BaseHTTPMiddleware):
+    MAX_BODY_SIZE = 50 * 1024 * 1024  # 50 MB
+
+    async def dispatch(self, request: _Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > self.MAX_BODY_SIZE:
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"detail": "Request body too large (max 50 MB)"}, status_code=413)
+        return await call_next(request)
+
+app.add_middleware(MaxBodySizeMiddleware)
+
 # CORS — allow frontend dev server and same-origin production
 app.add_middleware(
     CORSMiddleware,

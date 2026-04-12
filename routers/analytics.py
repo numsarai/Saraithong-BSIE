@@ -138,3 +138,12 @@ async def api_ctr_report(account: str = "", analyst: str = "analyst"):
     with get_db_session() as session:
         result = generate_ctr_report(session, account, analyst=analyst)
     return JSONResponse(result)
+
+
+@router.get("/promptpay-graph")
+async def api_promptpay_graph(account: str = ""):
+    """Build PromptPay/phone/national ID connection graph."""
+    from services.promptpay_graph_service import build_promptpay_graph
+    with get_db_session() as session:
+        result = build_promptpay_graph(session, account)
+    return JSONResponse(result)

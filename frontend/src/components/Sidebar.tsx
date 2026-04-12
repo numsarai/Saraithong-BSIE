@@ -9,7 +9,8 @@ import {
   APP_SUBTITLE,
   APP_VERSION,
 } from '@/config/appMeta'
-import { Upload, Search, Settings, Cpu, BarChart2, Building2, FolderTree, Database, Globe, LayoutDashboard } from 'lucide-react'
+import { Upload, Search, Settings, Cpu, BarChart2, Building2, FolderTree, Database, Globe, LayoutDashboard, Menu, X } from 'lucide-react'
+import { useState } from 'react'
 
 export function Sidebar() {
   const { t } = useTranslation()
@@ -41,8 +42,25 @@ export function Sidebar() {
     }
   }
 
+  const [collapsed, setCollapsed] = useState(false)
+
   return (
-    <aside className="w-[210px] shrink-0 bg-surface border-r border-border sticky top-0 h-screen py-6 px-3 flex flex-col gap-1">
+    <>
+      {/* Mobile toggle button */}
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="fixed top-3 left-3 z-50 md:hidden p-2 rounded-lg bg-surface border border-border text-muted hover:text-text cursor-pointer"
+      >
+        {collapsed ? <X size={18} /> : <Menu size={18} />}
+      </button>
+
+    <aside className={cn(
+      "shrink-0 bg-surface border-r border-border sticky top-0 h-screen py-6 px-3 flex flex-col gap-1 transition-all z-40",
+      "w-[210px]",
+      // Mobile: hidden by default, show when collapsed=true (toggle is inverted naming)
+      "max-md:fixed max-md:top-0 max-md:left-0 max-md:shadow-2xl",
+      collapsed ? "max-md:translate-x-0" : "max-md:-translate-x-full",
+    )}>
       <div className="px-2 mb-5 cursor-pointer" onClick={goHome}>
         <div className="flex items-center gap-2">
           <img
@@ -177,5 +195,7 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
+
   )
 }

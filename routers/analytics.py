@@ -12,6 +12,9 @@ from services.anomaly_detection_service import detect_anomalies
 from services.period_comparison_service import compare_periods
 from services.bulk_matching_service import bulk_cross_match
 from services.sna_service import compute_sna_metrics
+from services.file_metadata_service import extract_file_metadata
+from services.insights_service import generate_account_insights
+from services.case_tapestry_service import build_case_tapestry
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -52,6 +55,39 @@ async def api_sna_metrics():
     """Compute Social Network Analysis centrality metrics for the account network."""
     with get_db_session() as session:
         result = compute_sna_metrics(session)
+    return JSONResponse(result)
+
+
+@router.get("/file-metadata")
+async def api_file_metadata(file_path: str = ""):
+    """Extract and verify file metadata for forensic integrity checks."""
+    if not file_path:
+        return JSONResponse({"error": "file_path required"}, status_code=400)
+    result = extract_file_metadata(file_path)
+    return JSONResponse(result)
+
+
+@router.get("/insights")
+async def api_account_insights(account: str = ""):
+    """Generate auto investigation insights for an account."""
+    if not account:
+        return JSONResponse({"error": "account required"}, status_code=400)
+    with get_db_session() as session:
+        result = generate_account_insights(session, account)
+    return JSONResponse(result)
+
+
+@router.post("/case-tapestry")
+async def api_case_tapestry(request: Request):
+    """Build unified case tapestry from multiple accounts."""
+    payload = await request.json()
+    accounts = payload.get("accounts", [])
+    case_name = str(payload.get("case_name", ""))
+    analyst = str(payload.get("analyst", "analyst"))
+    if not accounts:
+        return JSONResponse({"error": "accounts list required"}, status_code=400)
+    with get_db_session() as session:
+        result = build_case_tapestry(session, accounts, case_name=case_name, analyst=analyst)
     return JSONResponse(result)
 
 

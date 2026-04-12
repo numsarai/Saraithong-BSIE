@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
 # ── FastAPI app ──────────────────────────────────────────────────────────
 app = FastAPI(
     title="BSIE – Bank Statement Intelligence Engine",
-    version="3.0.1",
+    version="4.0.0",
     root_path="",
     lifespan=lifespan,
 )

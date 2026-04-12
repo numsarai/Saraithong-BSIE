@@ -6,7 +6,8 @@ Export jobs, profiles, downloads, audit logs, and learning feedback endpoints.
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from services.auth_service import require_auth
 from fastapi.responses import FileResponse, JSONResponse
 
 from paths import OUTPUT_DIR, EXPORTS_DIR, BACKUPS_DIR
@@ -20,7 +21,7 @@ from services.search_service import (
     list_learning_feedback_logs,
 )
 
-router = APIRouter(prefix="/api", tags=["exports"])
+router = APIRouter(prefix="/api", tags=["exports"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/export-jobs")

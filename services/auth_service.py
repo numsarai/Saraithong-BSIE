@@ -148,12 +148,15 @@ def ensure_default_admin(session: Session) -> None:
     initial_pw = os.getenv("BSIE_ADMIN_INITIAL_PASSWORD", "")
     if not initial_pw:
         initial_pw = secrets.token_urlsafe(16)
-        _logger.warning("=" * 60)
-        _logger.warning("  DEFAULT ADMIN CREATED")
-        _logger.warning("  Username: %s", initial_username)
-        _logger.warning("  Password: %s", initial_pw)
-        _logger.warning("  CHANGE THIS PASSWORD IMMEDIATELY!")
-        _logger.warning("=" * 60)
+        # Print to stderr only — never to log file
+        import sys
+        print("=" * 60, file=sys.stderr)
+        print(f"  DEFAULT ADMIN CREATED", file=sys.stderr)
+        print(f"  Username: {initial_username}", file=sys.stderr)
+        print(f"  Password: {initial_pw}", file=sys.stderr)
+        print(f"  CHANGE THIS PASSWORD IMMEDIATELY!", file=sys.stderr)
+        print("=" * 60, file=sys.stderr)
+        _logger.warning("Default admin user '%s' created — password shown in stderr only", initial_username)
     else:
         _logger.info("Admin user '%s' created with configured password", initial_username)
     create_user(

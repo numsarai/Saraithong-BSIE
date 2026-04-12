@@ -4,7 +4,8 @@ routers/dashboard.py
 Dashboard overview API — unified summary of the entire BSIE system.
 """
 
-from fastapi import APIRouter
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 
@@ -13,7 +14,7 @@ from persistence.models import (
     Account, Alert, FileRecord, ParserRun, Transaction,
 )
 
-router = APIRouter(prefix="/api", tags=["dashboard"])
+router = APIRouter(prefix="/api", tags=["dashboard"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/dashboard")

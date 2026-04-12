@@ -4,7 +4,8 @@ routers/case_tags.py
 Case tag management endpoints.
 """
 
-from fastapi import APIRouter
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
@@ -12,7 +13,7 @@ from persistence.base import get_db_session
 from persistence.models import CaseTag, CaseTagLink
 from persistence.schemas import CaseTagAssignRequest, CaseTagRequest
 
-router = APIRouter(prefix="/api", tags=["case-tags"])
+router = APIRouter(prefix="/api", tags=["case-tags"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/case-tags")

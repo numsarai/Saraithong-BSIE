@@ -9,7 +9,8 @@ import uuid
 from pathlib import Path
 
 import pandas as pd
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from core.bank_detector import detect_bank
@@ -41,7 +42,7 @@ from utils.app_helpers import (
 
 logger = logging.getLogger("bsie.api")
 
-router = APIRouter(prefix="/api", tags=["ingestion"])
+router = APIRouter(prefix="/api", tags=["ingestion"], dependencies=[Depends(require_auth)])
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -524,7 +525,7 @@ async def api_redetect(body: _RedetectRequest):
         raise
     except Exception as exc:
         logger.exception("Redetect failed")
-        raise HTTPException(500, f"Re-detection failed: {exc}")
+        raise HTTPException(500, "Re-detection failed. Please try again or contact support.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -7,7 +7,8 @@ Bank management API routes: list, detail, create, delete, and learn.
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from core.bank_logo_registry import find_bank_logo_record
@@ -16,7 +17,7 @@ from utils.app_helpers import builtin_bank_keys, collect_bank_configs, get_bank_
 
 logger = logging.getLogger("bsie.api")
 
-router = APIRouter(prefix="/api", tags=["banks"])
+router = APIRouter(prefix="/api", tags=["banks"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/banks")

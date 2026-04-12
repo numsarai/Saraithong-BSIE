@@ -4,7 +4,8 @@ routers/fund_flow.py
 Cross-account fund flow analysis API routes.
 """
 
-from fastapi import APIRouter
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter
 from fastapi.responses import JSONResponse
 
 from persistence.base import get_db_session
@@ -14,7 +15,7 @@ from services.fund_flow_service import (
     trace_fund_path,
 )
 
-router = APIRouter(prefix="/api/fund-flow", tags=["fund-flow"])
+router = APIRouter(prefix="/api/fund-flow", tags=["fund-flow"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/{account}")

@@ -383,15 +383,17 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
     let cancelled = false
     setLoading(true)
 
-    fetchAggregatedEdges(account).then(aggEdges => {
-      if (cancelled) return
-      if (aggEdges && aggEdges.length > 0) {
-        setFlows(aggEdges)
-      } else {
-        setFlows(aggregateFromRows(rows, account))
+    ;(async () => {
+      try {
+        const aggEdges = await fetchAggregatedEdges(account)
+        if (cancelled) return
+        setFlows(aggEdges?.length ? aggEdges : aggregateFromRows(rows, account))
+      } catch {
+        if (!cancelled) setFlows(aggregateFromRows(rows, account))
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      setLoading(false)
-    })
+    })()
 
     return () => { cancelled = true }
   }, [account, rows])
@@ -666,7 +668,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
         />
 
         {/* Floating toolbar inside canvas */}
-        <div className="absolute top-2 left-2 right-2 flex flex-wrap items-center gap-1.5 bg-slate-900/85 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-slate-700/50">
+        <div className="absolute top-2 left-2 right-2 flex flex-wrap items-center gap-1.5 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border shadow-sm">
           {/* Layouts */}
           <Button
             variant={activeLayout === 'spread' ? 'outline' : 'ghost'} size="sm"
@@ -693,28 +695,28 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
             <Sun size={13} />{t('results.flowGraph.layoutPeacock')}
           </Button>
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Filters */}
           <div className="flex items-center gap-1">
-            <Filter size={11} className="text-slate-400" />
-            <span className="text-[10px] text-slate-400">{t('results.flowGraph.minAmount')}:</span>
+            <Filter size={11} className="text-muted" />
+            <span className="text-[10px] text-muted">{t('results.flowGraph.minAmount')}:</span>
             <input
               type="number" value={minAmount || ''} placeholder="0"
               onChange={e => setMinAmount(Number(e.target.value) || 0)}
-              className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-[11px] text-slate-200 w-16 outline-none"
+              className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-16 outline-none"
             />
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-slate-400">{t('results.flowGraph.minTxnCount')}:</span>
+            <span className="text-[10px] text-muted">{t('results.flowGraph.minTxnCount')}:</span>
             <input
               type="number" value={minTxnCount || ''} placeholder="0"
               onChange={e => setMinTxnCount(Number(e.target.value) || 0)}
-              className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-[11px] text-slate-200 w-16 outline-none"
+              className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-16 outline-none"
             />
           </div>
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Display toggles */}
           <Button variant={edgeLabelsVisible ? 'outline' : 'ghost'} size="sm" onClick={handleToggleEdgeLabels}>
@@ -724,7 +726,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
             <Paintbrush size={13} />
           </Button>
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Pin */}
           <Button
@@ -752,7 +754,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
             </>
           )}
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Actions */}
           <Button variant="ghost" size="sm" onClick={handleFit}><Maximize2 size={13} /></Button>

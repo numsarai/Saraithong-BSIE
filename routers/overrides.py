@@ -7,7 +7,8 @@ Override-management API routes extracted from app.py.
 import logging
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from core.override_manager import (
@@ -23,7 +24,7 @@ from services.audit_service import log_audit
 
 logger = logging.getLogger("bsie.api")
 
-router = APIRouter(prefix="/api", tags=["overrides"])
+router = APIRouter(prefix="/api", tags=["overrides"], dependencies=[Depends(require_auth)])
 
 
 @router.post("/override")

@@ -8,6 +8,7 @@ All processing stays on-premise — no data leaves the machine.
 
 import base64
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -22,9 +23,11 @@ logger = logging.getLogger("bsie.llm")
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _CONTEXT_FILE = _BASE_DIR / "config" / "llm_context.md"
 
-OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "gemma4:latest"
-REQUEST_TIMEOUT = 120.0
+import os as _os
+
+OLLAMA_BASE_URL = _os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+DEFAULT_MODEL = _os.getenv("OLLAMA_DEFAULT_MODEL", "gemma4:latest")
+REQUEST_TIMEOUT = float(_os.getenv("OLLAMA_TIMEOUT", "120.0"))
 
 
 def _load_system_prompt() -> str:
@@ -36,13 +39,23 @@ def _load_system_prompt() -> str:
 
 # ── Database Query Helpers ────────────────────────────────────────────────
 
+_LIKE_ESCAPE_RE = re.compile(r"[%_\\]")
+_MAX_SEARCH_LEN = 100
+
+
+def _safe_like(value: str) -> str:
+    """Escape LIKE wildcards and limit length to prevent DoS."""
+    return _LIKE_ESCAPE_RE.sub(lambda m: f"\\{m.group()}", value.strip()[:_MAX_SEARCH_LEN])
+
+
 def _resolve_account_id(session: Any, account_number: str) -> str | None:
     """Resolve account number to account ID."""
+    safe = _safe_like(account_number)
     row = session.scalars(
         select(Account).where(
             or_(
                 Account.normalized_account_number == account_number,
-                Account.normalized_account_number.like(f"%{account_number}%"),
+                Account.normalized_account_number.like(f"%{safe}%"),
             )
         )
     ).first()
@@ -175,43 +188,45 @@ def get_account_transactions(account_number: str, *, limit: int = 50) -> list[di
 
 
 def get_all_accounts_summary() -> list[dict[str, Any]]:
-    """Get a summary list of all accounts in the database."""
+    """Get a summary list of all accounts in the database (single query)."""
+    from sqlalchemy import case
+
     with get_db_session() as session:
-        accounts = session.scalars(
-            select(Account).order_by(Account.first_seen_at.desc())
+        rows = session.execute(
+            select(
+                Account.normalized_account_number,
+                Account.account_holder_name,
+                Account.bank_name,
+                func.count(Transaction.id).label("txn_count"),
+                func.coalesce(
+                    func.sum(case((Transaction.direction == "IN", func.abs(Transaction.amount)), else_=0)), 0
+                ).label("total_in"),
+                func.coalesce(
+                    func.sum(case((Transaction.direction == "OUT", func.abs(Transaction.amount)), else_=0)), 0
+                ).label("total_out"),
+            )
+            .outerjoin(Transaction, Transaction.account_id == Account.id)
+            .group_by(Account.id)
+            .order_by(Account.first_seen_at.desc())
         ).all()
 
-        result = []
-        for acct in accounts:
-            txn_count = session.scalar(
-                select(func.count(Transaction.id))
-                .where(Transaction.account_id == acct.id)
-            ) or 0
-            total_in = float(session.scalar(
-                select(func.sum(func.abs(Transaction.amount)))
-                .where(Transaction.account_id == acct.id, Transaction.direction == "IN")
-            ) or 0)
-            total_out = float(session.scalar(
-                select(func.sum(func.abs(Transaction.amount)))
-                .where(Transaction.account_id == acct.id, Transaction.direction == "OUT")
-            ) or 0)
-
-            result.append({
-                "account": acct.normalized_account_number or "",
-                "holder_name": acct.account_holder_name or "",
-                "bank": acct.bank_name or "",
-                "transaction_count": txn_count,
-                "total_in": total_in,
-                "total_out": total_out,
-            })
-
-        return result
+        return [
+            {
+                "account": row.normalized_account_number or "",
+                "holder_name": row.account_holder_name or "",
+                "bank": row.bank_name or "",
+                "transaction_count": int(row.txn_count),
+                "total_in": float(row.total_in),
+                "total_out": float(row.total_out),
+            }
+            for row in rows
+        ]
 
 
 def search_transactions(query: str, *, limit: int = 30) -> list[dict[str, Any]]:
     """Search transactions by keyword across descriptions, counterparty names, etc."""
     with get_db_session() as session:
-        like = f"%{query}%"
+        like = f"%{_safe_like(query)}%"
         txns = session.scalars(
             select(Transaction)
             .join(Account, Transaction.account_id == Account.id, isouter=True)
@@ -349,21 +364,21 @@ async def chat(
     parts: list[str] = []
 
     if auto_context:
-        # If account is specified, pull its data from DB
+        import asyncio
+
+        # If account is specified, pull its data from DB (in thread to avoid blocking)
         if account:
-            summary = get_account_summary(account)
+            summary = await asyncio.to_thread(get_account_summary, account)
             parts.append("=== ข้อมูลบัญชีจากฐานข้อมูล ===")
             parts.append(_format_account_summary(summary))
 
             if not transactions and summary.get("found"):
-                # Auto-fetch recent transactions
-                db_txns = get_account_transactions(account, limit=50)
+                db_txns = await asyncio.to_thread(get_account_transactions, account, limit=50)
                 if db_txns:
                     parts.append(f"\n=== ธุรกรรมล่าสุด ({len(db_txns)} รายการ) ===")
                     parts.append(_format_transactions(db_txns))
         else:
-            # No specific account — provide overview (top 20 by txn count)
-            all_accounts = get_all_accounts_summary()
+            all_accounts = await asyncio.to_thread(get_all_accounts_summary)
             active = [a for a in all_accounts if a["transaction_count"] > 0]
             top = sorted(active, key=lambda a: a["transaction_count"], reverse=True)[:20]
             if top:

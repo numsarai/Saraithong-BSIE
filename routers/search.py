@@ -7,7 +7,8 @@ Search-related API routes: accounts, transactions, and account details.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from persistence.base import get_db_session
@@ -22,7 +23,7 @@ from services.search_service import (
 
 logger = logging.getLogger("bsie.api")
 
-router = APIRouter(prefix="/api", tags=["search"])
+router = APIRouter(prefix="/api", tags=["search"], dependencies=[Depends(require_auth)])
 
 
 # CRITICAL: /accounts/remembered-name MUST be registered BEFORE

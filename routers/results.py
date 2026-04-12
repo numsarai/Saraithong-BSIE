@@ -8,7 +8,8 @@ import json
 import logging
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
@@ -23,7 +24,7 @@ from services.search_service import (
 
 logger = logging.getLogger("bsie.api")
 
-router = APIRouter(prefix="/api", tags=["results"])
+router = APIRouter(prefix="/api", tags=["results"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/results/{account}")

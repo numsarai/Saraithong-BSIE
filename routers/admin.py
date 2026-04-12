@@ -4,7 +4,8 @@ routers/admin.py
 Admin API routes for database status, backups, reset, and restore.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from services.auth_service import require_auth
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, inspect, select
 
@@ -42,7 +43,7 @@ from services.admin_service import (
 )
 from utils.app_helpers import masked_database_url
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/db-status")

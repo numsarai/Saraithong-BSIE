@@ -596,7 +596,7 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
   useEffect(() => {
     if (n2nMode) return
     if (selectedNode && !expandedNodes.has(selectedNode)) expandNode(selectedNode)
-  }, [selectedNode, n2nMode])
+  }, [selectedNode, n2nMode, expandNode, expandedNodes])
 
   // Build node info card when selectedNode changes
   useEffect(() => {
@@ -735,13 +735,13 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
         />
 
         {/* Floating toolbar */}
-        <div className="absolute top-2 left-2 right-2 flex flex-wrap items-center gap-1.5 bg-slate-900/85 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-slate-700/50">
+        <div className="absolute top-2 left-2 right-2 flex flex-wrap items-center gap-1.5 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border shadow-sm">
           {/* Search + Add */}
           <input
             value={searchAccount}
             onChange={e => setSearchAccount(e.target.value.replace(/\D/g, ''))}
             placeholder={t('linkChart.startAccount')}
-            className="bg-slate-800 border border-slate-600 rounded-lg px-2.5 py-1 text-[11px] text-slate-200 focus:border-sky-500 outline-none w-28"
+            className="bg-surface2 border border-border rounded-lg px-2.5 py-1 text-[11px] text-text focus:border-sky-500 outline-none w-28"
             onKeyDown={e => { if (e.key === 'Enter') { nodeCount === 0 ? handleStart() : handleAddAccount() } }}
           />
           {nodeCount === 0 ? (
@@ -754,7 +754,7 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
             </Button>
           )}
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Layouts */}
           {(['spread', 'compact', 'hierarchy', 'peacock'] as LayoutMode[]).map((mode) => {
@@ -768,24 +768,24 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
             )
           })}
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Filters */}
           <div className="flex items-center gap-1">
-            <Filter size={11} className="text-slate-400" />
-            <span className="text-[10px] text-slate-400">{t('linkChart.minAmount')}:</span>
+            <Filter size={11} className="text-muted" />
+            <span className="text-[10px] text-muted">{t('linkChart.minAmount')}:</span>
             <input type="number" value={minAmount || ''} placeholder="0"
               onChange={e => setMinAmount(Number(e.target.value) || 0)}
-              className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-[11px] text-slate-200 w-16 outline-none" />
+              className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-16 outline-none" />
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-slate-400">{t('linkChart.minTxnCount')}:</span>
+            <span className="text-[10px] text-muted">{t('linkChart.minTxnCount')}:</span>
             <input type="number" value={minTxnCount || ''} placeholder="0"
               onChange={e => setMinTxnCount(Number(e.target.value) || 0)}
-              className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-[11px] text-slate-200 w-16 outline-none" />
+              className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-16 outline-none" />
           </div>
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Toggles */}
           <Button variant={edgeLabelsVisible ? 'outline' : 'ghost'} size="sm" onClick={handleToggleEdgeLabels} disabled={nodeCount === 0}>
@@ -795,7 +795,7 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
             <Paintbrush size={13} />
           </Button>
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* N2N Mode */}
           <Button variant={n2nMode ? 'outline' : 'ghost'} size="sm"
@@ -823,7 +823,7 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
             </>
           )}
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Actions */}
           <Button variant="ghost" size="sm" onClick={handleFit}><Maximize2 size={13} /></Button>
@@ -836,12 +836,12 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
 
         {/* N2N Detail Panel — floating bottom-right */}
         {n2nMode && n2nNodeA && (
-          <div className="absolute bottom-3 right-3 w-80 max-h-72 overflow-auto bg-slate-900/90 backdrop-blur-sm rounded-lg border border-slate-700/50 p-3 text-xs">
+          <div className="absolute bottom-3 right-3 w-80 max-h-72 overflow-auto bg-surface/90 backdrop-blur-sm rounded-lg border border-border p-3 text-xs">
             <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold text-slate-200">
+              <span className="font-semibold text-text">
                 {n2nNodeB ? `${n2nNodeA} \u2194 ${n2nNodeB}` : t('linkChart.n2nSelectB')}
               </span>
-              <button onClick={exitN2nMode} className="text-slate-400 hover:text-slate-200 cursor-pointer"><X size={14} /></button>
+              <button onClick={exitN2nMode} className="text-muted hover:text-text cursor-pointer"><X size={14} /></button>
             </div>
 
             {n2nLoading && <div className="text-accent animate-pulse py-2">{t('linkChart.loading')}...</div>}
@@ -858,12 +858,12 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
                     <strong className="text-red-300">{formatAmountFull(n2nDetail.totalOut)}</strong>
                   </div>
                 </div>
-                <div className="text-slate-400 mb-2">{n2nDetail.count} {t('linkChart.n2nTxns')}</div>
+                <div className="text-muted mb-2">{n2nDetail.count} {t('linkChart.n2nTxns')}</div>
 
                 {n2nDetail.transactions.length > 0 && (
                   <table className="w-full text-[11px]">
                     <thead>
-                      <tr className="text-slate-400 border-b border-slate-700 text-left">
+                      <tr className="text-muted border-b border-border text-left">
                         <th className="py-1 pr-2">{t('linkChart.n2nDate')}</th>
                         <th className="py-1 pr-2">{t('linkChart.n2nAmount')}</th>
                         <th className="py-1">{t('linkChart.n2nDir')}</th>
@@ -874,8 +874,8 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
                         const dir = String(txn.direction || '').toUpperCase()
                         const isIn = dir === 'IN'
                         return (
-                          <tr key={i} className="border-b border-slate-800 hover:bg-slate-800/50">
-                            <td className="py-0.5 pr-2 text-slate-300">{String(txn.transaction_datetime || txn.posted_date || txn.date || '').slice(0, 10)}</td>
+                          <tr key={i} className="border-b border-border/50 hover:bg-surface2">
+                            <td className="py-0.5 pr-2 text-text2">{String(txn.transaction_datetime || txn.posted_date || txn.date || '').slice(0, 10)}</td>
                             <td className={`py-0.5 pr-2 font-mono ${isIn ? 'text-green-400' : 'text-red-400'}`}>
                               {isIn ? '+' : '-'}{formatAmountFull(Math.abs(parseFloat(txn.amount) || 0))}
                             </td>
@@ -889,13 +889,13 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
                   </table>
                 )}
                 {n2nDetail.transactions.length > 30 && (
-                  <div className="text-slate-500 mt-1">{t('linkChart.n2nLimited')}</div>
+                  <div className="text-muted mt-1">{t('linkChart.n2nLimited')}</div>
                 )}
               </>
             )}
 
             {!n2nNodeB && !n2nLoading && (
-              <div className="text-slate-400 py-2">
+              <div className="text-muted py-2">
                 <span className="inline-block w-3 h-3 rounded-full bg-sky-400/30 border border-sky-400 mr-1" />
                 {t('linkChart.n2nHintA')}
               </div>
@@ -906,21 +906,21 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
         {/* Node Info Card — floating near clicked node */}
         {nodeInfo && !n2nMode && (
           <div
-            className="absolute z-20 w-60 bg-slate-900/92 backdrop-blur-sm rounded-lg border border-slate-700/60 shadow-xl text-xs pointer-events-auto"
+            className="absolute z-20 w-60 bg-surface/95 backdrop-blur-sm rounded-lg border border-border shadow-xl text-xs pointer-events-auto"
             style={{ left: nodeInfo.x + 20, top: nodeInfo.y - 20 }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700/50">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-slate-100 truncate">{nodeInfo.label}</div>
-                <div className="text-[10px] text-slate-400 font-mono">{nodeInfo.id}</div>
+                <div className="text-[10px] text-muted font-mono">{nodeInfo.id}</div>
               </div>
               <div className="flex items-center gap-1 ml-2 shrink-0">
                 {nodeInfo.isRoot && <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold">{t('linkChart.nodeInfoRoot')}</span>}
                 {nodeInfo.isExpanded && <span className="px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 text-[9px] font-bold">{t('linkChart.expanded')}</span>}
                 {nodeInfo.isPinned && <Star size={10} className="text-yellow-400" />}
               </div>
-              <button onClick={() => setNodeInfo(null)} className="ml-1.5 text-slate-500 hover:text-slate-300 cursor-pointer"><X size={12} /></button>
+              <button onClick={() => setNodeInfo(null)} className="ml-1.5 text-muted hover:text-text2 cursor-pointer"><X size={12} /></button>
             </div>
 
             {/* Flow summary */}
@@ -938,15 +938,15 @@ export function LinkChart({ initialAccount, onNodeDoubleClick }: LinkChartProps)
             {/* Neighbors list */}
             {nodeInfo.neighbors.length > 0 && (
               <div className="px-3 pb-2">
-                <div className="text-[9px] text-slate-500 uppercase tracking-wide mb-1">{t('linkChart.nodeInfoConnections')} ({nodeInfo.neighbors.length}{nodeInfo.neighbors.length >= 8 ? '+' : ''})</div>
+                <div className="text-[9px] text-muted uppercase tracking-wide mb-1">{t('linkChart.nodeInfoConnections')} ({nodeInfo.neighbors.length}{nodeInfo.neighbors.length >= 8 ? '+' : ''})</div>
                 <div className="max-h-32 overflow-y-auto space-y-0.5">
                   {nodeInfo.neighbors.map((nb, i) => (
                     <div key={i}
-                      className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-slate-800/60 cursor-pointer"
+                      className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-surface2 cursor-pointer"
                       onClick={() => { setSelectedNode(nb.id); setNodeInfo(null) }}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${nb.direction === 'IN' ? 'bg-green-400' : 'bg-red-400'}`} />
-                      <span className="text-slate-300 truncate flex-1">{nb.label}</span>
+                      <span className="text-text2 truncate flex-1">{nb.label}</span>
                       <span className={`font-mono text-[10px] ${nb.direction === 'IN' ? 'text-green-400' : 'text-red-400'}`}>
                         {nb.direction === 'IN' ? '+' : '-'}{formatAmount(nb.amount)}
                       </span>

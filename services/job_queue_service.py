@@ -10,27 +10,26 @@ spawning a new thread per job (which caused DB lock errors).
 from __future__ import annotations
 
 import logging
+import queue as _queue
 import threading
-from queue import Queue
-from typing import Any
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
-_job_queue: Queue = Queue()
+_job_queue: _queue.Queue[dict[str, Any] | None] = _queue.Queue()
 _worker_thread: threading.Thread | None = None
-_worker_running = False
+_worker_lock = threading.Lock()
+_stop_event = threading.Event()
 
 
 def _worker_loop() -> None:
     """Process jobs one at a time from the queue."""
-    global _worker_running
-    _worker_running = True
     logger.info("Job queue worker started")
 
-    while _worker_running:
+    while not _stop_event.is_set():
         try:
             job = _job_queue.get(timeout=2.0)
-        except Exception:
+        except _queue.Empty:
             continue
 
         if job is None:  # Shutdown signal
@@ -49,20 +48,21 @@ def _worker_loop() -> None:
         finally:
             _job_queue.task_done()
 
-    _worker_running = False
     logger.info("Job queue worker stopped")
 
 
 def ensure_worker_running() -> None:
-    """Start the worker thread if not already running."""
+    """Start the worker thread if not already running (thread-safe)."""
     global _worker_thread
-    if _worker_thread and _worker_thread.is_alive():
-        return
-    _worker_thread = threading.Thread(target=_worker_loop, daemon=True, name="bsie-job-worker")
-    _worker_thread.start()
+    with _worker_lock:
+        if _worker_thread and _worker_thread.is_alive():
+            return
+        _stop_event.clear()
+        _worker_thread = threading.Thread(target=_worker_loop, daemon=True, name="bsie-job-worker")
+        _worker_thread.start()
 
 
-def enqueue_job(job_id: str, func: Any, **kwargs: Any) -> None:
+def enqueue_job(job_id: str, func: Callable[..., None], **kwargs: Any) -> None:
     """Add a job to the queue. It will be processed serially."""
     ensure_worker_running()
     _job_queue.put({"job_id": job_id, "func": func, "kwargs": kwargs})
@@ -71,6 +71,5 @@ def enqueue_job(job_id: str, func: Any, **kwargs: Any) -> None:
 
 def shutdown_worker() -> None:
     """Signal the worker to stop."""
-    global _worker_running
-    _worker_running = False
+    _stop_event.set()
     _job_queue.put(None)  # Unblock the worker

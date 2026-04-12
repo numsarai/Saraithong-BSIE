@@ -7,7 +7,8 @@ Bulk folder processing and analytics endpoints.
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from paths import OUTPUT_DIR
@@ -15,7 +16,7 @@ from core.bulk_processor import process_folder
 
 logger = logging.getLogger("bsie.api")
 
-router = APIRouter(prefix="/api", tags=["bulk"])
+router = APIRouter(prefix="/api", tags=["bulk"], dependencies=[Depends(require_auth)])
 
 
 @router.post("/process-folder")

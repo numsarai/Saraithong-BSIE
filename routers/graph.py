@@ -6,7 +6,8 @@ Graph-analysis API routes extracted from app.py.
 
 from typing import Optional
 
-from fastapi import APIRouter
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter
 from fastapi.responses import JSONResponse
 
 from persistence.base import get_db_session
@@ -21,7 +22,7 @@ from services.graph_analysis_service import (
 )
 from services.neo4j_service import get_neo4j_status, sync_graph_to_neo4j
 
-router = APIRouter(prefix="/api", tags=["graph"])
+router = APIRouter(prefix="/api", tags=["graph"], dependencies=[Depends(require_auth)])
 
 
 def _graph_filter_payload(

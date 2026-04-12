@@ -4,7 +4,8 @@ routers/reports.py
 PDF report generation API routes.
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from persistence.base import get_db_session
@@ -14,7 +15,7 @@ from services.report_template_service import (
     list_criteria, save_criteria,
 )
 
-router = APIRouter(prefix="/api/reports", tags=["reports"])
+router = APIRouter(prefix="/api/reports", tags=["reports"], dependencies=[Depends(require_auth)])
 
 
 @router.post("/account")

@@ -16,11 +16,27 @@ from typing import Any
 import openpyxl
 
 
+def _is_safe_path(path: Path, allowed_bases: list[Path]) -> bool:
+    """Check that resolved path is under one of the allowed base directories."""
+    resolved = path.resolve()
+    return any(
+        resolved == base.resolve() or str(resolved).startswith(str(base.resolve()) + os.sep)
+        for base in allowed_bases
+    )
+
+
 def extract_file_metadata(file_path: str | Path) -> dict[str, Any]:
     """Extract metadata from a file for forensic verification."""
+    from paths import INPUT_DIR, EVIDENCE_DIR, OUTPUT_DIR, EXPORTS_DIR
+
     path = Path(file_path)
+    allowed_dirs = [INPUT_DIR, EVIDENCE_DIR, OUTPUT_DIR, EXPORTS_DIR]
+
+    if not _is_safe_path(path, allowed_dirs):
+        return {"error": "Access denied — path outside allowed directories"}
+
     if not path.exists():
-        return {"error": "File not found", "path": str(path)}
+        return {"error": "File not found"}
 
     stat = path.stat()
     result: dict[str, Any] = {

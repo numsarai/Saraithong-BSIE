@@ -26,6 +26,10 @@
   --color-graph-leaf-border: #94a3b8;
   --color-toolbar-bg: rgba(255, 255, 255, 0.88);
   --color-toolbar-border: rgba(203, 213, 225, 0.6);
+  --color-chart-grid: #cbd5e1;
+  --color-chart-axis: #475569;
+  --color-chart-in:   #16a34a;
+  --color-chart-out:  #dc2626;
 }
 
 /* ── Dark Theme ────────────────────────────────────────── */
@@ -50,6 +54,10 @@
   --color-graph-leaf-border: #64748b;
   --color-toolbar-bg: rgba(15, 23, 42, 0.88);
   --color-toolbar-border: rgba(51, 65, 85, 0.6);
+  --color-chart-grid: #334155;
+  --color-chart-axis: #94a3b8;
+  --color-chart-in:   #22c55e;
+  --color-chart-out:  #ef4444;
 }
 
 /* ── Base Styles ───────────────────────────────────────── */

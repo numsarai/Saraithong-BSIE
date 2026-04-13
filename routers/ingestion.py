@@ -12,6 +12,10 @@ import pandas as pd
 from services.auth_service import require_auth
 from fastapi import Depends, APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+_limiter = Limiter(key_func=get_remote_address)
 
 from core.bank_detector import detect_bank
 from core.bank_memory import find_matching_bank_fingerprint, save_bank_fingerprint
@@ -50,7 +54,8 @@ router = APIRouter(prefix="/api", tags=["ingestion"], dependencies=[Depends(requ
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.post("/upload")
-async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("analyst"), force_redetect: str = Form("")):
+@_limiter.limit("10/minute")
+async def api_upload(request: Request, file: UploadFile = File(...), uploaded_by: str = Form("analyst"), force_redetect: str = Form("")):
     """
     Accept an Excel file, run bank + column auto-detection, and return:
     - detected bank
@@ -68,7 +73,29 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"File type '{suffix}' not supported. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
 
-    contents = await file.read()
+    # SEC-H1: Read with size limit (50 MB) to prevent memory exhaustion
+    MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+    contents = await file.read(MAX_UPLOAD_SIZE + 1)
+    if len(contents) > MAX_UPLOAD_SIZE:
+        raise HTTPException(413, f"File too large (max {MAX_UPLOAD_SIZE // 1024 // 1024} MB)")
+
+    # SEC-H2: Magic byte validation — verify actual file type matches extension
+    _MAGIC_BYTES: dict[str, list[bytes]] = {
+        ".xlsx": [b"PK\x03\x04"],  # ZIP-based (Office Open XML)
+        ".xls":  [b"\xd0\xcf\x11\xe0"],  # OLE2 compound document
+        ".pdf":  [b"%PDF"],
+        ".png":  [b"\x89PNG"],
+        ".jpg":  [b"\xff\xd8\xff"],
+        ".jpeg": [b"\xff\xd8\xff"],
+        ".bmp":  [b"BM"],
+    }
+    expected_magics = _MAGIC_BYTES.get(suffix)
+    if expected_magics and not any(contents[:8].startswith(m) for m in expected_magics):
+        raise HTTPException(
+            400,
+            f"File content does not match extension '{suffix}'. "
+            f"The file may be corrupted or have an incorrect extension.",
+        )
     persisted = persist_upload(
         content=contents,
         original_filename=file.filename,
@@ -533,7 +560,8 @@ async def api_redetect(body: _RedetectRequest):
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.post("/process")
-async def api_process(body: ProcessRequest):
+@_limiter.limit("10/minute")
+async def api_process(request: Request, body: ProcessRequest):
     """
     Start the 14-step pipeline in a background thread.
     Returns {job_id} immediately.
@@ -553,6 +581,16 @@ async def api_process(body: ProcessRequest):
             temp_file_path = temp_file_path or file_record.stored_path
     if not temp_file_path or not Path(temp_file_path).exists():
         raise HTTPException(400, "temp_file_path missing or file not found")
+
+    # SEC-H5: Confine temp_file_path to allowed data directories only
+    from paths import INPUT_DIR, EVIDENCE_DIR
+    resolved = Path(temp_file_path).resolve()
+    allowed_bases = [INPUT_DIR.resolve(), EVIDENCE_DIR.resolve()]
+    if not any(
+        str(resolved).startswith(str(b) + "/") or resolved == b
+        for b in allowed_bases
+    ):
+        raise HTTPException(403, "File path outside allowed directories")
     if not account or not account.isdigit() or len(account) not in (10, 12):
         raise HTTPException(400, "account must be exactly 10 or 12 digits")
 

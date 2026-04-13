@@ -118,8 +118,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Rate limiting (HIGH-3 fix)
-limiter = Limiter(key_func=get_remote_address)
+# Rate limiting (HIGH-3 fix) — global default: 60 req/min per IP
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["60/minute"],
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -145,6 +148,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        # SEC-M1: Content-Security-Policy to prevent XSS exfiltration
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'"
+        )
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)

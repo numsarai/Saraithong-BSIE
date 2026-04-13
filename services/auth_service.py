@@ -10,6 +10,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from fastapi import Request as _Request
+
 import hashlib
 import hmac
 import logging
@@ -104,6 +106,12 @@ def authenticate_user(session: Session, username: str, password: str) -> User | 
         return None
     if not verify_password(password, user.hashed_password):
         return None
+
+    # SEC-H4: Auto-migrate legacy SHA-256 hashes to PBKDF2 on successful login
+    if not user.hashed_password.startswith("pbkdf2$"):
+        _logger.info("Migrating legacy password hash for user '%s' to PBKDF2", username)
+        user.hashed_password = hash_password(password)
+
     user.last_login_at = utcnow()
     session.add(user)
     session.commit()
@@ -182,8 +190,16 @@ def serialize_user(user: User) -> dict[str, Any]:
 
 AUTH_REQUIRED = os.getenv("BSIE_AUTH_REQUIRED", "").strip().lower() in ("1", "true", "yes")
 
+if not AUTH_REQUIRED:
+    _logger.warning(
+        "=" * 60
+        + "\n  BSIE_AUTH_REQUIRED is OFF — ALL API endpoints are PUBLIC!"
+        + "\n  Set BSIE_AUTH_REQUIRED=true in .env for production."
+        + "\n" + "=" * 60
+    )
 
-async def get_current_user_optional(request: Any) -> User | None:
+
+async def get_current_user_optional(request: _Request) -> User | None:
     """Extract current user from JWT if present. Returns None if auth disabled or no token."""
     if not AUTH_REQUIRED:
         return None
@@ -196,7 +212,7 @@ async def get_current_user_optional(request: Any) -> User | None:
         return get_user_by_token(session, token)
 
 
-async def require_auth(request: Any) -> User | None:
+async def require_auth(request: _Request) -> User | None:
     """Dependency that enforces authentication when BSIE_AUTH_REQUIRED=true."""
     if not AUTH_REQUIRED:
         return None  # Auth disabled — allow all
@@ -207,7 +223,7 @@ async def require_auth(request: Any) -> User | None:
     return user
 
 
-async def require_admin(request: Any) -> User | None:
+async def require_admin(request: _Request) -> User | None:
     """Dependency that enforces admin role when auth is enabled."""
     user = await require_auth(request)
     if user and user.role != "admin":

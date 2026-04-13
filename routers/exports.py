@@ -4,11 +4,25 @@ routers/exports.py
 Export jobs, profiles, downloads, audit logs, and learning feedback endpoints.
 """
 
+import re
+import unicodedata
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from services.auth_service import require_auth
 from fastapi.responses import FileResponse, JSONResponse
+
+
+def _sanitize_filename(name: str) -> str:
+    """Remove dangerous Unicode characters (RTLO, zero-width, homoglyphs) from filenames."""
+    # Strip Unicode control characters (Bidi overrides, zero-width chars)
+    cleaned = "".join(
+        c for c in name
+        if unicodedata.category(c) not in ("Cf", "Cc", "Co")  # format, control, private-use
+    )
+    # Keep only safe filename characters (alphanumeric, Thai, dot, dash, underscore, space)
+    cleaned = re.sub(r'[^\w.\-\s\u0E00-\u0E7F]', '_', cleaned)
+    return cleaned.strip() or "download"
 
 from paths import OUTPUT_DIR, EXPORTS_DIR, BACKUPS_DIR
 from core.mapping_memory import list_profiles
@@ -59,7 +73,7 @@ async def api_download(account: str, file_path: str, download_name: str = ""):
         raise HTTPException(400, "Invalid file path")
     if not full.exists() or not full.is_file():
         raise HTTPException(404, "File not found")
-    preferred_name = Path(str(download_name or "")).name.strip() or full.name
+    preferred_name = _sanitize_filename(Path(str(download_name or "")).name.strip() or full.name)
     return FileResponse(str(full), filename=preferred_name)
 
 
@@ -76,7 +90,7 @@ async def api_download_bulk(run_id: str, file_path: str, download_name: str = ""
     if not full.exists() or not full.is_file():
         raise HTTPException(404, "File not found")
 
-    preferred_name = Path(str(download_name or "")).name.strip() or full.name
+    preferred_name = _sanitize_filename(Path(str(download_name or "")).name.strip() or full.name)
     return FileResponse(str(full), filename=preferred_name)
 
 
@@ -91,7 +105,7 @@ async def api_download_export(job_id: str, file_path: str, download_name: str = 
         raise HTTPException(400, "Invalid file path")
     if not full.exists() or not full.is_file():
         raise HTTPException(404, "File not found")
-    preferred_name = Path(str(download_name or "")).name.strip() or full.name
+    preferred_name = _sanitize_filename(Path(str(download_name or "")).name.strip() or full.name)
     return FileResponse(str(full), filename=preferred_name)
 
 
@@ -106,7 +120,7 @@ async def api_download_backup(backup_name: str, download_name: str = ""):
         raise HTTPException(400, "Invalid file path")
     if not full.exists() or not full.is_file():
         raise HTTPException(404, "File not found")
-    preferred_name = Path(str(download_name or "")).name.strip() or full.name
+    preferred_name = _sanitize_filename(Path(str(download_name or "")).name.strip() or full.name)
     return FileResponse(str(full), filename=preferred_name)
 
 

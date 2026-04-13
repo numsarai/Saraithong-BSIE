@@ -68,9 +68,12 @@ async def api_results(account: str, page: int = 1, page_size: int = 100, parser_
         end = start + page_size
         rows = df.iloc[start:end].to_dict(orient="records")
 
+    # Always merge meta.json (financial stats) into meta from DB (parsing info).
+    # meta.json is the authoritative source for total_in/out, category_counts, etc.
     meta_path = OUTPUT_DIR / safe / "meta.json"
-    if not meta and meta_path.exists():
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    if meta_path.exists():
+        file_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta = {**meta, **file_meta}
     if not rows and not txn_path.exists():
         raise HTTPException(404, f"No results for account {safe}")
 

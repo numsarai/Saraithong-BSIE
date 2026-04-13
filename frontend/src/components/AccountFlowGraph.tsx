@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import {
   Maximize2, Minimize2, X, Download, Filter, Pin, Star,
   Maximize, GitBranch, Sun, Tag, EyeOff, Eye, Paintbrush,
-  MousePointer, Expand, Shrink,
+  MousePointer, Expand, Shrink, Clock,
 } from 'lucide-react'
 
 interface FlowGraphProps {
@@ -123,6 +123,16 @@ function extractNameFromLabel(label: string, fallback: string): string {
     return fallback
   }
   return label
+}
+
+/** Extract hour (0–23) from a transaction row, or null if unparseable. */
+function extractHour(row: any): number | null {
+  const dt = String(row.transaction_datetime || row.date || '')
+  // Handles "YYYY-MM-DD HH:mm" and "YYYY-MM-DDTHH:mm"
+  const m = dt.match(/[T ](\d{2}):/)
+  if (m) return parseInt(m[1], 10)
+  const d = new Date(dt)
+  return isNaN(d.getTime()) ? null : d.getHours()
 }
 
 function aggregateFromRows(rows: any[], subjectAccount: string): AggEdge[] {
@@ -366,10 +376,12 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
   const [loading, setLoading] = useState(true)
   const [selectedCp, setSelectedCp] = useState<string | null>(null)
 
-  // New feature state
+  // Filter & layout state
   const [activeLayout, setActiveLayout] = useState<LayoutMode>('spread')
   const [minAmount, setMinAmount] = useState(0)
   const [minTxnCount, setMinTxnCount] = useState(0)
+  const [hourStart, setHourStart] = useState<number | null>(null)
+  const [hourEnd, setHourEnd]     = useState<number | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [pinnedNodes, setPinnedNodes] = useState<Set<string>>(new Set())
   const [conditionalFormatting, setConditionalFormatting] = useState(false)
@@ -378,25 +390,40 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
   const [selectedCount, setSelectedCount] = useState(0)
   const removedElementsRef = useRef<cytoscape.CollectionReturnValue | null>(null)
 
-  // Load data: prefer aggregated CSV, fallback to raw rows
+  const isHourFiltered = hourStart !== null || hourEnd !== null
+
+  // Rows filtered by hour-of-day (used when hour filter is active)
+  const hourFilteredRows = useMemo(() => {
+    if (!isHourFiltered) return rows
+    const lo = hourStart ?? 0
+    const hi = hourEnd ?? 23
+    return rows.filter(r => {
+      const h = extractHour(r)
+      if (h === null) return false
+      return lo <= hi ? (h >= lo && h <= hi) : (h >= lo || h <= hi) // supports wrap-around (e.g. 22–04)
+    })
+  }, [rows, hourStart, hourEnd, isHourFiltered])
+
+  // Load data: prefer aggregated CSV (only when no hour filter), fallback to raw rows
   useEffect(() => {
     let cancelled = false
     setLoading(true)
 
     ;(async () => {
       try {
-        const aggEdges = await fetchAggregatedEdges(account)
+        // CSV edges have no time info → skip when hour filter is active
+        const aggEdges = isHourFiltered ? null : await fetchAggregatedEdges(account)
         if (cancelled) return
-        setFlows(aggEdges?.length ? aggEdges : aggregateFromRows(rows, account))
+        setFlows(aggEdges?.length ? aggEdges : aggregateFromRows(hourFilteredRows, account))
       } catch {
-        if (!cancelled) setFlows(aggregateFromRows(rows, account))
+        if (!cancelled) setFlows(aggregateFromRows(hourFilteredRows, account))
       } finally {
         if (!cancelled) setLoading(false)
       }
     })()
 
     return () => { cancelled = true }
-  }, [account, rows])
+  }, [account, hourFilteredRows, isHourFiltered])
 
   // Filter flows by minAmount and minTxnCount
   const filteredFlows = useMemo(() =>
@@ -623,13 +650,13 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
     const inFlow = cpFlows.find(f => f.direction === 'IN')
     const outFlow = cpFlows.find(f => f.direction === 'OUT')
 
-    const txns = rows.filter(r => {
+    const txns = hourFilteredRows.filter(r => {
       const cp = String(r.counterparty_account_normalized || r.counterparty_account || r.from_account || r.to_account || '').trim()
       return cp === selectedCp
     }).slice(0, 50)
 
     return { cpName, inFlow, outFlow, txns, totalTxns: cpFlows.reduce((s, f) => s + f.count, 0) }
-  }, [selectedCp, filteredFlows, rows])
+  }, [selectedCp, filteredFlows, hourFilteredRows])
 
   if (loading || flows.length === 0) return null
 
@@ -714,6 +741,32 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
               onChange={e => setMinTxnCount(Number(e.target.value) || 0)}
               className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-16 outline-none"
             />
+          </div>
+
+          {/* Hour-of-day filter */}
+          <div className="flex items-center gap-1">
+            <Clock size={11} className="text-muted" />
+            <span className="text-[10px] text-muted">{t('results.flowGraph.hourRange')}:</span>
+            <input
+              type="number" min={0} max={23}
+              value={hourStart ?? ''} placeholder="00"
+              onChange={e => {
+                const v = e.target.value
+                setHourStart(v === '' ? null : Math.max(0, Math.min(23, Number(v))))
+              }}
+              className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-10 outline-none text-center"
+            />
+            <span className="text-[10px] text-muted">–</span>
+            <input
+              type="number" min={0} max={23}
+              value={hourEnd ?? ''} placeholder="23"
+              onChange={e => {
+                const v = e.target.value
+                setHourEnd(v === '' ? null : Math.max(0, Math.min(23, Number(v))))
+              }}
+              className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-10 outline-none text-center"
+            />
+            <span className="text-[10px] text-muted">{t('results.flowGraph.hourLabel')}</span>
           </div>
 
           <div className="border-l border-border h-5 mx-0.5" />

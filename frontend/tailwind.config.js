@@ -18,6 +18,10 @@ export default {
         muted:    'var(--color-muted)',
         text:     'var(--color-text)',
         text2:    'var(--color-text2)',
+        'chart-grid': 'var(--color-chart-grid)',
+        'chart-axis': 'var(--color-chart-axis)',
+        'chart-in':   'var(--color-chart-in)',
+        'chart-out':  'var(--color-chart-out)',
       },
       fontFamily: {
         sans: ['Noto Sans Thai', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],

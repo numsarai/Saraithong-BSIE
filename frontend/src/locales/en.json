@@ -236,7 +236,9 @@
       "layoutHierarchy": "Hierarchy",
       "layoutPeacock": "Peacock",
       "minAmount": "Min amount",
-      "minTxnCount": "Min txn count"
+      "minTxnCount": "Min txn count",
+      "hourRange": "Time range",
+      "hourLabel": "h"
     },
     "insights": {
       "title": "Investigation Insights"
@@ -467,6 +469,17 @@
     "title": "Activity Heatmap (Hour x Day)",
     "byHour": "Total by Hour",
     "byDay": "Total by Day of Week"
+  },
+  "dateFilter": {
+    "label": "Filter Date Range",
+    "from": "From",
+    "to": "To",
+    "preset7d": "7 days",
+    "preset30d": "30 days",
+    "preset90d": "90 days",
+    "presetAll": "All",
+    "reset": "Reset",
+    "showing": "Showing"
   },
   "linkChart": {
     "title": "Link Chart",

@@ -68,7 +68,7 @@ async def api_upload(request: Request, file: UploadFile = File(...), uploaded_by
         raise HTTPException(400, "No filename")
 
     # HIGH-5: File type allowlist
-    ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".ofx", ".pdf", ".csv", ".png", ".jpg", ".jpeg", ".bmp"}
+    ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".ofx", ".pdf", ".png", ".jpg", ".jpeg", ".bmp"}
     suffix = Path(file.filename).suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"File type '{suffix}' not supported. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
@@ -352,6 +352,8 @@ async def api_upload(request: Request, file: UploadFile = File(...), uploaded_by
             "identity_guess":   identity,
         })
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Upload failed for file: %s", file.filename)
         raise HTTPException(500, "File processing failed. Please try again or contact support.")

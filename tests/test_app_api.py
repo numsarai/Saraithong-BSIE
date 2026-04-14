@@ -307,6 +307,70 @@ def test_results_endpoint_uses_parser_run_scope_for_meta(tmp_path, monkeypatch):
     assert ("ParserRun", "RUN-123") in dummy_session.get_calls
 
 
+def test_results_timeline_endpoint_preserves_transaction_datetime(monkeypatch):
+    from datetime import date, datetime, timezone
+
+    class DummyScalarResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def first(self):
+            return self._rows[0] if self._rows else None
+
+    class DummyAccount:
+        id = "ACCOUNT-1"
+
+    class DummyRow:
+        transaction_datetime = datetime(2026, 3, 5, 14, 45, 0, tzinfo=timezone.utc)
+        posted_date = date(2026, 3, 5)
+        amount = 1250.0
+        direction = "IN"
+        transaction_type = "IN_TRANSFER"
+        counterparty_account_normalized = "2222222222"
+        counterparty_name_normalized = "alice"
+
+    class DummyExecuteResult:
+        def all(self):
+            return [DummyRow()]
+
+    class DummySession:
+        def scalars(self, query):
+            return DummyScalarResult([DummyAccount()])
+
+        def execute(self, query):
+            return DummyExecuteResult()
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _fake_session():
+        yield DummySession()
+
+    monkeypatch.setattr("routers.results.get_db_session", _fake_session)
+
+    response = client.get("/api/results/1234567890/timeline", params={"parser_run_id": "RUN-123"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["items"][0]["date"] == "2026-03-05"
+    assert payload["items"][0]["transaction_datetime"] == "2026-03-05T14:45:00+00:00"
+    assert payload["items"][0]["posted_date"] == "2026-03-05"
+
+
+def test_upload_pdf_extraction_errors_return_client_error():
+    with (
+        patch("routers.ingestion.parse_pdf_file", return_value={"tables_found": 0, "df": pd.DataFrame()}),
+        patch("routers.ingestion.parse_image_file", return_value={"df": pd.DataFrame()}),
+    ):
+        response = client.post(
+            "/api/upload",
+            files={"file": ("bad.pdf", BytesIO(b"%PDF-1.4\n%fake"), "application/pdf")},
+        )
+
+    assert response.status_code == 400
+    assert "Could not extract a transaction table from this PDF" in response.text
+
+
 def test_bulk_analytics_endpoint_returns_saved_artifact(tmp_path):
     run_dir = tmp_path / "bulk_runs" / "20260330_030000"
     run_dir.mkdir(parents=True)

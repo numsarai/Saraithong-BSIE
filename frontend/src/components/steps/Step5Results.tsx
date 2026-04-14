@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { deleteOverride, generateAccountReport, getAccountInsights, getOverrides, getResults, getResultsTimeline, saveOverride } from '@/api'
@@ -44,7 +44,7 @@ export function Step5Results() {
   const [page, setPage]       = useState(1)
   const [override, setOverride] = useState<OverrideState>(null)
   const [ovForm, setOvForm]   = useState({ from: '', to: '', reason: '', by: resolvedOperatorName })
-  const [checkMode, setCheckMode] = useState<'file_order' | 'chronological'>('file_order')
+  const [selectedCheckMode, setCheckMode] = useState<'file_order' | 'chronological' | null>(null)
   const [dateStart, setDateStart] = useState<string | null>(null)
   const [dateEnd, setDateEnd]     = useState<string | null>(null)
 
@@ -64,7 +64,7 @@ export function Step5Results() {
     enabled: !!account,
     staleTime: 60_000,
   })
-  const timelineItems = timelineData?.items || []
+  const timelineItems = useMemo(() => timelineData?.items || [], [timelineData?.items])
   const { data: insightsData } = useQuery({
     queryKey: ['account-insights', account],
     queryFn: () => getAccountInsights(account),
@@ -75,7 +75,7 @@ export function Step5Results() {
 
   // Merge both sources: API meta (from meta.json, authoritative) takes priority over store meta
   const meta = { ...(results?.meta || {}), ...(txnData?.meta || {}) }
-  const rows = txnData?.rows || results?.transactions || []
+  const rows = useMemo(() => txnData?.rows || results?.transactions || [], [txnData?.rows, results?.transactions])
   const total = Number(
     txnData?.total
     ?? meta.num_transactions
@@ -135,6 +135,9 @@ export function Step5Results() {
   const originalFilename = meta.original_filename || 'original.xlsx'
   const categoryFiles = meta.category_files || {}
   const reconciliation = meta.reconciliation || {}
+  const recommendedCheckMode =
+    reconciliation.recommended_check_mode === 'chronological' ? 'chronological' : 'file_order'
+  const checkMode = selectedCheckMode ?? recommendedCheckMode
   const checkModes = reconciliation.check_modes || {}
   const activeCheck = checkModes[checkMode] || {
     status: reconciliation.status || '—',
@@ -172,10 +175,6 @@ export function Step5Results() {
     { label: t('results.downloads.originalSource'),       file: `raw/original${originalFilename.includes('.') ? originalFilename.slice(originalFilename.lastIndexOf('.')) : '.xlsx'}`, downloadName: originalFilename },
     { label: t('results.downloads.metadataJson'),      file: 'meta.json', downloadName: `${filePrefix}_meta.json` },
   ]
-
-  useEffect(() => {
-    setCheckMode(reconciliation.recommended_check_mode === 'chronological' ? 'chronological' : 'file_order')
-  }, [account, reconciliation.recommended_check_mode])
 
   const statCards = [
     { label: t('results.stats.totalTxn'),   value: String(meta.num_transactions ?? total),          color: '' },
@@ -385,8 +384,8 @@ export function Step5Results() {
         />
       )}
 
-      {filteredRows.length > 0 && (
-        <AccountFlowGraph account={account} bankKey={bankKey} rows={filteredRows} />
+      {filteredTimeline.length > 0 && (
+        <AccountFlowGraph account={account} bankKey={bankKey} rows={filteredTimeline} />
       )}
 
       {filteredTimeline.length > 0 && (

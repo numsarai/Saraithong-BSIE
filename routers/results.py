@@ -73,7 +73,9 @@ async def api_results(account: str, page: int = 1, page_size: int = 100, parser_
     meta_path = OUTPUT_DIR / safe / "meta.json"
     if meta_path.exists():
         file_meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        meta = {**meta, **file_meta}
+        # Preserve parser-run-specific fields when reviewing a historical run.
+        # The account-level meta.json still fills in export stats such as total_in/out.
+        meta = {**file_meta, **meta} if parser_run_id else {**meta, **file_meta}
     if not rows and not txn_path.exists():
         raise HTTPException(404, f"No results for account {safe}")
 
@@ -127,7 +129,11 @@ async def api_results_timeline(account: str, parser_run_id: str = ""):
             result = session.execute(tx_query).all()
             items = [
                 {
-                    "date": str(row.posted_date or "")[:10] if row.posted_date else str(row.transaction_datetime or "")[:10],
+                    "date": row.posted_date.isoformat() if row.posted_date else (
+                        row.transaction_datetime.isoformat()[:10] if row.transaction_datetime else ""
+                    ),
+                    "transaction_datetime": row.transaction_datetime.isoformat() if row.transaction_datetime else "",
+                    "posted_date": row.posted_date.isoformat() if row.posted_date else "",
                     "amount": float(row.amount or 0),
                     "direction": str(row.direction or ""),
                     "transaction_type": str(row.transaction_type or ""),
@@ -142,9 +148,34 @@ async def api_results_timeline(account: str, parser_run_id: str = ""):
     txn_path = OUTPUT_DIR / safe / "processed" / "transactions.csv"
     if txn_path.exists():
         df = pd.read_csv(txn_path, dtype=str, encoding="utf-8-sig", usecols=lambda c: c in {
-            "date", "amount", "direction", "transaction_type", "counterparty_account", "counterparty_name",
+            "date",
+            "time",
+            "transaction_datetime",
+            "posted_date",
+            "amount",
+            "direction",
+            "transaction_type",
+            "counterparty_account",
+            "counterparty_name",
         }).fillna("")
-        items = df.to_dict(orient="records")
+        items = []
+        for row in df.to_dict(orient="records"):
+            date_value = str(row.get("date", "") or "").strip()[:10]
+            time_value = str(row.get("time", "") or "").strip()
+            transaction_datetime = str(row.get("transaction_datetime", "") or "").strip()
+            if not transaction_datetime:
+                transaction_datetime = f"{date_value}T{time_value}" if date_value and time_value else date_value
+            posted_date = str(row.get("posted_date", "") or "").strip()[:10] or date_value
+            items.append({
+                "date": date_value,
+                "transaction_datetime": transaction_datetime,
+                "posted_date": posted_date,
+                "amount": row.get("amount", ""),
+                "direction": row.get("direction", ""),
+                "transaction_type": row.get("transaction_type", ""),
+                "counterparty_account": row.get("counterparty_account", ""),
+                "counterparty_name": row.get("counterparty_name", ""),
+            })
         return JSONResponse({"account": safe, "items": items, "total": len(items)})
 
     return JSONResponse({"account": safe, "items": [], "total": 0})

@@ -22,6 +22,8 @@ vi.mock('@/api', () => ({
   deleteBank: vi.fn(async () => ({ status: 'ok' })),
   learnBankDetection: vi.fn(async () => ({ status: 'ok' })),
   saveOverride: vi.fn(async () => ({ status: 'ok' })),
+  llmChat: vi.fn(async () => ({ response: 'ok' })),
+  getLlmStatus: vi.fn(async () => ({ status: 'ok', models: [] })),
 }))
 
 vi.mock('sonner', () => ({

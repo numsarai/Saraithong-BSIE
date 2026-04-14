@@ -59,6 +59,7 @@ from routers.reports import router as reports_router
 from routers.fund_flow import router as fund_flow_router
 from routers.exports import router as exports_router
 from routers.llm import router as llm_router
+from routers.spni import router as spni_router
 
 # ── Logging ──────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -178,7 +179,7 @@ app.add_middleware(MaxBodySizeMiddleware)
 # CORS — allow frontend dev server and same-origin production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:6776", "http://127.0.0.1:6776", "http://localhost:8757"],
+    allow_origins=["http://localhost:6776", "http://127.0.0.1:6776", "http://localhost:8757", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -219,6 +220,7 @@ app.include_router(workspace_router)
 app.include_router(banks_router)
 app.include_router(exports_router)
 app.include_router(llm_router)
+app.include_router(spni_router)
 app.include_router(ui_router)  # UI catch-all routes last
 
 # ── Test compatibility re-exports ────────────────────────────────────────

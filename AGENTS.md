@@ -381,3 +381,26 @@ For most BSIE work, use this order:
 4. Implement frontend integration after backend contracts are stable.
 5. Add or update regression tests.
 6. Review final behavior against evidence-integrity rules.
+
+## Agent Session Protocol
+
+### On Session Start (MANDATORY)
+
+1. Read `docs/HANDOFF.md` — understand current state, warnings, and pending work
+2. Read `docs/DECISIONS.md` — know what was already decided (do NOT reverse without asking)
+3. Check `docs/.handoff-snapshot.md` if exists — environment and test state from last session
+4. Run `git log --oneline -10` — understand recent changes
+5. Run tests before making changes — confirm baseline is green
+
+### On Session End (MANDATORY)
+
+Before ending your session, you MUST update `docs/HANDOFF.md` with:
+
+1. **What you did** — files changed, features added/fixed, tests written
+2. **What's next** — prioritized list of remaining work
+3. **Decisions made** — any architectural or technical choices (also add to `docs/DECISIONS.md` if significant)
+4. **Warnings** — things that are broken, unstable, or must not be touched
+5. **Failed attempts** — approaches you tried that didn't work and why (saves the next agent from repeating)
+6. **Environment changes** — new deps installed, migrations run, config changed
+
+This is NON-NEGOTIABLE. The next agent (which may be a different AI) depends on this information.

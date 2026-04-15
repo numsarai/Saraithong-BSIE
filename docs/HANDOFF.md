@@ -7,39 +7,26 @@
 
 - **Last agent:** Codex (GPT-5)
 - **Date:** 2026-04-15
-- **Branch:** `Smarter-BSIE`
+- **Branch:** `codex/spni-export-test-runtime-pr`
 - **Baseline:** backend green (`231 passed`), frontend green (`33 passed`)
 - **Server:** `uvicorn app:app --host 0.0.0.0 --port 8757`
 
 ## Done (latest session)
 
-- ทำ session-start protocol ครบ: อ่าน `docs/HANDOFF.md`, `docs/DECISIONS.md`, เช็ก `git log --oneline -10`, ยืนยันว่า `docs/.handoff-snapshot.md` ยังไม่มี
-- แก้ `services/file_ingestion_service.py`
-  - เพิ่ม canonical evidence-path helper
-  - เพิ่ม self-heal สำหรับ duplicate uploads: ถ้า `stored_path` หายหรืออยู่นอก `EVIDENCE_DIR` ปัจจุบัน ให้ rewrite evidence file เข้า path ปัจจุบันและอัปเดต `stored_path` / `storage_key`
-- เพิ่ม regression test `test_persist_upload_repairs_missing_duplicate_evidence_path` ใน `tests/test_persistence_platform.py`
-- แยก pytest runtime ออกจาก project root:
-  - แก้ `tests/conftest.py` ให้สร้าง temp runtime root แล้ว patch `paths.USER_DATA_DIR`, `DB_PATH`, และ writable dirs ก่อน test modules import `app`
-  - ปรับ `tests/test_paths.py` ให้ตรวจ behavior ของ isolated test runtime แทนการ assume ว่า `USER_DATA_DIR == BUNDLE_DIR`
-- เก็บ frontend test warning:
-  - แก้ `frontend/src/App.workflow.test.tsx` ให้ mock `LlmChat` ออกจาก workflow test ที่ไม่ได้ทดสอบ chat
-  - ห่อ `useStore` resets ใน `act(...)` เพื่อไม่ให้ mounted components (`Sidebar`, `App`, `Step3Config`) อัปเดตนอก React test boundary
-  - ลบการ suppress `console.error` สำหรับ `not wrapped in act`
-  - แก้ `frontend/src/test/setup.ts` ให้ inject in-memory `localStorage` / `sessionStorage` stub ก่อน import `i18n` เพื่อกัน Node 25 global storage warning (`--localstorage-file`)
-- ยืนยันผลหลังแก้:
-  - `tests/test_paths.py` -> ผ่าน
-  - `tests/test_app_api.py -k "upload_accepts_ofx or upload_uses_uploaded_by_form_field"` -> ผ่าน
-  - `tests/test_persistence_platform.py -k persist_upload` -> ผ่าน
+- ทำ session-start protocol ครบ: อ่าน `docs/HANDOFF.md`, `docs/DECISIONS.md`, ตรวจว่า `docs/.handoff-snapshot.md` ยังไม่มี, และเช็ก `git log --oneline -10`
+- ตรวจ repo state เพื่อเตรียม PR:
+  - ยืนยันว่า working tree สะอาด
+  - ยืนยันว่า `Smarter-BSIE` ahead จาก `origin/Smarter-BSIE` อยู่ 6 commits
+  - สร้าง PR branch `codex/spni-export-test-runtime-pr` จาก `HEAD` ปัจจุบันเพื่อไม่ push ตรงกลับ shared branch
+- rerun baseline tests สดก่อนเปิด PR:
   - `pytest tests/` -> `231 passed`
   - `frontend npm test` -> `33 passed`
+- ไม่มี product-code change ใหม่ใน session นี้; เป้าหมายของ session คือ package งานเดิมให้อยู่ในรูป branch/PR ที่ปลอดภัยและอ้างอิงผลทดสอบล่าสุดได้
 
 ## Commits (this session)
 
 ```
-See `git log --oneline -5` after session close for the final commit covering:
-- duplicate evidence-path self-heal
-- pytest runtime isolation
-- frontend test warning cleanup
+Pending a handoff-only commit on `codex/spni-export-test-runtime-pr` before push/PR creation.
 ```
 
 ## Next (priority order)
@@ -85,5 +72,10 @@ See `git log --oneline -5` after session close for the final commit covering:
 
 ## History
 
+- Codex (GPT-5), 2026-04-15
+  - เพิ่ม canonical evidence-path self-heal ใน `services/file_ingestion_service.py`
+  - แยก pytest runtime ออกจาก project-root state ใน `tests/conftest.py`
+  - เก็บ frontend test warnings ใน `frontend/src/App.workflow.test.tsx` และ `frontend/src/test/setup.ts`
+  - ยืนยันผล: `pytest tests/` = `231 passed`, `frontend npm test` = `33 passed`
 - Claude Code (Opus 4.6), 2026-04-15
   - เพิ่ม SPNI router/service, graph/timeline ingestion fixes, และ docs v4.1

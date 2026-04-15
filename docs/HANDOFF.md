@@ -21,18 +21,18 @@
 - แก้ CodeQL path-validation สำหรับ evidence storage:
   - เพิ่ม `_normalize_file_id()` ให้รับเฉพาะ UUID
   - เพิ่ม `_normalize_storage_suffix()` ให้ suffix อยู่ใน allowlist (`.[a-z0-9]{1,16}`) ไม่งั้น fallback เป็น `.dat`
-  - ทำ `_canonical_evidence_path()` ให้ตรวจว่า resolved dir/path ยังอยู่ใต้ `EVIDENCE_DIR` ก่อนใช้งาน
-  - เพิ่ม explicit guard ก่อน `write_bytes()` ใน flow สร้างไฟล์ใหม่และ flow repair duplicate evidence path
+  - ทำ `_canonical_evidence_path()` ให้ประกอบ path จาก sanitized UUID/suffix เท่านั้น
+  - ปรับ duplicate repair ให้ reuse/repair เฉพาะ canonical path ใต้ current `EVIDENCE_DIR` แทนการ `resolve()` arbitrary stored path จาก record เดิม
 - เพิ่ม regression test `test_canonical_evidence_path_rejects_invalid_file_id` ใน `tests/test_persistence_platform.py`
 - ยืนยันผลหลังแก้:
   - `.venv/bin/python -m pytest tests/test_persistence_platform.py -q` -> `11 passed`
   - `.venv/bin/python -m pytest tests/ -q` -> `232 passed`
-- เตรียม push follow-up commit นี้กลับเข้า `codex/spni-export-test-runtime-pr` เพื่ออัปเดต PR checks
+- เตรียม push latest follow-up commit นี้กลับเข้า `codex/spni-export-test-runtime-pr` เพื่ออัปเดต PR checks
 
 ## Commits (this session)
 
 ```
-Pending follow-up commit for the CodeQL path-validation fix (`services/file_ingestion_service.py`, `tests/test_persistence_platform.py`, `docs/HANDOFF.md`) before push.
+Pending latest follow-up commit for the refined CodeQL path-validation fix (`services/file_ingestion_service.py`, `docs/HANDOFF.md`) before push.
 ```
 
 ## Next (priority order)
@@ -80,7 +80,7 @@ Pending follow-up commit for the CodeQL path-validation fix (`services/file_inge
 ## History
 
 - Codex (GPT-5), 2026-04-15
-  - แก้ CodeQL `py/path-injection` บน `services/file_ingestion_service.py` ด้วย UUID/suffix normalization และ safe-root validation
+  - แก้ CodeQL `py/path-injection` บน `services/file_ingestion_service.py` ด้วย UUID/suffix normalization และ canonical-path-only duplicate repair
   - เพิ่ม regression test `test_canonical_evidence_path_rejects_invalid_file_id`
   - ยืนยันผล: targeted persistence `11 passed`, backend suite `232 passed`
 - Codex (GPT-5), 2026-04-15

@@ -14,6 +14,7 @@ from persistence.models import FileRecord
 from services.fingerprinting import sha256_bytes
 
 _SAFE_SUFFIX_RE = re.compile(r"^\.[a-z0-9]{1,16}$")
+_SAFE_FILE_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
 def _normalize_storage_suffix(raw_suffix: str) -> str:
@@ -23,47 +24,37 @@ def _normalize_storage_suffix(raw_suffix: str) -> str:
 
 def _normalize_file_id(file_id: str) -> str:
     try:
-        return str(UUID(str(file_id)))
+        normalized = str(UUID(str(file_id))).lower()
     except (ValueError, TypeError) as exc:
         raise ValueError("Invalid file identifier for evidence storage") from exc
+    if not _SAFE_FILE_ID_RE.fullmatch(normalized):
+        raise ValueError("Invalid file identifier for evidence storage")
+    return normalized
 
 
 def _canonical_evidence_path(file_id: str, suffix: str) -> Path:
     safe_file_id = _normalize_file_id(file_id)
     safe_suffix = _normalize_storage_suffix(suffix)
     evidence_dir = EVIDENCE_DIR / safe_file_id
-    if not _is_within_directory(evidence_dir, EVIDENCE_DIR):
-        raise ValueError("Resolved evidence directory escaped evidence root")
     evidence_dir.mkdir(parents=True, exist_ok=True)
-    evidence_path = evidence_dir / f"original{safe_suffix}"
-    if not _is_within_directory(evidence_path, EVIDENCE_DIR):
-        raise ValueError("Resolved evidence path escaped evidence root")
-    return evidence_path
-
-
-def _is_within_directory(path: Path, directory: Path) -> bool:
-    resolved_path = path.resolve()
-    resolved_directory = directory.resolve()
-    return resolved_path == resolved_directory or resolved_directory in resolved_path.parents
+    return evidence_dir / f"original{safe_suffix}"
 
 
 def _repair_reused_evidence_file(existing: FileRecord, content: bytes, fallback_suffix: str) -> Path:
-    stored_path = Path(existing.stored_path) if existing.stored_path else Path()
     suffix = Path(existing.original_filename or "").suffix or fallback_suffix or ".dat"
-    canonical_path = _canonical_evidence_path(existing.id, suffix)
+    safe_file_id = _normalize_file_id(existing.id)
+    safe_suffix = _normalize_storage_suffix(suffix)
+    canonical_path = _canonical_evidence_path(safe_file_id, safe_suffix)
 
-    if existing.stored_path:
-        try:
-            if stored_path.exists() and _is_within_directory(stored_path, EVIDENCE_DIR):
-                return stored_path
-        except OSError:
-            pass
+    if canonical_path.exists():
+        existing.stored_path = str(canonical_path)
+        existing.storage_key = f"{safe_file_id}/original{safe_suffix}"
+        existing.import_status = "uploaded"
+        return canonical_path
 
-    if not _is_within_directory(canonical_path, EVIDENCE_DIR):
-        raise ValueError("Resolved evidence path escaped evidence root")
     canonical_path.write_bytes(content)
     existing.stored_path = str(canonical_path)
-    existing.storage_key = f"{_normalize_file_id(existing.id)}/original{_normalize_storage_suffix(suffix)}"
+    existing.storage_key = f"{safe_file_id}/original{safe_suffix}"
     existing.import_status = "uploaded"
     return canonical_path
 
@@ -128,12 +119,11 @@ def persist_upload(
         session.flush()
         file_id = file_row.id
 
-        evidence_path = _canonical_evidence_path(file_id, suffix)
-        if not _is_within_directory(evidence_path, EVIDENCE_DIR):
-            raise ValueError("Resolved evidence path escaped evidence root")
+        safe_file_id = _normalize_file_id(file_id)
+        evidence_path = _canonical_evidence_path(safe_file_id, suffix)
         evidence_path.write_bytes(content)
         file_row.stored_path = str(evidence_path)
-        file_row.storage_key = f"{_normalize_file_id(file_id)}/original{suffix}"
+        file_row.storage_key = f"{safe_file_id}/original{suffix}"
         file_row.import_status = "uploaded"
         session.add(file_row)
         session.commit()

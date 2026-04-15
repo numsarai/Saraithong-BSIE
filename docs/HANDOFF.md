@@ -24,6 +24,7 @@
   - ทำ `_canonical_evidence_path()` ให้ประกอบ path จาก sanitized UUID/suffix เท่านั้น
   - ปรับ duplicate repair ให้ reuse/repair เฉพาะ canonical path ใต้ current `EVIDENCE_DIR` แทนการ `resolve()` arbitrary stored path จาก record เดิม
   - refine อีกรอบให้ validation ใช้ `realpath` เฉพาะการตรวจ root escape แต่ path ที่คืน/บันทึกยังเป็น canonical path string เดิมของ runtime เพื่อไม่ให้ `/private/var` alias กระทบ tests
+  - refine ล่าสุดให้ `_canonical_evidence_exists()` และ `_write_canonical_evidence()` ทำ `abspath/realpath + prefix check` ภายในฟังก์ชันเดียวกันก่อน `exists/open` เพื่อให้ CodeQL เห็น safe-root validation ชัดขึ้น
 - เพิ่ม regression test `test_canonical_evidence_path_rejects_invalid_file_id` ใน `tests/test_persistence_platform.py`
 - ยืนยันผลหลังแก้:
   - `.venv/bin/python -m pytest tests/test_persistence_platform.py -q` -> `11 passed`
@@ -83,6 +84,7 @@ Pending latest follow-up commit for the refined CodeQL path-validation fix (`ser
 - Codex (GPT-5), 2026-04-15
   - แก้ CodeQL `py/path-injection` บน `services/file_ingestion_service.py` ด้วย UUID/suffix normalization และ canonical-path-only duplicate repair
   - refine helper ให้ validate ด้วย `realpath` แต่คืน stored path เดิมของ runtime
+  - rewrite sink helpers ให้มี local `abspath/realpath + prefix check` ก่อน `exists/open`
   - เพิ่ม regression test `test_canonical_evidence_path_rejects_invalid_file_id`
   - ยืนยันผล: targeted persistence `11 passed`, backend suite `232 passed`
 - Codex (GPT-5), 2026-04-15

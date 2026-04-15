@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+import os
 from pathlib import Path
 import re
 from typing import Any
@@ -35,24 +36,44 @@ def _normalize_file_id(file_id: str) -> str:
 def _canonical_evidence_path(file_id: str, suffix: str) -> Path:
     safe_file_id = _normalize_file_id(file_id)
     safe_suffix = _normalize_storage_suffix(suffix)
+    evidence_root = os.path.realpath(str(EVIDENCE_DIR))
     evidence_dir = EVIDENCE_DIR / safe_file_id
-    evidence_dir.mkdir(parents=True, exist_ok=True)
-    return evidence_dir / f"original{safe_suffix}"
+    resolved_evidence_dir = os.path.realpath(str(evidence_dir))
+    if resolved_evidence_dir != evidence_root and not resolved_evidence_dir.startswith(evidence_root + os.sep):
+        raise ValueError("Invalid file identifier for evidence storage")
+    os.makedirs(evidence_dir, exist_ok=True)
+
+    evidence_path = evidence_dir / f"original{safe_suffix}"
+    resolved_evidence_path = os.path.realpath(str(evidence_path))
+    if resolved_evidence_path != evidence_root and not resolved_evidence_path.startswith(evidence_root + os.sep):
+        raise ValueError("Invalid suffix for evidence storage")
+    return evidence_path
+
+
+def _canonical_evidence_exists(file_id: str, suffix: str) -> bool:
+    return os.path.exists(_canonical_evidence_path(file_id, suffix))
+
+
+def _write_canonical_evidence(file_id: str, suffix: str, content: bytes) -> Path:
+    evidence_path = _canonical_evidence_path(file_id, suffix)
+    with evidence_path.open("wb") as handle:
+        handle.write(content)
+    return evidence_path
 
 
 def _repair_reused_evidence_file(existing: FileRecord, content: bytes, fallback_suffix: str) -> Path:
     suffix = Path(existing.original_filename or "").suffix or fallback_suffix or ".dat"
     safe_file_id = _normalize_file_id(existing.id)
     safe_suffix = _normalize_storage_suffix(suffix)
-    canonical_path = _canonical_evidence_path(safe_file_id, safe_suffix)
 
-    if canonical_path.exists():
+    if _canonical_evidence_exists(safe_file_id, safe_suffix):
+        canonical_path = _canonical_evidence_path(safe_file_id, safe_suffix)
         existing.stored_path = str(canonical_path)
         existing.storage_key = f"{safe_file_id}/original{safe_suffix}"
         existing.import_status = "uploaded"
         return canonical_path
 
-    canonical_path.write_bytes(content)
+    canonical_path = _write_canonical_evidence(safe_file_id, safe_suffix, content)
     existing.stored_path = str(canonical_path)
     existing.storage_key = f"{safe_file_id}/original{safe_suffix}"
     existing.import_status = "uploaded"
@@ -120,8 +141,7 @@ def persist_upload(
         file_id = file_row.id
 
         safe_file_id = _normalize_file_id(file_id)
-        evidence_path = _canonical_evidence_path(safe_file_id, suffix)
-        evidence_path.write_bytes(content)
+        evidence_path = _write_canonical_evidence(safe_file_id, suffix, content)
         file_row.stored_path = str(evidence_path)
         file_row.storage_key = f"{safe_file_id}/original{suffix}"
         file_row.import_status = "uploaded"

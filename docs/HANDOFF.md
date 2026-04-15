@@ -13,20 +13,18 @@
 
 ## Done (latest session)
 
-- ทำ session-start protocol ครบ: อ่าน `docs/HANDOFF.md`, `docs/DECISIONS.md`, ตรวจว่า `docs/.handoff-snapshot.md` ยังไม่มี, และเช็ก `git log --oneline -10`
-- ตรวจ repo state เพื่อเตรียม PR:
-  - ยืนยันว่า working tree สะอาด
-  - ยืนยันว่า `Smarter-BSIE` ahead จาก `origin/Smarter-BSIE` อยู่ 6 commits
-  - สร้าง PR branch `codex/spni-export-test-runtime-pr` จาก `HEAD` ปัจจุบันเพื่อไม่ push ตรงกลับ shared branch
-- rerun baseline tests สดก่อนเปิด PR:
-  - `pytest tests/` -> `231 passed`
-  - `frontend npm test` -> `33 passed`
-- ไม่มี product-code change ใหม่ใน session นี้; เป้าหมายของ session คือ package งานเดิมให้อยู่ในรูป branch/PR ที่ปลอดภัยและอ้างอิงผลทดสอบล่าสุดได้
+- ตรวจ CI failure บน PR #10 แล้วพบว่า `Backend Tests` ล้มตั้งแต่ test collection เพราะ `services/report_service.py` import `from fpdf import FPDF` แต่ runner ติดตั้ง dependency จาก `requirements.txt` ซึ่งยังไม่มี `fpdf2`
+- แก้ `requirements.txt`
+  - เพิ่ม `fpdf2>=2.8.0` ใต้หมวด PDF/OCR เพื่อให้ environment ใน CI ติดตั้ง dependency สำหรับ report generation ครบ
+- ยืนยันผลหลังแก้:
+  - `.venv/bin/python -c "from fpdf import FPDF"` -> ผ่าน
+  - `.venv/bin/python -m pytest tests/ -q` -> `231 passed`
+- เตรียม push commit นี้กลับเข้า `codex/spni-export-test-runtime-pr` เพื่อ trigger CI ใหม่บน PR เดิม
 
 ## Commits (this session)
 
 ```
-Pending a handoff-only commit on `codex/spni-export-test-runtime-pr` before push/PR creation.
+Pending final commit for the CI fix (`requirements.txt` + `docs/HANDOFF.md`) before push.
 ```
 
 ## Next (priority order)
@@ -56,6 +54,7 @@ Pending a handoff-only commit on `codex/spni-export-test-runtime-pr` before push
 - `CLAUDE.md` ใช้ `@AGENTS.md` (pointer) — เนื้อหาจริงอยู่ใน `AGENTS.md`
 - `docs/.handoff-snapshot.md` ยังไม่มีไฟล์
 - `frontend npm test` ไม่มี React `act(...)` warning และไม่มี Node `--localstorage-file` warning แล้ว
+- ถ้า CI ยังมี failure หลังจากนี้ ให้ดู run ใหม่ว่ามาจาก dependency install cache หรือจาก test logic ขั้นถัดไป ไม่ใช่ `fpdf` import เดิม
 
 ## Failed Attempts
 
@@ -72,6 +71,9 @@ Pending a handoff-only commit on `codex/spni-export-test-runtime-pr` before push
 
 ## History
 
+- Codex (GPT-5), 2026-04-15
+  - แก้ CI backend collection failure โดยเพิ่ม `fpdf2>=2.8.0` ใน `requirements.txt`
+  - ยืนยัน local import `from fpdf import FPDF` และ backend suite `231 passed`
 - Codex (GPT-5), 2026-04-15
   - เพิ่ม canonical evidence-path self-heal ใน `services/file_ingestion_service.py`
   - แยก pytest runtime ออกจาก project-root state ใน `tests/conftest.py`

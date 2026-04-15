@@ -8,23 +8,31 @@
 - **Last agent:** Codex (GPT-5)
 - **Date:** 2026-04-15
 - **Branch:** `codex/spni-export-test-runtime-pr`
-- **Baseline:** backend green (`231 passed`), frontend green (`33 passed`)
+- **Baseline:** backend green (`232 passed`), frontend green (`33 passed`)
 - **Server:** `uvicorn app:app --host 0.0.0.0 --port 8757`
 
 ## Done (latest session)
 
-- ตรวจ CI failure บน PR #10 แล้วพบว่า `Backend Tests` ล้มตั้งแต่ test collection เพราะ `services/report_service.py` import `from fpdf import FPDF` แต่ runner ติดตั้ง dependency จาก `requirements.txt` ซึ่งยังไม่มี `fpdf2`
-- แก้ `requirements.txt`
-  - เพิ่ม `fpdf2>=2.8.0` ใต้หมวด PDF/OCR เพื่อให้ environment ใน CI ติดตั้ง dependency สำหรับ report generation ครบ
+- ตรวจ CI failure บน PR #10 แล้วเจอ 2 ชั้น:
+  - `Backend Tests` ล้มตั้งแต่ test collection เพราะ `services/report_service.py` import `from fpdf import FPDF` แต่ CI ติดตั้งจาก `requirements.txt` ซึ่งยังไม่มี `fpdf2`
+  - หลัง push แก้ dependency แล้ว PR-side `CI` ผ่าน แต่ยังมี `CodeQL` fail จาก open alert `py/path-injection` ที่ `services/file_ingestion_service.py`
+- แก้ dependency สำหรับ backend CI:
+  - เพิ่ม `fpdf2>=2.8.0` ใน `requirements.txt`
+- แก้ CodeQL path-validation สำหรับ evidence storage:
+  - เพิ่ม `_normalize_file_id()` ให้รับเฉพาะ UUID
+  - เพิ่ม `_normalize_storage_suffix()` ให้ suffix อยู่ใน allowlist (`.[a-z0-9]{1,16}`) ไม่งั้น fallback เป็น `.dat`
+  - ทำ `_canonical_evidence_path()` ให้ตรวจว่า resolved dir/path ยังอยู่ใต้ `EVIDENCE_DIR` ก่อนใช้งาน
+  - เพิ่ม explicit guard ก่อน `write_bytes()` ใน flow สร้างไฟล์ใหม่และ flow repair duplicate evidence path
+- เพิ่ม regression test `test_canonical_evidence_path_rejects_invalid_file_id` ใน `tests/test_persistence_platform.py`
 - ยืนยันผลหลังแก้:
-  - `.venv/bin/python -c "from fpdf import FPDF"` -> ผ่าน
-  - `.venv/bin/python -m pytest tests/ -q` -> `231 passed`
-- เตรียม push commit นี้กลับเข้า `codex/spni-export-test-runtime-pr` เพื่อ trigger CI ใหม่บน PR เดิม
+  - `.venv/bin/python -m pytest tests/test_persistence_platform.py -q` -> `11 passed`
+  - `.venv/bin/python -m pytest tests/ -q` -> `232 passed`
+- เตรียม push follow-up commit นี้กลับเข้า `codex/spni-export-test-runtime-pr` เพื่ออัปเดต PR checks
 
 ## Commits (this session)
 
 ```
-Pending final commit for the CI fix (`requirements.txt` + `docs/HANDOFF.md`) before push.
+Pending follow-up commit for the CodeQL path-validation fix (`services/file_ingestion_service.py`, `tests/test_persistence_platform.py`, `docs/HANDOFF.md`) before push.
 ```
 
 ## Next (priority order)
@@ -54,7 +62,7 @@ Pending final commit for the CI fix (`requirements.txt` + `docs/HANDOFF.md`) bef
 - `CLAUDE.md` ใช้ `@AGENTS.md` (pointer) — เนื้อหาจริงอยู่ใน `AGENTS.md`
 - `docs/.handoff-snapshot.md` ยังไม่มีไฟล์
 - `frontend npm test` ไม่มี React `act(...)` warning และไม่มี Node `--localstorage-file` warning แล้ว
-- ถ้า CI ยังมี failure หลังจากนี้ ให้ดู run ใหม่ว่ามาจาก dependency install cache หรือจาก test logic ขั้นถัดไป ไม่ใช่ `fpdf` import เดิม
+- ถ้า PR ยังมี `CodeQL` fail หลัง push รอบนี้ ให้ตรวจ open code-scanning alert ใหม่บน PR merge ref; `Backend Tests` ของ PR run ผ่านแล้วหลังเพิ่ม `fpdf2`
 
 ## Failed Attempts
 
@@ -71,6 +79,10 @@ Pending final commit for the CI fix (`requirements.txt` + `docs/HANDOFF.md`) bef
 
 ## History
 
+- Codex (GPT-5), 2026-04-15
+  - แก้ CodeQL `py/path-injection` บน `services/file_ingestion_service.py` ด้วย UUID/suffix normalization และ safe-root validation
+  - เพิ่ม regression test `test_canonical_evidence_path_rejects_invalid_file_id`
+  - ยืนยันผล: targeted persistence `11 passed`, backend suite `232 passed`
 - Codex (GPT-5), 2026-04-15
   - แก้ CI backend collection failure โดยเพิ่ม `fpdf2>=2.8.0` ใน `requirements.txt`
   - ยืนยัน local import `from fpdf import FPDF` และ backend suite `231 passed`

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import mimetypes
 from pathlib import Path
+import re
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import select
 
@@ -11,11 +13,32 @@ from persistence.base import get_db_session, utcnow
 from persistence.models import FileRecord
 from services.fingerprinting import sha256_bytes
 
+_SAFE_SUFFIX_RE = re.compile(r"^\.[a-z0-9]{1,16}$")
+
+
+def _normalize_storage_suffix(raw_suffix: str) -> str:
+    suffix = (raw_suffix or ".dat").strip().lower()
+    return suffix if _SAFE_SUFFIX_RE.fullmatch(suffix) else ".dat"
+
+
+def _normalize_file_id(file_id: str) -> str:
+    try:
+        return str(UUID(str(file_id)))
+    except (ValueError, TypeError) as exc:
+        raise ValueError("Invalid file identifier for evidence storage") from exc
+
 
 def _canonical_evidence_path(file_id: str, suffix: str) -> Path:
-    evidence_dir = EVIDENCE_DIR / file_id
+    safe_file_id = _normalize_file_id(file_id)
+    safe_suffix = _normalize_storage_suffix(suffix)
+    evidence_dir = EVIDENCE_DIR / safe_file_id
+    if not _is_within_directory(evidence_dir, EVIDENCE_DIR):
+        raise ValueError("Resolved evidence directory escaped evidence root")
     evidence_dir.mkdir(parents=True, exist_ok=True)
-    return evidence_dir / f"original{suffix.lower()}"
+    evidence_path = evidence_dir / f"original{safe_suffix}"
+    if not _is_within_directory(evidence_path, EVIDENCE_DIR):
+        raise ValueError("Resolved evidence path escaped evidence root")
+    return evidence_path
 
 
 def _is_within_directory(path: Path, directory: Path) -> bool:
@@ -36,9 +59,11 @@ def _repair_reused_evidence_file(existing: FileRecord, content: bytes, fallback_
         except OSError:
             pass
 
+    if not _is_within_directory(canonical_path, EVIDENCE_DIR):
+        raise ValueError("Resolved evidence path escaped evidence root")
     canonical_path.write_bytes(content)
     existing.stored_path = str(canonical_path)
-    existing.storage_key = f"{existing.id}/original{suffix.lower()}"
+    existing.storage_key = f"{_normalize_file_id(existing.id)}/original{_normalize_storage_suffix(suffix)}"
     existing.import_status = "uploaded"
     return canonical_path
 
@@ -52,7 +77,7 @@ def persist_upload(
 ) -> dict[str, Any]:
     """Persist uploaded file evidence and return duplicate hints."""
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-    suffix = Path(original_filename).suffix or ".dat"
+    suffix = _normalize_storage_suffix(Path(original_filename).suffix or ".dat")
     file_hash = sha256_bytes(content)
     file_id = None
 
@@ -104,16 +129,19 @@ def persist_upload(
         file_id = file_row.id
 
         evidence_path = _canonical_evidence_path(file_id, suffix)
+        if not _is_within_directory(evidence_path, EVIDENCE_DIR):
+            raise ValueError("Resolved evidence path escaped evidence root")
         evidence_path.write_bytes(content)
         file_row.stored_path = str(evidence_path)
-        file_row.storage_key = f"{file_id}/original{suffix.lower()}"
+        file_row.storage_key = f"{_normalize_file_id(file_id)}/original{suffix}"
         file_row.import_status = "uploaded"
         session.add(file_row)
         session.commit()
 
+    normalized_file_id = _normalize_file_id(file_id)
     return {
-        "file_id": file_id,
-        "stored_path": str(EVIDENCE_DIR / file_id / f"original{suffix.lower()}"),
+        "file_id": normalized_file_id,
+        "stored_path": str(EVIDENCE_DIR / normalized_file_id / f"original{suffix}"),
         "file_hash_sha256": file_hash,
         "duplicate_file_status": "unique",
         "prior_ingestions": [],

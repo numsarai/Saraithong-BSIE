@@ -99,14 +99,15 @@ def test_persist_upload_repairs_missing_duplicate_evidence_path(tmp_path: Path):
 
     assert second["duplicate_file_status"] == "exact_duplicate"
     assert second["file_id"] == first["file_id"]
-    assert second["stored_path"] == str(canonical_path)
-    assert canonical_path.exists()
-    assert canonical_path.read_bytes() == payload
+    repaired_path = Path(second["stored_path"])
+    assert repaired_path.resolve() == canonical_path.resolve()
+    assert repaired_path.exists()
+    assert repaired_path.read_bytes() == payload
 
     with get_db_session() as session:
         row = session.get(FileRecord, first["file_id"])
         assert row is not None
-        assert row.stored_path == str(canonical_path)
+        assert Path(row.stored_path).resolve() == canonical_path.resolve()
         assert row.storage_key == f"{first['file_id']}/original.ofx"
 
 

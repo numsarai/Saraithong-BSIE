@@ -43,9 +43,8 @@ def _canonical_evidence_exists(file_id: str, suffix: str) -> bool:
     safe_file_id = _normalize_file_id(file_id)
     safe_suffix = _normalize_storage_suffix(suffix)
     evidence_root = os.path.realpath(os.fspath(EVIDENCE_DIR))
-    evidence_path = os.path.abspath(os.path.join(os.fspath(EVIDENCE_DIR), safe_file_id, f"original{safe_suffix}"))
-    resolved_evidence_path = os.path.realpath(evidence_path)
-    if resolved_evidence_path != evidence_root and not resolved_evidence_path.startswith(evidence_root + os.sep):
+    evidence_path = os.path.realpath(os.path.join(os.fspath(EVIDENCE_DIR), safe_file_id, f"original{safe_suffix}"))
+    if evidence_path != evidence_root and not evidence_path.startswith(evidence_root + os.sep):
         raise ValueError("Invalid evidence path")
     return os.path.exists(evidence_path)
 
@@ -54,15 +53,13 @@ def _write_canonical_evidence(file_id: str, suffix: str, content: bytes) -> Path
     safe_file_id = _normalize_file_id(file_id)
     safe_suffix = _normalize_storage_suffix(suffix)
     evidence_root = os.path.realpath(os.fspath(EVIDENCE_DIR))
-    evidence_dir = os.path.abspath(os.path.join(os.fspath(EVIDENCE_DIR), safe_file_id))
-    resolved_evidence_dir = os.path.realpath(evidence_dir)
-    if resolved_evidence_dir != evidence_root and not resolved_evidence_dir.startswith(evidence_root + os.sep):
+    evidence_dir = os.path.realpath(os.path.join(os.fspath(EVIDENCE_DIR), safe_file_id))
+    if evidence_dir != evidence_root and not evidence_dir.startswith(evidence_root + os.sep):
         raise ValueError("Invalid evidence directory")
     os.makedirs(evidence_dir, exist_ok=True)
 
-    evidence_path = os.path.abspath(os.path.join(evidence_dir, f"original{safe_suffix}"))
-    resolved_evidence_path = os.path.realpath(evidence_path)
-    if resolved_evidence_path != evidence_root and not resolved_evidence_path.startswith(evidence_root + os.sep):
+    evidence_path = os.path.realpath(os.path.join(evidence_dir, f"original{safe_suffix}"))
+    if evidence_path != evidence_root and not evidence_path.startswith(evidence_root + os.sep):
         raise ValueError("Invalid evidence path")
 
     with open(evidence_path, "wb") as handle:

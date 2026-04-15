@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-004: Pytest runtime ต้องแยกออกจาก project-root state
+- **Date:** 2026-04-15
+- **Status:** accepted
+- **Context:** ชุดทดสอบ API/persistence เคยใช้ `bsie.db` และ writable dirs จาก project root โดยตรง ทำให้เจอ environment-coupled failure จาก legacy records และ evidence paths ของ workspace เก่า
+- **Decision:** ให้ `tests/conftest.py` สร้าง temp runtime root สำหรับ pytest แล้ว patch `paths.USER_DATA_DIR`, `DB_PATH`, และ writable runtime directories ก่อน test modules import `app`
+- **Alternatives:** (1) ใช้ project-root DB ต่อแล้วคอยล้าง state เอง — ยังเสี่ยงเจอข้อมูลข้ามรอบ (2) เปลี่ยน app code ให้ special-case pytest — เพิ่ม test-specific branching ใน production modules
+- **Consequences:** `pytest` จะไม่แตะ `bsie.db` หรือ `data/evidence` ของ project root อีก, path-sensitive tests เสถียรขึ้น, และ `tests/test_paths.py` ต้องยืนยัน behavior ของ test harness ใหม่แทนการ assume ว่า dev runtime = project root
+
 ### DEC-003: AccountFlowGraph ใช้ in-memory aggregation แทน CSV fetch
 - **Date:** 2026-04-14
 - **Status:** accepted

@@ -74,6 +74,41 @@ def test_persist_upload_creates_file_record_and_duplicate_hint():
         assert len(rows) == 1  # Only one record for duplicate files
 
 
+def test_persist_upload_repairs_missing_duplicate_evidence_path(tmp_path: Path):
+    init_db()
+    unique_account = f"{uuid4().int % 10**10:010d}"
+    payload = _sample_ofx(unique_account).encode("utf-8")
+
+    first = persist_upload(content=payload, original_filename="stale-duplicate.ofx", uploaded_by="tester")
+    canonical_path = Path(first["stored_path"])
+    legacy_path = tmp_path / "legacy-workspace" / "data" / "evidence" / first["file_id"] / "original.ofx"
+
+    if canonical_path.exists():
+        canonical_path.unlink()
+
+    with get_db_session() as session:
+        row = session.get(FileRecord, first["file_id"])
+        assert row is not None
+        row.stored_path = str(legacy_path)
+        row.storage_key = "legacy/original.ofx"
+        session.add(row)
+        session.commit()
+
+    second = persist_upload(content=payload, original_filename="stale-duplicate.ofx", uploaded_by="tester")
+
+    assert second["duplicate_file_status"] == "exact_duplicate"
+    assert second["file_id"] == first["file_id"]
+    assert second["stored_path"] == str(canonical_path)
+    assert canonical_path.exists()
+    assert canonical_path.read_bytes() == payload
+
+    with get_db_session() as session:
+        row = session.get(FileRecord, first["file_id"])
+        assert row is not None
+        assert row.stored_path == str(canonical_path)
+        assert row.storage_key == f"{first['file_id']}/original.ofx"
+
+
 def test_ofx_pipeline_persists_parser_run_batch_and_transactions(tmp_path: Path):
     init_db()
     account = "1234500012"

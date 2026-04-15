@@ -12,6 +12,37 @@ from persistence.models import FileRecord
 from services.fingerprinting import sha256_bytes
 
 
+def _canonical_evidence_path(file_id: str, suffix: str) -> Path:
+    evidence_dir = EVIDENCE_DIR / file_id
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    return evidence_dir / f"original{suffix.lower()}"
+
+
+def _is_within_directory(path: Path, directory: Path) -> bool:
+    resolved_path = path.resolve()
+    resolved_directory = directory.resolve()
+    return resolved_path == resolved_directory or resolved_directory in resolved_path.parents
+
+
+def _repair_reused_evidence_file(existing: FileRecord, content: bytes, fallback_suffix: str) -> Path:
+    stored_path = Path(existing.stored_path) if existing.stored_path else Path()
+    suffix = Path(existing.original_filename or "").suffix or fallback_suffix or ".dat"
+    canonical_path = _canonical_evidence_path(existing.id, suffix)
+
+    if existing.stored_path:
+        try:
+            if stored_path.exists() and _is_within_directory(stored_path, EVIDENCE_DIR):
+                return stored_path
+        except OSError:
+            pass
+
+    canonical_path.write_bytes(content)
+    existing.stored_path = str(canonical_path)
+    existing.storage_key = f"{existing.id}/original{suffix.lower()}"
+    existing.import_status = "uploaded"
+    return canonical_path
+
+
 def persist_upload(
     *,
     content: bytes,
@@ -42,9 +73,12 @@ def persist_upload(
         # If exact same file already uploaded, reuse it instead of creating a new record
         if duplicates:
             existing = duplicates[0]
+            stored_path = _repair_reused_evidence_file(existing, content, suffix)
+            session.add(existing)
+            session.commit()
             return {
                 "file_id": existing.id,
-                "stored_path": existing.stored_path,
+                "stored_path": str(stored_path),
                 "file_hash_sha256": file_hash,
                 "duplicate_file_status": "exact_duplicate",
                 "prior_ingestions": prior,
@@ -69,9 +103,7 @@ def persist_upload(
         session.flush()
         file_id = file_row.id
 
-        evidence_dir = EVIDENCE_DIR / file_id
-        evidence_dir.mkdir(parents=True, exist_ok=True)
-        evidence_path = evidence_dir / f"original{suffix.lower()}"
+        evidence_path = _canonical_evidence_path(file_id, suffix)
         evidence_path.write_bytes(content)
         file_row.stored_path = str(evidence_path)
         file_row.storage_key = f"{file_id}/original{suffix.lower()}"

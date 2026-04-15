@@ -34,9 +34,11 @@ vi.mock('sonner', () => ({
   Toaster: () => null,
 }))
 
+vi.mock('@/components/LlmChat', () => ({
+  LlmChat: () => null,
+}))
+
 const { uploadFile, confirmMapping, getBanks } = await import('@/api')
-let consoleErrorSpy: ReturnType<typeof vi.spyOn> | null = null
-const originalConsoleError = console.error
 
 async function flushAsyncWork() {
   await Promise.resolve()
@@ -100,21 +102,17 @@ async function uploadSample(container: HTMLElement, filename = 'sample.xlsx') {
 describe('App workflow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    useStore.getState().reset()
-    useStore.setState({ operatorName: 'Case Reviewer' })
-    vi.mocked(getBanks).mockImplementation(() => new Promise(() => {}))
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown, ...args: unknown[]) => {
-      if (typeof message === 'string' && message.includes('not wrapped in act')) {
-        return
-      }
-      originalConsoleError(message, ...args)
+    act(() => {
+      useStore.getState().reset()
+      useStore.setState({ operatorName: 'Case Reviewer' })
     })
+    vi.mocked(getBanks).mockImplementation(() => new Promise(() => {}))
   })
 
   afterEach(() => {
-    useStore.getState().reset()
-    consoleErrorSpy?.mockRestore()
-    consoleErrorSpy = null
+    act(() => {
+      useStore.getState().reset()
+    })
   })
 
   it('forces analyst review in the full upload flow for ambiguous bank detection', async () => {

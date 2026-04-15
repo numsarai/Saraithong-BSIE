@@ -5,43 +5,50 @@
 
 ## Current State
 
-- **Last agent:** Claude Code (Opus 4.6)
+- **Last agent:** Codex (GPT-5)
 - **Date:** 2026-04-15
 - **Branch:** `Smarter-BSIE`
-- **Baseline:** tests green (229 passed, 1 pre-existing skip)
+- **Baseline:** backend green (`231 passed`), frontend green (`33 passed`)
 - **Server:** `uvicorn app:app --host 0.0.0.0 --port 8757`
 
 ## Done (latest session)
 
-- เพิ่ม SPNI integration router (`routers/spni.py` + `services/spni_service.py`)
-  - `GET /api/spni/health` — health check
-  - `GET /api/spni/runs` — list completed parser runs (status="done")
-  - `GET /api/spni/runs/{id}/preview` — preview counts + accounts + date range
-  - `GET /api/spni/export?run_id=...` — batch export accounts + transactions + entities
-  - Batched SQL queries (no N+1), typed `datetime` params, `Query(ge=, le=)` bounds
-  - 16 tests ใน `tests/test_spni_api.py`
-- แก้ไข `app.py` — register SPNI router + CORS `localhost:3000`
-- แก้ไข `routers/results.py` — timeline endpoint ส่ง `transaction_datetime` + `posted_date`
-- แก้ไข `routers/ingestion.py` — ลบ .csv จาก allowlist, fix HTTPException re-raise
-- ลดความซับซ้อน `AccountFlowGraph.tsx` — ลบ async CSV fetch ใช้ `useMemo` แทน
-- ปรับ `Step5Results.tsx` — ใช้ timeline data สำหรับ graph/charts
-- อัพเดต docs: README v4.1, ARCHITECTURE, FEATURES, DECISIONS (3 entries)
+- ทำ session-start protocol ครบ: อ่าน `docs/HANDOFF.md`, `docs/DECISIONS.md`, เช็ก `git log --oneline -10`, ยืนยันว่า `docs/.handoff-snapshot.md` ยังไม่มี
+- แก้ `services/file_ingestion_service.py`
+  - เพิ่ม canonical evidence-path helper
+  - เพิ่ม self-heal สำหรับ duplicate uploads: ถ้า `stored_path` หายหรืออยู่นอก `EVIDENCE_DIR` ปัจจุบัน ให้ rewrite evidence file เข้า path ปัจจุบันและอัปเดต `stored_path` / `storage_key`
+- เพิ่ม regression test `test_persist_upload_repairs_missing_duplicate_evidence_path` ใน `tests/test_persistence_platform.py`
+- แยก pytest runtime ออกจาก project root:
+  - แก้ `tests/conftest.py` ให้สร้าง temp runtime root แล้ว patch `paths.USER_DATA_DIR`, `DB_PATH`, และ writable dirs ก่อน test modules import `app`
+  - ปรับ `tests/test_paths.py` ให้ตรวจ behavior ของ isolated test runtime แทนการ assume ว่า `USER_DATA_DIR == BUNDLE_DIR`
+- เก็บ frontend test warning:
+  - แก้ `frontend/src/App.workflow.test.tsx` ให้ mock `LlmChat` ออกจาก workflow test ที่ไม่ได้ทดสอบ chat
+  - ห่อ `useStore` resets ใน `act(...)` เพื่อไม่ให้ mounted components (`Sidebar`, `App`, `Step3Config`) อัปเดตนอก React test boundary
+  - ลบการ suppress `console.error` สำหรับ `not wrapped in act`
+  - แก้ `frontend/src/test/setup.ts` ให้ inject in-memory `localStorage` / `sessionStorage` stub ก่อน import `i18n` เพื่อกัน Node 25 global storage warning (`--localstorage-file`)
+- ยืนยันผลหลังแก้:
+  - `tests/test_paths.py` -> ผ่าน
+  - `tests/test_app_api.py -k "upload_accepts_ofx or upload_uses_uploaded_by_form_field"` -> ผ่าน
+  - `tests/test_persistence_platform.py -k persist_upload` -> ผ่าน
+  - `pytest tests/` -> `231 passed`
+  - `frontend npm test` -> `33 passed`
 
 ## Commits (this session)
 
 ```
-bae254f docs: update all documentation to v4.1 with SPNI integration
-ea082d4 docs: add agent session protocol, handoff docs, and decision log
-d035086 feat: timeline datetime fields, graph simplification, ingestion fixes
-7110b36 feat: add SPNI integration router for Sprint 3 data export
+See `git log --oneline -5` after session close for the final commit covering:
+- duplicate evidence-path self-heal
+- pytest runtime isolation
+- frontend test warning cleanup
 ```
 
 ## Next (priority order)
 
 1. **SPNI Sprint 0-2** — init Next.js project, workspace/entity CRUD, graph viz (`/Users/saraithong/Documents/The terminal/spni/`)
 2. **SPNI Sprint 3** — สร้าง BSIEAdapter ฝั่ง SPNI เรียก `/api/spni/export`
-3. BSIE: พิจารณา Pydantic response models สำหรับ SPNI endpoints (OpenAPI docs)
-4. BSIE: ADR-005 legacy table migration (v4.1-4.3)
+3. BSIE: พิจารณา per-test DB cleanup หรือ dedicated fixtures สำหรับ tests ที่ยังพึ่ง shared in-session state
+4. BSIE: พิจารณา Pydantic response models สำหรับ SPNI endpoints (OpenAPI docs)
+5. BSIE: ADR-005 legacy table migration (v4.1-4.3)
 
 ## Active Decisions
 
@@ -50,27 +57,33 @@ d035086 feat: timeline datetime fields, graph simplification, ingestion fixes
 - Entity model ไม่มี `identifier_type` — SPNI adapter ต้อง derive จาก `entity_type`
 - Parser run status ใช้ `"done"` (ไม่ใช่ `"completed"`)
 - AccountFlowGraph ใช้ in-memory aggregation แทน CSV fetch
+- Duplicate file reuse ต้อง self-heal `stored_path` กลับเข้า `EVIDENCE_DIR` ปัจจุบันเมื่อ path เก่าหายหรืออยู่นอก workspace ปัจจุบัน
+- Pytest ต้องใช้ temp runtime root ผ่าน `tests/conftest.py` แทน project-root `bsie.db` และ writable dirs
 
 ## Warnings
 
-- `tests/test_app_api.py::test_upload_accepts_ofx_and_returns_identity_guess` — fail เนื่องจาก path mismatch (`/Users/saraithong/Documents/bsie/` vs `/Users/saraithong/Documents/The terminal/bsie/`) — pre-existing, ไม่เกี่ยวกับงานนี้
+- Runtime app ปกติยังใช้ `bsie.db` ที่ project root (ไม่ใช่ `data/bsie.db`)
+- Pytest runtime ถูกแยกแล้ว แต่ยังเป็น session-level temp DB ไม่ใช่ per-test DB isolation
 - BSIE server ต้องรันจาก `/Users/saraithong/Documents/The terminal/bsie/`
 - CORS `localhost:3000` เพิ่มแล้ว — ถ้า SPNI เปลี่ยน port ต้องอัพเดต `app.py` line 181
 - `CLAUDE.md` ใช้ `@AGENTS.md` (pointer) — เนื้อหาจริงอยู่ใน `AGENTS.md`
+- `docs/.handoff-snapshot.md` ยังไม่มีไฟล์
+- `frontend npm test` ไม่มี React `act(...)` warning และไม่มี Node `--localstorage-file` warning แล้ว
 
 ## Failed Attempts
 
-- Claude in Chrome extension — ไม่สามารถเชื่อมต่อได้ ถอนการติดตั้งแล้ว ใช้ Control Chrome แทน
+- ไม่มี failed attempt ใหม่ใน session นี้
 
 ## Environment
 
 - Python 3.12.13 (`.venv/`)
 - Node (frontend): React 19 + Vite
-- Database: SQLite WAL at `data/bsie.db`
+- Database: SQLite WAL at `bsie.db`
 - No new deps installed this session
 
 ---
 
 ## History
 
-<!-- ย้าย Current State ลงมาที่นี่เมื่ออัพเดตรอบใหม่ -->
+- Claude Code (Opus 4.6), 2026-04-15
+  - เพิ่ม SPNI router/service, graph/timeline ingestion fixes, และ docs v4.1

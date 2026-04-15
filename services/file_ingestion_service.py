@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import mimetypes
-import os
 from pathlib import Path
 import re
 from typing import Any
@@ -14,13 +13,7 @@ from persistence.base import get_db_session, utcnow
 from persistence.models import FileRecord
 from services.fingerprinting import sha256_bytes
 
-_SAFE_SUFFIX_RE = re.compile(r"^\.[a-z0-9]{1,16}$")
 _SAFE_FILE_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-
-
-def _normalize_storage_suffix(raw_suffix: str) -> str:
-    suffix = (raw_suffix or ".dat").strip().lower()
-    return suffix if _SAFE_SUFFIX_RE.fullmatch(suffix) else ".dat"
 
 
 def _normalize_file_id(file_id: str) -> str:
@@ -33,55 +26,61 @@ def _normalize_file_id(file_id: str) -> str:
     return normalized
 
 
-def _canonical_evidence_path(file_id: str, suffix: str) -> Path:
-    safe_file_id = _normalize_file_id(file_id)
-    safe_suffix = _normalize_storage_suffix(suffix)
-    return EVIDENCE_DIR / safe_file_id / f"original{safe_suffix}"
+def _storage_name_for_filename(filename: str | None) -> str:
+    suffix = Path(str(filename or "")).suffix.lower()
+    if suffix == ".xlsx":
+        return "original.xlsx"
+    if suffix == ".xls":
+        return "original.xls"
+    if suffix == ".ofx":
+        return "original.ofx"
+    if suffix == ".pdf":
+        return "original.pdf"
+    if suffix == ".png":
+        return "original.png"
+    if suffix == ".jpg":
+        return "original.jpg"
+    if suffix == ".jpeg":
+        return "original.jpeg"
+    if suffix == ".bmp":
+        return "original.bmp"
+    return "original.dat"
 
 
-def _canonical_evidence_exists(file_id: str, suffix: str) -> bool:
-    safe_file_id = _normalize_file_id(file_id)
-    safe_suffix = _normalize_storage_suffix(suffix)
-    evidence_root = os.path.realpath(os.fspath(EVIDENCE_DIR))
-    evidence_path = os.path.realpath(os.path.join(os.fspath(EVIDENCE_DIR), safe_file_id, f"original{safe_suffix}"))
-    if evidence_path != evidence_root and not evidence_path.startswith(evidence_root + os.sep):
+def _canonical_evidence_path(file_record: FileRecord, fallback_filename: str | None = None) -> Path:
+    safe_file_id = _normalize_file_id(file_record.id)
+    storage_name = _storage_name_for_filename(file_record.original_filename or fallback_filename)
+    evidence_root = EVIDENCE_DIR.resolve()
+    evidence_path = (evidence_root / safe_file_id / storage_name).resolve()
+    if evidence_path != evidence_root and evidence_root not in evidence_path.parents:
         raise ValueError("Invalid evidence path")
-    return os.path.exists(evidence_path)
+    return evidence_path
 
 
-def _write_canonical_evidence(file_id: str, suffix: str, content: bytes) -> Path:
-    safe_file_id = _normalize_file_id(file_id)
-    safe_suffix = _normalize_storage_suffix(suffix)
-    evidence_root = os.path.realpath(os.fspath(EVIDENCE_DIR))
-    evidence_dir = os.path.realpath(os.path.join(os.fspath(EVIDENCE_DIR), safe_file_id))
-    if evidence_dir != evidence_root and not evidence_dir.startswith(evidence_root + os.sep):
-        raise ValueError("Invalid evidence directory")
-    os.makedirs(evidence_dir, exist_ok=True)
-
-    evidence_path = os.path.realpath(os.path.join(evidence_dir, f"original{safe_suffix}"))
-    if evidence_path != evidence_root and not evidence_path.startswith(evidence_root + os.sep):
-        raise ValueError("Invalid evidence path")
-
-    with open(evidence_path, "wb") as handle:
-        handle.write(content)
-    return Path(evidence_path)
+def _canonical_evidence_exists(file_record: FileRecord, fallback_filename: str | None = None) -> bool:
+    return _canonical_evidence_path(file_record, fallback_filename).exists()
 
 
-def _repair_reused_evidence_file(existing: FileRecord, content: bytes, fallback_suffix: str) -> Path:
-    suffix = Path(existing.original_filename or "").suffix or fallback_suffix or ".dat"
+def _write_canonical_evidence(file_record: FileRecord, content: bytes, fallback_filename: str | None = None) -> Path:
+    evidence_path = _canonical_evidence_path(file_record, fallback_filename)
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_bytes(content)
+    return evidence_path
+
+
+def _repair_reused_evidence_file(existing: FileRecord, content: bytes, fallback_filename: str) -> Path:
     safe_file_id = _normalize_file_id(existing.id)
-    safe_suffix = _normalize_storage_suffix(suffix)
 
-    if _canonical_evidence_exists(safe_file_id, safe_suffix):
-        canonical_path = _canonical_evidence_path(safe_file_id, safe_suffix)
+    if _canonical_evidence_exists(existing, fallback_filename):
+        canonical_path = _canonical_evidence_path(existing, fallback_filename)
         existing.stored_path = str(canonical_path)
-        existing.storage_key = f"{safe_file_id}/original{safe_suffix}"
+        existing.storage_key = f"{safe_file_id}/{canonical_path.name}"
         existing.import_status = "uploaded"
         return canonical_path
 
-    canonical_path = _write_canonical_evidence(safe_file_id, safe_suffix, content)
+    canonical_path = _write_canonical_evidence(existing, content, fallback_filename)
     existing.stored_path = str(canonical_path)
-    existing.storage_key = f"{safe_file_id}/original{safe_suffix}"
+    existing.storage_key = f"{safe_file_id}/{canonical_path.name}"
     existing.import_status = "uploaded"
     return canonical_path
 
@@ -95,7 +94,6 @@ def persist_upload(
 ) -> dict[str, Any]:
     """Persist uploaded file evidence and return duplicate hints."""
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-    suffix = _normalize_storage_suffix(Path(original_filename).suffix or ".dat")
     file_hash = sha256_bytes(content)
     file_id = None
 
@@ -116,7 +114,7 @@ def persist_upload(
         # If exact same file already uploaded, reuse it instead of creating a new record
         if duplicates:
             existing = duplicates[0]
-            stored_path = _repair_reused_evidence_file(existing, content, suffix)
+            stored_path = _repair_reused_evidence_file(existing, content, original_filename)
             session.add(existing)
             session.commit()
             return {
@@ -147,17 +145,18 @@ def persist_upload(
         file_id = file_row.id
 
         safe_file_id = _normalize_file_id(file_id)
-        evidence_path = _write_canonical_evidence(safe_file_id, suffix, content)
+        evidence_path = _write_canonical_evidence(file_row, content)
         file_row.stored_path = str(evidence_path)
-        file_row.storage_key = f"{safe_file_id}/original{suffix}"
+        file_row.storage_key = f"{safe_file_id}/{evidence_path.name}"
         file_row.import_status = "uploaded"
         session.add(file_row)
         session.commit()
 
     normalized_file_id = _normalize_file_id(file_id)
+    storage_name = _storage_name_for_filename(original_filename)
     return {
         "file_id": normalized_file_id,
-        "stored_path": str(EVIDENCE_DIR / normalized_file_id / f"original{suffix}"),
+        "stored_path": str(EVIDENCE_DIR / normalized_file_id / storage_name),
         "file_hash_sha256": file_hash,
         "duplicate_file_status": "unique",
         "prior_ingestions": [],

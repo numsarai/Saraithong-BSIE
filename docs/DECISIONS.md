@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-005: Evidence storage filenames ต้องมาจาก fixed allowlist
+- **Date:** 2026-04-15
+- **Status:** accepted
+- **Context:** CodeQL ยังเปิด `py/path-injection` บน evidence storage แม้จะ sanitize suffix และตรวจ root prefix แล้ว เพราะ sink path ยังถูกประกอบจาก dynamic suffix string
+- **Decision:** map `original_filename` ไปเป็น known-safe storage filename โดยตรง (`original.xlsx`, `original.ofx`, `original.pdf`, ... , fallback `original.dat`) และให้ evidence-path helpers ทำงานกับ `FileRecord` UUID ที่ระบบสร้างเอง
+- **Alternatives:** (1) regex sanitize suffix ต่อไป — ยังไม่พอให้ CodeQL ปิด alert (2) ตัด extension ออกจาก stored path ทั้งหมด — เสี่ยงกระทบ ingestion/parser dispatch ที่ใช้นามสกุลไฟล์
+- **Consequences:** stored path ยังอ่านง่ายและคง suffix ที่ parser ต้องใช้, duplicate self-heal ยังซ่อมกลับสู่ canonical path เดิมได้, และ path construction ไม่พึ่ง dynamic suffix composition อีก
+
 ### DEC-004: Pytest runtime ต้องแยกออกจาก project-root state
 - **Date:** 2026-04-15
 - **Status:** accepted

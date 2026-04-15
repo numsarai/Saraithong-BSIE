@@ -8,7 +8,7 @@
 - **Last agent:** Codex (GPT-5)
 - **Date:** 2026-04-15
 - **Branch:** `codex/spni-export-test-runtime-pr`
-- **Baseline:** backend green (`232 passed`), frontend green (`33 passed`)
+- **Baseline:** backend green (`260 passed`), frontend green (`33 passed`)
 - **Server:** `uvicorn app:app --host 0.0.0.0 --port 8757`
 
 ## Done (latest session)
@@ -20,22 +20,21 @@
   - เพิ่ม `fpdf2>=2.8.0` ใน `requirements.txt`
 - แก้ CodeQL path-validation สำหรับ evidence storage:
   - เพิ่ม `_normalize_file_id()` ให้รับเฉพาะ UUID
-  - เพิ่ม `_normalize_storage_suffix()` ให้ suffix อยู่ใน allowlist (`.[a-z0-9]{1,16}`) ไม่งั้น fallback เป็น `.dat`
-  - ทำ `_canonical_evidence_path()` ให้ประกอบ path จาก sanitized UUID/suffix เท่านั้น
+  - เปลี่ยน evidence filename จากการประกอบด้วย sanitized suffix ไปเป็น fixed allowlist mapping (`original.xlsx`, `original.ofx`, ... , fallback `original.dat`) เพื่อให้ storage path ขึ้นกับ server-controlled UUID + known-safe filename เท่านั้น
+  - ทำ `_canonical_evidence_path()` / `_canonical_evidence_exists()` / `_write_canonical_evidence()` ให้ทำงานกับ `FileRecord` โดยตรง แทนการรับ path parts ดิบ
   - ปรับ duplicate repair ให้ reuse/repair เฉพาะ canonical path ใต้ current `EVIDENCE_DIR` แทนการ `resolve()` arbitrary stored path จาก record เดิม
-  - refine อีกรอบให้ validation ใช้ `realpath` เฉพาะการตรวจ root escape แต่ path ที่คืน/บันทึกยังเป็น canonical path string เดิมของ runtime เพื่อไม่ให้ `/private/var` alias กระทบ tests
-  - refine ล่าสุดให้ `_canonical_evidence_exists()` และ `_write_canonical_evidence()` ทำ `abspath/realpath + prefix check` ภายในฟังก์ชันเดียวกันก่อน `exists/open` เพื่อให้ CodeQL เห็น safe-root validation ชัดขึ้น
-  - refine เพิ่มอีกชั้นให้ sink ใช้ `realpath` ตัวเดียวกับที่ผ่าน prefix check จริง ๆ และปรับ regression test ให้เทียบ resolved path แทน string literal ของ macOS temp alias
+  - คง canonical stored path/`storage_key` เดิมไว้ (`.../original.ofx` เป็นต้น) เพื่อไม่กระทบ parser dispatch และ duplicate self-heal behavior
+  - ปรับ regression test ให้ validate invalid file id ผ่าน `_normalize_file_id()` โดยตรง และให้ duplicate repair ยังเทียบ resolved path ได้ถูกต้องบน macOS temp alias
 - เพิ่ม regression test `test_canonical_evidence_path_rejects_invalid_file_id` ใน `tests/test_persistence_platform.py`
 - ยืนยันผลหลังแก้:
   - `.venv/bin/python -m pytest tests/test_persistence_platform.py -q` -> `11 passed`
-  - `.venv/bin/python -m pytest tests/ -q` -> `232 passed`
+  - `.venv/bin/python -m pytest tests/ -q` -> `260 passed`
 - เตรียม push latest follow-up commit นี้กลับเข้า `codex/spni-export-test-runtime-pr` เพื่ออัปเดต PR checks
 
 ## Commits (this session)
 
 ```
-Pending latest follow-up commit for the refined CodeQL path-validation fix (`services/file_ingestion_service.py`, `docs/HANDOFF.md`) before push.
+Pending latest follow-up commit for the fixed storage-name allowlist / record-based evidence-path fix (`services/file_ingestion_service.py`, `tests/test_persistence_platform.py`, `docs/HANDOFF.md`, `docs/DECISIONS.md`) before push.
 ```
 
 ## Next (priority order)
@@ -65,11 +64,11 @@ Pending latest follow-up commit for the refined CodeQL path-validation fix (`ser
 - `CLAUDE.md` ใช้ `@AGENTS.md` (pointer) — เนื้อหาจริงอยู่ใน `AGENTS.md`
 - `docs/.handoff-snapshot.md` ยังไม่มีไฟล์
 - `frontend npm test` ไม่มี React `act(...)` warning และไม่มี Node `--localstorage-file` warning แล้ว
-- ถ้า PR ยังมี `CodeQL` fail หลัง push รอบนี้ ให้ตรวจ open code-scanning alert ใหม่บน PR merge ref; `Backend Tests` ของ PR run ผ่านแล้วหลังเพิ่ม `fpdf2`
+- ถ้า PR ยังมี `CodeQL` fail หลัง push รอบนี้ ให้ตรวจ open code-scanning alert ใหม่บน PR merge ref; ตอนนี้ backend tests ผ่านที่ `260 passed` แล้ว เหลือยืนยันว่า CodeQL ปิด alert สองจุดเดิมได้จริง
 
 ## Failed Attempts
 
-- ไม่มี failed attempt ใหม่ใน session นี้
+- ความพยายามรอบก่อนที่ใช้ regex-sanitized suffix + realpath/prefix check อย่างเดียว ยังไม่พอให้ CodeQL ปิด alert `py/path-injection`; รอบล่าสุดจึงเปลี่ยนเป็น fixed storage-name allowlist แทน dynamic suffix composition
 
 ## Environment
 
@@ -82,6 +81,10 @@ Pending latest follow-up commit for the refined CodeQL path-validation fix (`ser
 
 ## History
 
+- Codex (GPT-5), 2026-04-15
+  - เปลี่ยน evidence storage ให้ใช้ fixed allowlist filename ต่อชนิดไฟล์ (`original.xlsx`, `original.ofx`, ฯลฯ) แทน dynamic suffix string
+  - ปรับ helper ให้ operate บน `FileRecord` โดยตรง และยังคง canonical `stored_path`/`storage_key` เดิมเพื่อไม่กระทบ ingestion dispatch
+  - ยืนยันผล: targeted persistence `11 passed`, backend suite `260 passed`
 - Codex (GPT-5), 2026-04-15
   - แก้ CodeQL `py/path-injection` บน `services/file_ingestion_service.py` ด้วย UUID/suffix normalization และ canonical-path-only duplicate repair
   - refine helper ให้ validate ด้วย `realpath` แต่คืน stored path เดิมของ runtime

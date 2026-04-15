@@ -12,7 +12,7 @@ from persistence.models import Account, AuditLog, ExportJob, FileRecord, ParserR
 from pipeline.process_account import process_account
 from services.account_resolution_service import best_known_account_holder_name
 from services.export_service import create_export_job, run_export_job
-from services.file_ingestion_service import _canonical_evidence_path, persist_upload
+from services.file_ingestion_service import _normalize_file_id, persist_upload
 from services.persistence_pipeline_service import create_parser_run
 from services.review_service import update_account_fields, update_transaction_fields
 from services.search_service import search_transactions
@@ -111,11 +111,9 @@ def test_persist_upload_repairs_missing_duplicate_evidence_path(tmp_path: Path):
         assert row.storage_key == f"{first['file_id']}/original.ofx"
 
 
-def test_canonical_evidence_path_rejects_invalid_file_id(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr("services.file_ingestion_service.EVIDENCE_DIR", tmp_path)
-
+def test_canonical_evidence_path_rejects_invalid_file_id():
     with pytest.raises(ValueError):
-        _canonical_evidence_path("../escape", ".ofx")
+        _normalize_file_id("../escape")
 
 
 def test_ofx_pipeline_persists_parser_run_batch_and_transactions(tmp_path: Path):

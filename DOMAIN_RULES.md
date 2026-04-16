@@ -1,6 +1,6 @@
 # BSIE Domain Rules
 
-> Updated for BSIE v4.0
+> Updated for BSIE v4.1
 
 ## Evidence Integrity
 

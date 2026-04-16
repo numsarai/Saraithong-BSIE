@@ -70,18 +70,18 @@ uvicorn app:app --host 127.0.0.1 --port 8757
 
 # Agent Orchestration
 
-> Updated for BSIE v4.0
+> Updated for BSIE v4.1
 
 ## Core Principle
 
 All agents must preserve evidentiary integrity first. Raw source values, lineage, audit logs, review history, and reproducible exports are not optional.
 
-## Current Project Reality (v4.0)
+## Current Project Reality (v4.1)
 
-BSIE v4.0 has been restructured from a monolithic `app.py` into a modular router architecture:
+BSIE v4.1 continues the modular router architecture introduced in v4.0, now adding the SPNI integration surface:
 
-- `app.py` is now ~230 lines handling lifecycle, middleware, and router registration only.
-- **21 API routers** under `routers/` own all endpoint logic: admin, alerts, analytics, annotations, auth, banks, bulk, case_tags, dashboard, exports, fund_flow, graph, ingestion, jobs, overrides, reports, results, review, search, ui, workspace.
+- `app.py` is now a thin shell handling lifecycle, middleware, and router registration only.
+- **22 API routers** under `routers/` own all endpoint logic: admin, alerts, analytics, annotations, auth, banks, bulk, case_tags, dashboard, exports, fund_flow, graph, ingestion, jobs, overrides, reports, results, review, search, spni, ui, workspace.
 - **34 services** under `services/` encapsulate business logic.
 - `pipeline/process_account.py` remains the sequential 14-step evidence-sensitive pipeline core.
 - `persistence/models.py` and `persistence/schemas.py` define the persistent evidence contract.

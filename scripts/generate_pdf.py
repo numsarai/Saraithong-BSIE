@@ -120,7 +120,7 @@ def generate():
     pdf.text_block(MX, 60, CW, 'Smart Police & National Intelligence', 20, SKY, align='C')
     pdf.set_fill_color(*GOLD)
     pdf.rect(PW/2-15, 80, 30, 1, 'F')
-    pdf.text_block(MX, 88, CW, 'โมดูลแรก: BSIE v4.0 — Bank Statement Intelligence Engine', 16, WHITE, align='C')
+    pdf.text_block(MX, 88, CW, 'โมดูลแรก: BSIE v4.1 — Bank Statement Intelligence Engine', 16, WHITE, align='C')
     pdf.text_block(MX, 100, CW, 'ระบบวิเคราะห์ธุรกรรมทางการเงินอัจฉริยะ สำหรับงานสืบสวนสอบสวน', 14, (190,227,248), align='C')
     pdf.text_block(MX, 140, CW, 'เอกสารประกอบการนำเสนอเพื่อของบประมาณระดับประเทศ\nจัดทำโดย ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง\nเมษายน 2569', 12, SUBTLE, align='C')
 
@@ -129,7 +129,7 @@ def generate():
     pdf.slide_title('SPNI Platform — ภาพรวม 4 โมดูล', WHITE)
     pdf.subtitle('แพลตฟอร์มรวมเครื่องมือสืบสวนสอบสวนสำหรับ สตช. ทั้งประเทศ', (190,227,248))
 
-    mods = [('โมดูล 1', 'BSIE — การเงิน', 'v4.0 *', MINT),
+    mods = [('โมดูล 1', 'BSIE — การเงิน', 'v4.1 *', MINT),
             ('โมดูล 2', 'CDR — โทรศัพท์', 'วางแผน', DGRAY),
             ('โมดูล 3', 'Social Media', 'วางแผน', DGRAY),
             ('โมดูล 4', 'CCTV ภาพ/วีดีโอ', 'วางแผน', DGRAY)]
@@ -190,7 +190,7 @@ def generate():
 
     # ════════════ 4. ARCHITECTURE ════════════
     pdf.new_slide(VDARK)
-    pdf.slide_title('สถาปัตยกรรมระบบ BSIE v4.0', WHITE)
+    pdf.slide_title('สถาปัตยกรรมระบบ BSIE v4.1', WHITE)
 
     pdf.card(MX, 24, CW, 22, (32,64,112))
     pdf.card_title(MX, 24, CW, 'Frontend', GOLD, 12)
@@ -448,7 +448,7 @@ def generate():
 
     phases_tl = [
         ('Phase 1 Pilot', 'เดือน 1-3', MX, CW*0.18, GREEN, 'ฟรี',
-         ['BSIE v4.0 Pilot', 'ทดลอง 5-10 คดี', 'เก็บ feedback']),
+         ['BSIE v4.1 Pilot', 'ทดลอง 5-10 คดี', 'เก็บ feedback']),
         ('Phase 2 จังหวัด', 'เดือน 4-9', MX+CW*0.20, CW*0.22, BLUE, '~8 ล้าน',
          ['Server 5 จว.', 'PostgreSQL+LLM', 'อบรม 5 จังหวัด']),
         ('Phase 3 SPNI', 'เดือน 10-21', MX+CW*0.44, CW*0.30, ORANGE, '~40 ล้าน',
@@ -489,7 +489,7 @@ def generate():
     pdf.slide_title('งบประมาณระดับประเทศ — SPNI Platform', VDARK)
 
     budget = [
-        ('Phase 1: Pilot (3 เดือน)', [('ใช้ PC ที่มี + BSIE v4.0','ฟรี')], 'ฟรี', GREEN),
+        ('Phase 1: Pilot (3 เดือน)', [('ใช้ PC ที่มี + BSIE v4.1','ฟรี')], 'ฟรี', GREEN),
         ('Phase 2: 5 จังหวัดนำร่อง (6 เดือน)', [
             ('App Server ×5','1,500,000 ฿'),('GPU Server LLM ×5','5,000,000 ฿'),
             ('Network/UPS ×5','500,000 ฿'),('PostgreSQL+พัฒนา','500,000 ฿'),('อบรม','300,000 ฿')
@@ -582,7 +582,7 @@ def generate():
 
     # ════════════ 19. PROJECT STATS ════════════
     pdf.new_slide(VDARK)
-    pdf.slide_title('ขนาดโปรเจค BSIE v4.0 — ตัวเลข', WHITE)
+    pdf.slide_title('ขนาดโปรเจค BSIE v4.1 — ตัวเลข', WHITE)
     stats = [
         ('161','Python Files',GREEN),('41','React/TS Files',SKY),
         ('~41,000','Lines of Code',GOLD),('120+','API Endpoints',BLUE),
@@ -660,7 +660,7 @@ def generate():
     pdf.set_fill_color(*GOLD); pdf.rect(PW/2-15, 27, 30, 0.8, 'F')
 
     for i, (num, text, clr) in enumerate([
-        ('1.','BSIE v4.0 พร้อมใช้วันนี้ — ไม่ต้องรองบประมาณ',MINT),
+        ('1.','BSIE v4.1 พร้อมใช้วันนี้ — ไม่ต้องรองบประมาณ',MINT),
         ('2.','ทดลอง Pilot กับคดีจริง 5-10 คดี (ฟรี)',SKY),
         ('3.','เก็บ feedback จากพนักงานสอบสวน',GOLD),
         ('4.','เสนองบ Phase 2: ~8 ล้านบาท (5 จังหวัดนำร่อง)',SALMON),
@@ -675,7 +675,7 @@ def generate():
     pdf.card(MX, 118, CW, 14, (30,58,95))
     pdf.text_block(MX, 120, CW, 'งบ SPNI ทั้ง 3 ปี (~170 ล้าน) < ค่า license i2 ปีเดียว (742+ ล้าน) -> คืนทุนทันที', 12, GOLD, True, 'C')
 
-    pdf.text_block(MX, 150, CW, 'ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง | โทร: 096-776-8757 | BSIE v4.0', 10, SUBTLE, align='C')
+    pdf.text_block(MX, 150, CW, 'ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง | โทร: 096-776-8757 | BSIE v4.1', 10, SUBTLE, align='C')
 
     # -- Save --
     out = BASE / 'docs' / 'SPNI_BSIE_Presentation.pdf'

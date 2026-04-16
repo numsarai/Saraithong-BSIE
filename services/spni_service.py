@@ -27,10 +27,11 @@ from persistence.models import (
     StatementBatch,
     Transaction,
 )
+from project_meta import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
-APP_VERSION = "4.0.0"
+__all__ = ["APP_VERSION", "export_data", "get_run_preview", "list_completed_runs"]
 
 
 # ── Serialization helpers ───────────────────────────────────────────────

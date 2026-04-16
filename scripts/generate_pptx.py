@@ -136,7 +136,7 @@ def generate():
          "Smart Police & National Intelligence", 24, SKY, False, PP_ALIGN.CENTER)
     _line(s, Inches(5.9), Inches(3.3), Inches(1.5), Pt(3), GOLD)
     _txt(s, MX, Inches(3.6), CW, Inches(0.45),
-         "โมดูลแรก: BSIE v4.0 — Bank Statement Intelligence Engine", 20, WHITE, False, PP_ALIGN.CENTER)
+         "โมดูลแรก: BSIE v4.1 — Bank Statement Intelligence Engine", 20, WHITE, False, PP_ALIGN.CENTER)
     _txt(s, MX, Inches(4.2), CW, Inches(0.4),
          "ระบบวิเคราะห์ธุรกรรมทางการเงินอัจฉริยะ สำหรับงานสืบสวนสอบสวน", 16, RGBColor(0xBE,0xE3,0xF8), False, PP_ALIGN.CENTER)
     _txt(s, MX, Inches(5.5), CW, Inches(1.2),
@@ -152,7 +152,7 @@ def generate():
     _sub(s, "ระบบรวมเครื่องมือช่วยงานสืบสวนสอบสวน สำหรับ สตช. ทั้งประเทศ", RGBColor(0xBE,0xE3,0xF8))
 
     mods = [
-        ("โมดูล 1", "วิเคราะห์การเงิน", "v4.0 พร้อมใช้ ★", MINT),
+        ("โมดูล 1", "วิเคราะห์การเงิน", "v4.1 พร้อมใช้ ★", MINT),
         ("โมดูล 2", "วิเคราะห์โทรศัพท์", "วางแผน", DGRAY),
         ("โมดูล 3", "สื่อสังคมออนไลน์", "วางแผน", DGRAY),
         ("โมดูล 4", "กล้องวงจรปิด", "วางแผน", DGRAY),
@@ -230,7 +230,7 @@ def generate():
     # 4. ARCHITECTURE — System
     # ════════════════════════════════════════════════════════════
     s = S(VDARK)
-    _title(s, "โครงสร้างระบบ BSIE v4.0", WHITE)
+    _title(s, "โครงสร้างระบบ BSIE v4.1", WHITE)
 
     layer_h = Inches(1.05)
     layer_gap = Inches(0.15)
@@ -678,7 +678,7 @@ def generate():
     # Phase bars
     phases_tl = [
         ("เฟส 1\nทดลอง", "เดือน 1-3", MX, Inches(2.3), GREEN, "ฟรี",
-         ["BSIE v4.0 Pilot", "ทดลอง 5-10 คดีจริง", "เก็บ feedback"]),
+         ["BSIE v4.1 Pilot", "ทดลอง 5-10 คดีจริง", "เก็บ feedback"]),
         ("เฟส 2\nจังหวัดนำร่อง", "เดือน 4-9", MX+Inches(2.5), Inches(2.8), BLUE, "~8 ล้าน",
          ["Server 5 จังหวัด", "PostgreSQL + Multi-user", "Local LLM + GPU", "อบรม 5 จังหวัด"]),
         ("เฟส 3\nขยายระบบ", "เดือน 10-21", MX+Inches(5.5), Inches(3.8), ORANGE, "~40 ล้าน",
@@ -733,7 +733,7 @@ def generate():
 
     budget_phases = [
         ("เฟส 1: ทดลอง (3 เดือน)", [
-            ("ใช้เครื่อง PC ที่มีอยู่ + ซอฟต์แวร์ BSIE v4.0", "ฟรี"),
+            ("ใช้เครื่อง PC ที่มีอยู่ + ซอฟต์แวร์ BSIE v4.1", "ฟรี"),
         ], "ฟรี", GREEN),
         ("เฟส 2: นำร่อง 5 จังหวัด (6 เดือน)", [
             ("เซิร์ฟเวอร์หลัก ×5 (CPU 8-core, 32GB, 1TB SSD)", "1,500,000 ฿"),
@@ -841,7 +841,7 @@ def generate():
     # 19. PROJECT STATS
     # ════════════════════════════════════════════════════════════
     s = S(VDARK)
-    _title(s, "ขนาดระบบ BSIE v4.0 — ตัวเลข", WHITE)
+    _title(s, "ขนาดระบบ BSIE v4.1 — ตัวเลข", WHITE)
 
     stats = [
         ("161", "ไฟล์โปรแกรมหลัก", GREEN), ("41", "ไฟล์หน้าจอแสดงผล", SKY),
@@ -941,7 +941,7 @@ def generate():
     _line(s, Inches(5.9), Inches(1.2), Inches(1.5), Pt(3), GOLD)
 
     closing = [
-        ("1.", "BSIE v4.0 พร้อมใช้วันนี้ — ไม่ต้องรองบประมาณ", MINT),
+        ("1.", "BSIE v4.1 พร้อมใช้วันนี้ — ไม่ต้องรองบประมาณ", MINT),
         ("2.", "ทดลองใช้กับคดีจริง 5-10 คดี (ฟรี)", SKY),
         ("3.", "เก็บความเห็นจากพนักงานสอบสวน", GOLD),
         ("4.", "เสนองบเฟส 2: ~8 ล้านบาท (5 จังหวัดนำร่อง)", SALMON),
@@ -958,7 +958,7 @@ def generate():
          15, GOLD, True, PP_ALIGN.CENTER)
 
     _txt(s, MX, Inches(6.7), CW, Inches(0.35),
-         "ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง │ โทร: 096-776-8757 │ BSIE v4.0 — Bank Statement Intelligence Engine",
+         "ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง │ โทร: 096-776-8757 │ BSIE v4.1 — Bank Statement Intelligence Engine",
          11, SUBTLE, False, PP_ALIGN.CENTER)
 
     # ── Save ──

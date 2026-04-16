@@ -1,6 +1,6 @@
 # Config Registry
 
-> Updated for BSIE v4.0
+> Updated for BSIE v4.1
 
 This registry is the built-in validation layer for BSIE bank formats.
 

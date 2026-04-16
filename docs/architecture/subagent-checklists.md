@@ -1,6 +1,6 @@
 # BSIE Subagent Checklists And Templates
 
-> Updated for BSIE v4.0 -- `app.py` is now a thin shell with 21 routers. Subagent file ownership targets individual `routers/*.py` and `services/*.py` files rather than the monolithic app.py.
+> Updated for BSIE v4.1 -- `app.py` is a thin shell with 22 routers. Subagent file ownership targets individual `routers/*.py` and `services/*.py` files rather than the monolithic app.py.
 
 This document turns the BSIE subagent policy into practical checklists and reusable templates.
 

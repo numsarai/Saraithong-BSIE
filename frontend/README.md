@@ -1,6 +1,6 @@
 # BSIE Frontend
 
-> Updated for BSIE v4.0
+> Updated for BSIE v4.1
 
 React 19 + Vite 8 + TypeScript analyst interface for BSIE.
 

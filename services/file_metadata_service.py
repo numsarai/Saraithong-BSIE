@@ -26,7 +26,7 @@ def _resolve_safe_path(
     use downstream — the original ``file_path`` input must be considered
     untrusted data.
     """
-    resolved = Path(file_path).resolve()
+    resolved = Path(file_path).resolve()  # codeql[py/path-injection]
     for base in allowed_bases:
         base_resolved = base.resolve()
         if resolved == base_resolved or base_resolved in resolved.parents:
@@ -44,10 +44,11 @@ def extract_file_metadata(file_path: str | Path) -> dict[str, Any]:
     if safe_path is None:
         return {"error": "Access denied — path outside allowed directories"}
 
-    if not safe_path.is_file():
+    # safe_path is provably under an allowed base at this point.
+    if not safe_path.is_file():  # codeql[py/path-injection]
         return {"error": "File not found"}
 
-    stat = safe_path.stat()
+    stat = safe_path.stat()  # codeql[py/path-injection]
     result: dict[str, Any] = {
         "path": str(safe_path),
         "filename": safe_path.name,

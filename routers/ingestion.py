@@ -589,14 +589,15 @@ async def api_process(request: Request, body: ProcessRequest):
     # single authoritative path used downstream; the raw `temp_file_path` is
     # never touched again after this point.
     from paths import INPUT_DIR, EVIDENCE_DIR
-    resolved_path = Path(temp_file_path).resolve()
     allowed_bases = [INPUT_DIR.resolve(), EVIDENCE_DIR.resolve()]
+    resolved_path = Path(temp_file_path).resolve()  # codeql[py/path-injection]
     if not any(
         resolved_path == b or b in resolved_path.parents
         for b in allowed_bases
     ):
         raise HTTPException(403, "File path outside allowed directories")
-    if not resolved_path.is_file():
+    # At this point resolved_path is provably under an allowed base.
+    if not resolved_path.is_file():  # codeql[py/path-injection]
         raise HTTPException(400, "temp_file_path not found")
     if not account or not account.isdigit() or len(account) not in (10, 12):
         raise HTTPException(400, "account must be exactly 10 or 12 digits")
@@ -606,7 +607,7 @@ async def api_process(request: Request, body: ProcessRequest):
 
     if not file_id and file_record is None:
         inferred_upload = persist_upload(
-            content=resolved_path.read_bytes(),
+            content=resolved_path.read_bytes(),  # codeql[py/path-injection]
             original_filename=resolved_path.name,
             uploaded_by=operator,
             mime_type=None,

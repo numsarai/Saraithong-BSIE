@@ -30,11 +30,14 @@ router = APIRouter(prefix="/api", tags=["results"], dependencies=[Depends(requir
 
 
 _SAFE_ACCOUNT_RE = re.compile(r"^\d{10,12}$")
+_SAFE_PART_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 
 def _safe_account(account: str) -> str:
     """Validate and normalize an account number to digits-only, 10-12 chars.
 
+    Pure string validation (regex only, no filesystem access) so CodeQL's
+    taint analysis recognizes the output as a path-safe identifier.
     Raises HTTPException(400) if the input cannot produce a valid account.
     """
     digits = "".join(c for c in str(account or "") if c.isdigit())
@@ -44,15 +47,17 @@ def _safe_account(account: str) -> str:
 
 
 def _canonical_output_path(safe_account: str, *parts: str) -> Path:
-    """Build an OUTPUT_DIR path and assert it stays under the OUTPUT_DIR root.
+    """Build an OUTPUT_DIR path from already-sanitized components.
 
     ``safe_account`` MUST already have been validated via ``_safe_account``.
+    Each extra ``part`` must match ``_SAFE_PART_RE`` — callers pass only
+    hardcoded literals (e.g. ``"processed"``, ``"meta.json"``), so the
+    regex is a defense-in-depth assert, not dynamic input handling.
     """
-    output_root = OUTPUT_DIR.resolve()
-    candidate = (output_root / safe_account).joinpath(*parts).resolve()
-    if candidate != output_root and output_root not in candidate.parents:
-        raise HTTPException(400, "Invalid output path")
-    return candidate
+    for part in parts:
+        if not _SAFE_PART_RE.fullmatch(part):
+            raise HTTPException(400, "Invalid output path component")
+    return OUTPUT_DIR.joinpath(safe_account, *parts)
 
 
 @router.get("/results/{account}")

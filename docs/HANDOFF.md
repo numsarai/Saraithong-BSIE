@@ -6,12 +6,29 @@
 ## Current State
 
 - **Last agent:** Codex (GPT-5)
-- **Date:** 2026-04-15
+- **Date:** 2026-04-16
 - **Branch:** `codex/spni-export-test-runtime-pr`
-- **Baseline:** backend green (`260 passed`), frontend green (`33 passed`)
+- **Baseline:** backend green (`260 passed`), frontend green (`33 passed`), targeted regression suites green (`58 passed`)
 - **Server:** `uvicorn app:app --host 0.0.0.0 --port 8757`
 
 ## Done (latest session)
+
+- แก้ report/export scoping regressions ตาม review findings:
+  - `services/report_service.py`
+    - เพิ่ม `_resolve_account_for_report()` เพื่อ resolve account จาก `parser_run_id` ก่อน fallback ไปที่ normalized account lookup
+    - `generate_account_report()` ใช้ account ของ parser run ที่เลือก และ filter alerts ด้วย `parser_run_id` เมื่อระบุ
+    - `generate_case_report()` จำกัด combined alerts ให้เฉพาะ account IDs ที่ผู้ใช้ร้องขอในรายงานคดี
+  - `services/spni_service.py`
+    - ปรับ `export_data()` ให้คำนวณ accounts/entities + `meta.total_accounts`/`meta.total_entities` จาก full filtered export set ก่อน apply pagination กับ transactions
+- เพิ่ม regression tests:
+  - `tests/test_report_service.py`
+    - ยืนยัน account report ใช้ account/alerts จาก parser run ที่เลือก
+    - ยืนยัน case report ไม่ปน alerts ของบัญชีที่ไม่ได้ร้องขอ
+  - `tests/test_spni_service.py`
+    - ยืนยัน paginated SPNI export ยังคืน account/entity metadata และ totals แบบ consistent
+- ยืนยันผล:
+  - `.venv/bin/python -m pytest tests/test_report_service.py tests/test_spni_service.py -q` -> `3 passed`
+  - `.venv/bin/python -m pytest tests/test_spni_api.py tests/test_app_api.py tests/test_report_service.py tests/test_spni_service.py -q` -> `58 passed`
 
 - ตรวจ CI failure บน PR #10 แล้วเจอ 2 ชั้น:
   - `Backend Tests` ล้มตั้งแต่ test collection เพราะ `services/report_service.py` import `from fpdf import FPDF` แต่ CI ติดตั้งจาก `requirements.txt` ซึ่งยังไม่มี `fpdf2`
@@ -34,7 +51,7 @@
 ## Commits (this session)
 
 ```
-Pending latest follow-up commit for the fixed storage-name allowlist / record-based evidence-path fix (`services/file_ingestion_service.py`, `tests/test_persistence_platform.py`, `docs/HANDOFF.md`, `docs/DECISIONS.md`) before push.
+Pending local changes for report/export scoping fixes (`services/report_service.py`, `services/spni_service.py`, `tests/test_report_service.py`, `tests/test_spni_service.py`, `docs/HANDOFF.md`) plus earlier uncommitted follow-up noted below.
 ```
 
 ## Next (priority order)
@@ -54,6 +71,8 @@ Pending latest follow-up commit for the fixed storage-name allowlist / record-ba
 - AccountFlowGraph ใช้ in-memory aggregation แทน CSV fetch
 - Duplicate file reuse ต้อง self-heal `stored_path` กลับเข้า `EVIDENCE_DIR` ปัจจุบันเมื่อ path เก่าหายหรืออยู่นอก workspace ปัจจุบัน
 - Pytest ต้องใช้ temp runtime root ผ่าน `tests/conftest.py` แทน project-root `bsie.db` และ writable dirs
+- PDF reports ต้อง scope account/alerts ตาม parser run หรือ requested account set เพื่อไม่ให้ปนคนละคดี/คนละ ingest
+- SPNI export ต้องคำนวณ account/entity metadata จาก full filtered set ก่อน pagination ของ transactions
 
 ## Warnings
 
@@ -81,6 +100,10 @@ Pending latest follow-up commit for the fixed storage-name allowlist / record-ba
 
 ## History
 
+- Codex (GPT-5), 2026-04-16
+  - แก้ report/export scoping regressions: account report resolve account จาก parser run, filter alerts ตาม parser run, case report จำกัด alerts ตาม requested accounts, และ SPNI export คำนวณ accounts/entities/totals ก่อน pagination
+  - เพิ่ม regression tests `tests/test_report_service.py` และ `tests/test_spni_service.py`
+  - ยืนยันผล: targeted report/SPNI + nearby API suites `58 passed`
 - Codex (GPT-5), 2026-04-15
   - เปลี่ยน evidence storage ให้ใช้ fixed allowlist filename ต่อชนิดไฟล์ (`original.xlsx`, `original.ofx`, ฯลฯ) แทน dynamic suffix string
   - ปรับ helper ให้ operate บน `FileRecord` โดยตรง และยังคง canonical `stored_path`/`storage_key` เดิมเพื่อไม่กระทบ ingestion dispatch

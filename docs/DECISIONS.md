@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-006: Reports and SPNI exports must scope metadata to the selected evidence set
+- **Date:** 2026-04-16
+- **Status:** accepted
+- **Context:** Report generation and SPNI export now operate on persisted multi-run evidence. If alerts/accounts/entities are derived from the whole database or only the current transaction page, outputs can mix unrelated investigations or return inconsistent totals.
+- **Decision:** Account reports resolve the account row from the selected `parser_run_id` when provided and only include alerts for that run; case reports only include alerts linked to the requested accounts; SPNI export derives account/entity metadata and totals from the full filtered result set before paginating transactions.
+- **Alternatives:** (1) Keep loose normalized-account lookups and global alert queries — risks wrong bank/holder selection and cross-case contamination. (2) Page accounts/entities together with transactions — makes totals and metadata incomplete for paged imports.
+- **Consequences:** Court-facing PDFs remain scoped to the intended evidence set, and SPNI can page through transactions without losing the full account/entity context for the filtered run.
+
 ### DEC-005: Evidence storage filenames ต้องมาจาก fixed allowlist
 - **Date:** 2026-04-15
 - **Status:** accepted

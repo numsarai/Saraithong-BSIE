@@ -309,18 +309,21 @@ def export_data(
     if amount_max is not None:
         base = base.where(Transaction.amount <= Decimal(str(amount_max)))
 
+    filtered_transactions = base.subquery()
+
     # ── Total count (before pagination) ─────────────────────────────────
-    count_stmt = select(func.count()).select_from(base.subquery())
+    count_stmt = select(func.count()).select_from(filtered_transactions)
     total_transactions = session.scalar(count_stmt) or 0
 
-    # ── Fetch paginated transactions ────────────────────────────────────
-    txn_stmt = base.order_by(Transaction.transaction_datetime).limit(limit).offset(offset)
-    txn_rows = session.scalars(txn_stmt).all()
+    # ── Collect all account IDs for the filtered export set ─────────────
+    acct_ids = session.scalars(
+        select(distinct(filtered_transactions.c.account_id)).where(
+            filtered_transactions.c.account_id.isnot(None)
+        )
+    ).all()
+    acct_id_set: set[str] = set(acct_ids)
 
-    # ── Collect account IDs from results ────────────────────────────────
-    acct_id_set: set[str] = {tx.account_id for tx in txn_rows if tx.account_id}
-
-    # ── Fetch accounts ──────────────────────────────────────────────────
+    # ── Fetch accounts for the full filtered export set ─────────────────
     acct_map: dict[str, Account] = {}
     if acct_id_set:
         acct_rows = session.scalars(
@@ -333,7 +336,7 @@ def export_data(
         for a in acct_map.values()
     }
 
-    # ── Fetch entities linked to these accounts ─────────────────────────
+    # ── Fetch entities linked to the full filtered export set ───────────
     entities: list[dict[str, Any]] = []
     if acct_id_set:
         entity_stmt = (
@@ -344,6 +347,10 @@ def export_data(
         )
         entity_rows = session.scalars(entity_stmt).all()
         entities = [_serialize_entity(e) for e in entity_rows]
+
+    # ── Fetch paginated transactions ────────────────────────────────────
+    txn_stmt = base.order_by(Transaction.transaction_datetime).limit(limit).offset(offset)
+    txn_rows = session.scalars(txn_stmt).all()
 
     # ── Serialize ───────────────────────────────────────────────────────
     serialized_accounts = [_serialize_account(a) for a in acct_map.values()]

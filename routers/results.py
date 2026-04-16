@@ -6,6 +6,8 @@ Result retrieval and file search endpoints.
 
 import json
 import logging
+import re
+from pathlib import Path
 
 import pandas as pd
 from services.auth_service import require_auth
@@ -27,11 +29,37 @@ logger = logging.getLogger("bsie.api")
 router = APIRouter(prefix="/api", tags=["results"], dependencies=[Depends(require_auth)])
 
 
+_SAFE_ACCOUNT_RE = re.compile(r"^\d{10,12}$")
+
+
+def _safe_account(account: str) -> str:
+    """Validate and normalize an account number to digits-only, 10-12 chars.
+
+    Raises HTTPException(400) if the input cannot produce a valid account.
+    """
+    digits = "".join(c for c in str(account or "") if c.isdigit())
+    if not _SAFE_ACCOUNT_RE.fullmatch(digits):
+        raise HTTPException(400, "Invalid account number")
+    return digits
+
+
+def _canonical_output_path(safe_account: str, *parts: str) -> Path:
+    """Build an OUTPUT_DIR path and assert it stays under the OUTPUT_DIR root.
+
+    ``safe_account`` MUST already have been validated via ``_safe_account``.
+    """
+    output_root = OUTPUT_DIR.resolve()
+    candidate = (output_root / safe_account).joinpath(*parts).resolve()
+    if candidate != output_root and output_root not in candidate.parents:
+        raise HTTPException(400, "Invalid output path")
+    return candidate
+
+
 @router.get("/results/{account}")
 async def api_results(account: str, page: int = 1, page_size: int = 100, parser_run_id: str = ""):
     """Return paginated transaction results for an account."""
-    safe = "".join(c for c in account if c.isdigit())
-    processed_dir = OUTPUT_DIR / safe / "processed"
+    safe = _safe_account(account)
+    processed_dir = _canonical_output_path(safe, "processed")
     meta = {}
     rows = []
     total = 0
@@ -70,7 +98,7 @@ async def api_results(account: str, page: int = 1, page_size: int = 100, parser_
 
     # Always merge meta.json (financial stats) into meta from DB (parsing info).
     # meta.json is the authoritative source for total_in/out, category_counts, etc.
-    meta_path = OUTPUT_DIR / safe / "meta.json"
+    meta_path = _canonical_output_path(safe, "meta.json")
     if meta_path.exists():
         file_meta = json.loads(meta_path.read_text(encoding="utf-8"))
         # Preserve parser-run-specific fields when reviewing a historical run.
@@ -107,7 +135,7 @@ async def api_results(account: str, page: int = 1, page_size: int = 100, parser_
 @router.get("/results/{account}/timeline")
 async def api_results_timeline(account: str, parser_run_id: str = ""):
     """Return lightweight date+amount+direction data for ALL transactions — for timeline charts."""
-    safe = "".join(c for c in account if c.isdigit())
+    safe = _safe_account(account)
 
     with get_db_session() as session:
         account_row = session.scalars(
@@ -145,7 +173,7 @@ async def api_results_timeline(account: str, parser_run_id: str = ""):
             return JSONResponse({"account": safe, "items": items, "total": len(items)})
 
     # Fallback to CSV
-    txn_path = OUTPUT_DIR / safe / "processed" / "transactions.csv"
+    txn_path = _canonical_output_path(safe, "processed", "transactions.csv")
     if txn_path.exists():
         df = pd.read_csv(txn_path, dtype=str, encoding="utf-8-sig", usecols=lambda c: c in {
             "date",

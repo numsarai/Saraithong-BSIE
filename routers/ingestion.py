@@ -581,18 +581,23 @@ async def api_process(request: Request, body: ProcessRequest):
         file_record = get_file_record(file_id)
         if file_record:
             temp_file_path = temp_file_path or file_record.stored_path
-    if not temp_file_path or not Path(temp_file_path).exists():
-        raise HTTPException(400, "temp_file_path missing or file not found")
+    if not temp_file_path:
+        raise HTTPException(400, "temp_file_path missing")
 
-    # SEC-H5: Confine temp_file_path to allowed data directories only
+    # SEC-H5: Confine temp_file_path to allowed data directories via realpath
+    # + prefix check BEFORE any filesystem read. `resolved_path` becomes the
+    # single authoritative path used downstream; the raw `temp_file_path` is
+    # never touched again after this point.
     from paths import INPUT_DIR, EVIDENCE_DIR
-    resolved = Path(temp_file_path).resolve()
+    resolved_path = Path(temp_file_path).resolve()
     allowed_bases = [INPUT_DIR.resolve(), EVIDENCE_DIR.resolve()]
     if not any(
-        str(resolved).startswith(str(b) + "/") or resolved == b
+        resolved_path == b or b in resolved_path.parents
         for b in allowed_bases
     ):
         raise HTTPException(403, "File path outside allowed directories")
+    if not resolved_path.is_file():
+        raise HTTPException(400, "temp_file_path not found")
     if not account or not account.isdigit() or len(account) not in (10, 12):
         raise HTTPException(400, "account must be exactly 10 or 12 digits")
 
@@ -601,8 +606,8 @@ async def api_process(request: Request, body: ProcessRequest):
 
     if not file_id and file_record is None:
         inferred_upload = persist_upload(
-            content=Path(temp_file_path).read_bytes(),
-            original_filename=Path(temp_file_path).name,
+            content=resolved_path.read_bytes(),
+            original_filename=resolved_path.name,
             uploaded_by=operator,
             mime_type=None,
         )
@@ -617,7 +622,7 @@ async def api_process(request: Request, body: ProcessRequest):
 
     dispatch_pipeline(
         job_id,
-        temp_file_path,
+        str(resolved_path),
         bank_key,
         account,
         name,

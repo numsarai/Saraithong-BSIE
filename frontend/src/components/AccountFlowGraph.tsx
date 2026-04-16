@@ -39,92 +39,6 @@ function computeConditionalSize(flowTotal: number): number {
   return Math.max(25, Math.min(70, 25 + Math.log10(Math.max(flowTotal, 1)) * 8))
 }
 
-/**
- * Try to load pre-aggregated edges from the CSV export.
- * Falls back to aggregating from raw transaction rows.
- */
-async function fetchAggregatedEdges(account: string): Promise<AggEdge[] | null> {
-  try {
-    const res = await fetch(`/api/download/${account}/processed/aggregated_edges.csv`)
-    if (!res.ok) return null
-    const text = await res.text()
-    const lines = text.split('\n').filter(l => l.trim())
-    if (lines.length < 2) return null
-
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-    const fromIdx = headers.indexOf('from_node_id')
-    const toIdx = headers.indexOf('to_node_id')
-    const typeIdx = headers.indexOf('edge_type')
-    const countIdx = headers.indexOf('transaction_count')
-    const amountIdx = headers.indexOf('total_amount_abs')
-    const labelIdx = headers.indexOf('label')
-    if (fromIdx < 0 || toIdx < 0) return null
-
-    const subjectNode = `ACCOUNT:${account}`
-    const edges: AggEdge[] = []
-
-    for (let i = 1; i < lines.length; i++) {
-      const row = parseCsvLine(lines[i])
-      if (!row || row.length < Math.max(fromIdx, toIdx, countIdx, amountIdx) + 1) continue
-
-      const fromNode = row[fromIdx]
-      const toNode = row[toIdx]
-      const edgeType = typeIdx >= 0 ? row[typeIdx] : ''
-      const count = countIdx >= 0 ? parseInt(row[countIdx]) || 1 : 1
-      const amount = amountIdx >= 0 ? parseFloat(row[amountIdx]) || 0 : 0
-
-      let cp: string
-      let dir: 'IN' | 'OUT'
-
-      if (edgeType === 'RECEIVED_FROM' || toNode === subjectNode) {
-        cp = fromNode.replace('ACCOUNT:', '')
-        dir = 'IN'
-      } else if (edgeType === 'SENT_TO' || fromNode === subjectNode) {
-        cp = toNode.replace('ACCOUNT:', '')
-        dir = 'OUT'
-      } else {
-        continue
-      }
-
-      if (!cp || cp === account) continue
-
-      const cpName = labelIdx >= 0 ? extractNameFromLabel(row[labelIdx], cp) : cp
-
-      edges.push({ counterparty: cp, counterpartyName: cpName, direction: dir, totalAmount: amount, count })
-    }
-
-    return edges.length > 0 ? edges : null
-  } catch {
-    return null
-  }
-}
-
-function parseCsvLine(line: string): string[] {
-  const result: string[] = []
-  let current = ''
-  let inQuotes = false
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    if (ch === '"') {
-      inQuotes = !inQuotes
-    } else if (ch === ',' && !inQuotes) {
-      result.push(current.trim())
-      current = ''
-    } else {
-      current += ch
-    }
-  }
-  result.push(current.trim())
-  return result
-}
-
-function extractNameFromLabel(label: string, fallback: string): string {
-  if (!label || label.includes('transactions)') || label.includes('Sent To') || label.includes('Received From')) {
-    return fallback
-  }
-  return label
-}
-
 /** Extract hour (0–23) from a transaction row, or null if unparseable. */
 function extractHour(row: any): number | null {
   const dt = String(row.transaction_datetime || row.date || '')
@@ -372,8 +286,6 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<cytoscape.Core | null>(null)
-  const [flows, setFlows] = useState<AggEdge[]>([])
-  const [loading, setLoading] = useState(true)
   const [selectedCp, setSelectedCp] = useState<string | null>(null)
 
   // Filter & layout state
@@ -388,6 +300,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
   const [edgeLabelsVisible, setEdgeLabelsVisible] = useState(true)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedCount, setSelectedCount] = useState(0)
+  const [hasHiddenElements, setHasHiddenElements] = useState(false)
   const removedElementsRef = useRef<cytoscape.CollectionReturnValue | null>(null)
 
   const isHourFiltered = hourStart !== null || hourEnd !== null
@@ -404,26 +317,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
     })
   }, [rows, hourStart, hourEnd, isHourFiltered])
 
-  // Load data: prefer aggregated CSV (only when no hour filter), fallback to raw rows
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-
-    ;(async () => {
-      try {
-        // CSV edges have no time info → skip when hour filter is active
-        const aggEdges = isHourFiltered ? null : await fetchAggregatedEdges(account)
-        if (cancelled) return
-        setFlows(aggEdges?.length ? aggEdges : aggregateFromRows(hourFilteredRows, account))
-      } catch {
-        if (!cancelled) setFlows(aggregateFromRows(hourFilteredRows, account))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-
-    return () => { cancelled = true }
-  }, [account, hourFilteredRows, isHourFiltered])
+  const flows = useMemo(() => aggregateFromRows(hourFilteredRows, account), [account, hourFilteredRows])
 
   // Filter flows by minAmount and minTxnCount
   const filteredFlows = useMemo(() =>
@@ -575,6 +469,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
     } else {
       removedElementsRef.current = removed
     }
+    setHasHiddenElements(true)
     setSelectedCount(0)
   }, [])
 
@@ -584,6 +479,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
     if (!cy || !removedElementsRef.current) return
     removedElementsRef.current.restore()
     removedElementsRef.current = null
+    setHasHiddenElements(false)
     if (conditionalFormatting) applyConditionalFormatting(true)
     if (!edgeLabelsVisible) cy.edges().style('label', '')
   }, [conditionalFormatting, applyConditionalFormatting, edgeLabelsVisible])
@@ -658,7 +554,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
     return { cpName, inFlow, outFlow, txns, totalTxns: cpFlows.reduce((s, f) => s + f.count, 0) }
   }, [selectedCp, filteredFlows, hourFilteredRows])
 
-  if (loading || flows.length === 0) return null
+  if (flows.length === 0) return null
 
   const graphHeight = isFullscreen ? '100%' : Math.min(900, 450 + cpCount * 2)
 
@@ -801,7 +697,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
               <Button variant="ghost" size="sm" onClick={handleHideSelected} disabled={selectedCount === 0}>
                 <EyeOff size={13} />
               </Button>
-              <Button variant="ghost" size="sm" onClick={handleShowAll} disabled={removedElementsRef.current == null}>
+              <Button variant="ghost" size="sm" onClick={handleShowAll} disabled={!hasHiddenElements}>
                 <Eye size={13} />
               </Button>
             </>

@@ -3,14 +3,14 @@
   "configurations": [
     {
       "name": "bsie-backend",
-      "runtimeExecutable": "/Users/saraithong/Documents/bsie/.venv/bin/uvicorn",
-      "runtimeArgs": ["app:app", "--host", "127.0.0.1", "--port", "8757"],
+      "runtimeExecutable": "/Users/saraithong/Documents/The terminal/bsie/.venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8757"],
       "port": 8757
     },
     {
       "name": "bsie-frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "/Users/saraithong/Documents/bsie/frontend"],
+      "runtimeArgs": ["run", "dev", "--prefix", "/Users/saraithong/Documents/The terminal/bsie/frontend"],
       "port": 6776
     }
   ]

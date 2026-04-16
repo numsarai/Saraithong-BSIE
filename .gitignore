@@ -65,3 +65,9 @@ frontend/dist/
 artifacts/
 tmp_screens/
 tmp_i2/
+
+# Cloud sync conflict duplicates (iCloud Drive / Dropbox / etc.)
+* 2.*
+* 2
+** 2.*
+** 2

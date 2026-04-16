@@ -35,7 +35,7 @@ def _slides_html() -> str:
         <h1 class="mega">SPNI Platform</h1>
         <p class="subtitle" style="color:#63b3ed">Smart Police &amp; National Intelligence</p>
         <div class="gold-line"></div>
-        <p class="subtitle-sm">โมดูลแรก: BSIE v4.0 — Bank Statement Intelligence Engine</p>
+        <p class="subtitle-sm">โมดูลแรก: BSIE v4.1 — Bank Statement Intelligence Engine</p>
         <p class="desc-light">ระบบวิเคราะห์ธุรกรรมทางการเงินอัจฉริยะ สำหรับงานสืบสวนสอบสวน</p>
         <div style="margin-top:2.5rem">
           <p class="meta">เอกสารประกอบการนำเสนอเพื่อของบประมาณระดับประเทศ</p>
@@ -49,7 +49,7 @@ def _slides_html() -> str:
     # ── 2. SPNI VISION ────────────────────────────────────────
     modules_html = ""
     mods = [
-        ("โมดูล 1", "BSIE — การเงิน", "v4.0 พร้อมใช้ ★", True),
+        ("โมดูล 1", "BSIE — การเงิน", "v4.1 พร้อมใช้ ★", True),
         ("โมดูล 2", "CDR — โทรศัพท์", "วางแผน", False),
         ("โมดูล 3", "Social Media Intel", "วางแผน", False),
         ("โมดูล 4", "CCTV — ภาพ/วีดีโอ", "วางแผน", False),
@@ -140,7 +140,7 @@ def _slides_html() -> str:
     parts.append(f"""
     <section class="slide slide-vdark">
       <div class="slide-inner">
-        <h2 class="slide-title white">สถาปัตยกรรมระบบ BSIE v4.0</h2>
+        <h2 class="slide-title white">สถาปัตยกรรมระบบ BSIE v4.1</h2>
         <div class="arch-layer" style="background:#204070">
           <span class="layer-label gold">Frontend</span>
           <div class="tech-row">{fe_html}</div>
@@ -603,7 +603,7 @@ PC สอบสวน 1-30 → Browser → HTTPS</pre>
     # ── 15. ROADMAP HORIZONTAL ─────────────────────────────────
     phases_road = [
         ("Phase 1", "Pilot", "เดือน 1-3", "#38a169", "ฟรี",
-         ["BSIE v4.0 Pilot", "ทดลอง 5-10 คดีจริง", "เก็บ feedback"]),
+         ["BSIE v4.1 Pilot", "ทดลอง 5-10 คดีจริง", "เก็บ feedback"]),
         ("Phase 2", "จังหวัดนำร่อง", "เดือน 4-9", "#2b6cb0", "~8 ล้าน",
          ["Server 5 จังหวัด", "PostgreSQL + Multi-user", "Local LLM + GPU", "อบรม 5 จังหวัด"]),
         ("Phase 3", "SPNI Foundation", "เดือน 10-21", "#dd6b20", "~40 ล้าน",
@@ -649,7 +649,7 @@ PC สอบสวน 1-30 → Browser → HTTPS</pre>
     # ── 16. BUDGET NATIONAL ────────────────────────────────────
     budget_phases = [
         ("Phase 1: Pilot (3 เดือน)", [
-            ("ใช้เครื่อง PC ที่มีอยู่ + ซอฟต์แวร์ BSIE v4.0", "ฟรี"),
+            ("ใช้เครื่อง PC ที่มีอยู่ + ซอฟต์แวร์ BSIE v4.1", "ฟรี"),
         ], "ฟรี", "#38a169"),
         ("Phase 2: จังหวัดนำร่อง 5 จังหวัด (6 เดือน)", [
             ("Application Server x5 (CPU 8-core, 32GB, 1TB SSD)", "1,500,000 ฿"),
@@ -801,7 +801,7 @@ PC สอบสวน 1-30 → Browser → HTTPS</pre>
     parts.append(f"""
     <section class="slide slide-vdark">
       <div class="slide-inner">
-        <h2 class="slide-title white">ขนาดโปรเจค BSIE v4.0 — ตัวเลข</h2>
+        <h2 class="slide-title white">ขนาดโปรเจค BSIE v4.1 — ตัวเลข</h2>
         <div class="stat-grid">{stat_html}</div>
       </div>
     </section>
@@ -888,7 +888,7 @@ PC สอบสวน 1-30 → Browser → HTTPS</pre>
 
     # ── 22. CLOSING ────────────────────────────────────────────
     closing_steps = [
-        ("1.", "BSIE v4.0 พร้อมใช้วันนี้ — ไม่ต้องรองบประมาณ", "#48bb78"),
+        ("1.", "BSIE v4.1 พร้อมใช้วันนี้ — ไม่ต้องรองบประมาณ", "#48bb78"),
         ("2.", "ทดลอง Pilot กับคดีจริง 5-10 คดี (ฟรี)", "#63b3ed"),
         ("3.", "เก็บ feedback จากพนักงานสอบสวน", "#d69e2e"),
         ("4.", "เสนองบ Phase 2: ~8 ล้านบาท (5 จังหวัดนำร่อง)", "#fc8181"),
@@ -909,7 +909,7 @@ PC สอบสวน 1-30 → Browser → HTTPS</pre>
         <div class="gold-line"></div>
         <div class="close-steps">{close_html}</div>
         <div class="close-highlight">งบ SPNI ทั้ง 3 ปี (~170 ล้าน) &lt; ค่า license i2 ปีเดียว (742+ ล้าน) → คืนทุนทันที</div>
-        <p class="close-contact">ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง │ โทร: 096-776-8757 │ BSIE v4.0 — Bank Statement Intelligence Engine</p>
+        <p class="close-contact">ร้อยตำรวจเอกณัฐวุฒิ สาหร่ายทอง │ โทร: 096-776-8757 │ BSIE v4.1 — Bank Statement Intelligence Engine</p>
       </div>
     </section>
     """)
@@ -1297,7 +1297,7 @@ def build_html() -> str:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SPNI Platform — BSIE v4.0 Presentation</title>
+<title>SPNI Platform — BSIE v4.1 Presentation</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;600;700;800&display=swap" rel="stylesheet">

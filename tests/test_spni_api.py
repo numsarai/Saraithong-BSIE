@@ -86,9 +86,11 @@ def test_spni_health_returns_ok():
 
 
 def test_spni_health_includes_version():
+    from project_meta import APP_VERSION
+
     response = client.get("/api/spni/health")
     payload = response.json()
-    assert payload["version"] == "4.0.0"
+    assert payload["version"] == APP_VERSION
 
 
 # ── Runs endpoint ───────────────────────────────────────────────────────

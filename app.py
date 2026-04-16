@@ -32,6 +32,7 @@ from paths import (
     STATIC_DIR, CONFIG_DIR,
     INPUT_DIR, OUTPUT_DIR, EVIDENCE_DIR, EXPORTS_DIR, BACKUPS_DIR,
 )
+from project_meta import APP_VERSION
 from database import init_db
 from migrate_to_db import migrate_json_to_db
 from utils.app_helpers import run_auto_backup_loop
@@ -114,7 +115,7 @@ async def lifespan(app: FastAPI):
 # ── FastAPI app ──────────────────────────────────────────────────────────
 app = FastAPI(
     title="BSIE – Bank Statement Intelligence Engine",
-    version="4.0.0",
+    version=APP_VERSION,
     root_path="",
     lifespan=lifespan,
 )

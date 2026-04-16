@@ -13,7 +13,7 @@ description: |
   - Analyze social network metrics (SNA)
   - Manage alerts, annotations, or workspace state
 
-  This skill covers the full BSIE v4.0 platform — from file upload through
+  This skill covers the full BSIE v4.1 platform — from file upload through
   graph analysis to court-ready export.
 ---
 

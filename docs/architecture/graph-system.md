@@ -1,4 +1,4 @@
-# BSIE Graph System Architecture (v4.0)
+# BSIE Graph System Architecture (v4.1)
 
 > Consolidated from: graph-export.md, graph-foundation-phase1.md, graph-suspicious-rules-phase2.md, i2-export-workflows.md
 

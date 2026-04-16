@@ -8,7 +8,8 @@ import json
 import logging
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from database import db_create_job, db_get_job
@@ -23,7 +24,7 @@ from utils.app_helpers import dispatch_pipeline
 
 logger = logging.getLogger("bsie.api")
 
-router = APIRouter(prefix="/api", tags=["jobs"])
+router = APIRouter(prefix="/api", tags=["jobs"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/job/{job_id}")

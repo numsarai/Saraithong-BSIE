@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { deleteOverride, generateAccountReport, getAccountInsights, getOverrides, getResults, getResultsTimeline, saveOverride } from '@/api'
@@ -13,6 +13,7 @@ import { Download, RotateCcw, ShieldCheck, History, Trash2 } from 'lucide-react'
 import { AccountFlowGraph } from '@/components/AccountFlowGraph'
 import { TimelineChart } from '@/components/TimelineChart'
 import { TimeWheel } from '@/components/TimeWheel'
+import { DateRangeFilter } from '@/components/DateRangeFilter'
 
 type OverrideState = { tid: string; from: string; to: string } | null
 
@@ -43,7 +44,9 @@ export function Step5Results() {
   const [page, setPage]       = useState(1)
   const [override, setOverride] = useState<OverrideState>(null)
   const [ovForm, setOvForm]   = useState({ from: '', to: '', reason: '', by: resolvedOperatorName })
-  const [checkMode, setCheckMode] = useState<'file_order' | 'chronological'>('file_order')
+  const [selectedCheckMode, setCheckMode] = useState<'file_order' | 'chronological' | null>(null)
+  const [dateStart, setDateStart] = useState<string | null>(null)
+  const [dateEnd, setDateEnd]     = useState<string | null>(null)
 
   const { data: txnData, refetch } = useQuery({
     queryKey: ['results', account, parserRunId, page],
@@ -61,7 +64,7 @@ export function Step5Results() {
     enabled: !!account,
     staleTime: 60_000,
   })
-  const timelineItems = timelineData?.items || []
+  const timelineItems = useMemo(() => timelineData?.items || [], [timelineData?.items])
   const { data: insightsData } = useQuery({
     queryKey: ['account-insights', account],
     queryFn: () => getAccountInsights(account),
@@ -70,8 +73,9 @@ export function Step5Results() {
   })
   const insights = insightsData?.insights || []
 
-  const meta = results?.meta || txnData?.meta || {}
-  const rows = txnData?.rows || results?.transactions || []
+  // Merge both sources: API meta (from meta.json, authoritative) takes priority over store meta
+  const meta = { ...(results?.meta || {}), ...(txnData?.meta || {}) }
+  const rows = useMemo(() => txnData?.rows || results?.transactions || [], [txnData?.rows, results?.transactions])
   const total = Number(
     txnData?.total
     ?? meta.num_transactions
@@ -99,11 +103,41 @@ export function Step5Results() {
     ? overrideData.overrides.filter((row: any) => String(row.account_number || '') === String(account || ''))
     : []
 
+  // ── Date range filter for charts ──────────────────────────
+  const [dateMin, dateMax] = useMemo(() => {
+    const range = String(meta.date_range || '')
+    const parts = range.split(' to ')
+    return [parts[0]?.trim() || '', parts[1]?.trim() || '']
+  }, [meta.date_range])
+
+  const filteredTimeline = useMemo(() => {
+    if (!dateStart && !dateEnd) return timelineItems
+    return timelineItems.filter((item: any) => {
+      const d = String(item.date || '').slice(0, 10)
+      if (dateStart && d < dateStart) return false
+      if (dateEnd && d > dateEnd) return false
+      return true
+    })
+  }, [timelineItems, dateStart, dateEnd])
+
+  const filteredRows = useMemo(() => {
+    if (!dateStart && !dateEnd) return rows
+    return rows.filter((row: any) => {
+      const d = String(row.transaction_datetime || row.posted_date || row.date || '').slice(0, 10)
+      if (dateStart && d < dateStart) return false
+      if (dateEnd && d > dateEnd) return false
+      return true
+    })
+  }, [rows, dateStart, dateEnd])
+
   const dlBase  = `/api/download/${account}`
   const reportFile = meta.report_filename || 'report.xlsx'
   const originalFilename = meta.original_filename || 'original.xlsx'
   const categoryFiles = meta.category_files || {}
   const reconciliation = meta.reconciliation || {}
+  const recommendedCheckMode =
+    reconciliation.recommended_check_mode === 'chronological' ? 'chronological' : 'file_order'
+  const checkMode = selectedCheckMode ?? recommendedCheckMode
   const checkModes = reconciliation.check_modes || {}
   const activeCheck = checkModes[checkMode] || {
     status: reconciliation.status || '—',
@@ -141,10 +175,6 @@ export function Step5Results() {
     { label: t('results.downloads.originalSource'),       file: `raw/original${originalFilename.includes('.') ? originalFilename.slice(originalFilename.lastIndexOf('.')) : '.xlsx'}`, downloadName: originalFilename },
     { label: t('results.downloads.metadataJson'),      file: 'meta.json', downloadName: `${filePrefix}_meta.json` },
   ]
-
-  useEffect(() => {
-    setCheckMode(reconciliation.recommended_check_mode === 'chronological' ? 'chronological' : 'file_order')
-  }, [account, reconciliation.recommended_check_mode])
 
   const statCards = [
     { label: t('results.stats.totalTxn'),   value: String(meta.num_transactions ?? total),          color: '' },
@@ -341,16 +371,29 @@ export function Step5Results() {
         ))}
       </div>
 
-      {rows.length > 0 && (
-        <AccountFlowGraph account={account} bankKey={bankKey} rows={rows} />
+      {/* Date range filter for all charts */}
+      {(timelineItems.length > 0 || rows.length > 0) && dateMin && (
+        <DateRangeFilter
+          minDate={dateMin}
+          maxDate={dateMax}
+          startDate={dateStart}
+          endDate={dateEnd}
+          totalCount={timelineItems.length || rows.length}
+          filteredCount={filteredTimeline.length || filteredRows.length}
+          onChange={(s, e) => { setDateStart(s); setDateEnd(e) }}
+        />
       )}
 
-      {timelineItems.length > 0 && (
-        <TimelineChart transactions={timelineItems} />
+      {filteredTimeline.length > 0 && (
+        <AccountFlowGraph account={account} bankKey={bankKey} rows={filteredTimeline} />
       )}
 
-      {timelineItems.length > 0 && (
-        <TimeWheel transactions={timelineItems} />
+      {filteredTimeline.length > 0 && (
+        <TimelineChart transactions={filteredTimeline} />
+      )}
+
+      {filteredTimeline.length > 0 && (
+        <TimeWheel transactions={filteredTimeline} />
       )}
 
       {insights.length > 0 && (

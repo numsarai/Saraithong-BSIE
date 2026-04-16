@@ -1,8 +1,8 @@
 # BSIE – Bank Statement Intelligence Engine
 
-**v4.0** · Financial Intelligence Platform · FastAPI · React 19 · Cytoscape.js · SQLAlchemy
+**v4.1** · Financial Intelligence Platform · FastAPI · React 19 · Cytoscape.js · SQLAlchemy
 
-BSIE is an investigation-grade financial intelligence platform for Thai police investigators. It processes bank statements from 8 Thai banks, builds transaction networks, detects suspicious patterns, and generates court-ready reports — functioning as a mini i2 Analyst's Notebook.
+BSIE is an investigation-grade financial intelligence platform for Thai police investigators. It processes bank statements from 8 Thai banks, builds transaction networks, detects suspicious patterns, and generates court-ready reports — functioning as a mini i2 Analyst's Notebook. BSIE also serves as a data source module for [SPNI](../spni/) via its integration API.
 
 ## Ownership
 
@@ -45,10 +45,16 @@ Z-score | IQR | Benford's Law | Moving Average
 - **i2**: ANX + XIMP + CSV for i2 Analyst's Notebook
 - **Report Templates**: Configurable sections + analysis criteria
 
+### SPNI Integration
+- **`/api/spni/health`** — Health check for SPNI connectivity
+- **`/api/spni/runs`** — List completed parser runs for import selection
+- **`/api/spni/runs/{id}/preview`** — Preview data before import
+- **`/api/spni/export`** — Batch export accounts + transactions + entities
+
 ### Security
 - JWT Authentication (BSIE_AUTH_REQUIRED env flag)
 - i18n Thai/English
-- 244 Tests (212 backend + 32 frontend)
+- 261 Tests (229 backend + 32 frontend)
 - CI/CD (GitHub Actions)
 - CORS + Request Timing Middleware
 - Architecture Decision Records
@@ -59,7 +65,7 @@ Z-score | IQR | Benford's Law | Moving Average
 
 | Layer | Libraries |
 |-------|-----------|
-| Backend | FastAPI, Uvicorn, 21 API routers, 27 services |
+| Backend | FastAPI, Uvicorn, 22 API routers, 28 services |
 | Frontend | React 19, Vite, TypeScript, Tailwind CSS, Zustand |
 | Visualization | Cytoscape.js, Recharts |
 | Data | Pandas, Openpyxl, pdfplumber, EasyOCR |
@@ -104,9 +110,9 @@ Open http://localhost:8757
 
 ```
 bsie/
-├── app.py                  # FastAPI app (thin shell, 145 lines)
-├── routers/                # 21 API router modules
-├── services/               # 27 business logic services
+├── app.py                  # FastAPI app (thin shell)
+├── routers/                # 22 API router modules (125+ endpoints)
+├── services/               # 28 business logic services
 ├── core/                   # Processing pipeline modules
 ├── persistence/            # SQLAlchemy models (20 tables)
 ├── pipeline/               # 14-step processing pipeline
@@ -115,7 +121,7 @@ bsie/
 ├── config/                 # Bank detection configs
 ├── static/fonts/           # TH Sarabun New
 ├── docs/adr/               # Architecture Decision Records
-└── tests/                  # 212 backend tests
+└── tests/                  # 229 backend tests
 ```
 
 ## Architecture Decision Records
@@ -124,3 +130,4 @@ bsie/
 - [ADR-002](docs/adr/002-cytoscape-for-graph-visualization.md) — Cytoscape.js for graph visualization
 - [ADR-003](docs/adr/003-duplicate-prevention-reuse-policy.md) — Duplicate prevention policy
 - [ADR-004](docs/adr/004-i18n-thai-first-architecture.md) — Thai-first i18n architecture
+- [ADR-005](docs/adr/005-legacy-table-deprecation.md) — Legacy table deprecation plan

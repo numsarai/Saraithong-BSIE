@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -126,8 +126,30 @@ interface DotData {
   desc: string
 }
 
+/** Read chart colors from CSS variables so Recharts adapts to light/dark theme. */
+function useChartColors() {
+  const [colors, setColors] = useState({ grid: '#334155', axis: '#64748b', in: '#16a34a', out: '#dc2626' })
+  useEffect(() => {
+    const update = () => {
+      const s = getComputedStyle(document.documentElement)
+      setColors({
+        grid: s.getPropertyValue('--color-chart-grid').trim() || '#334155',
+        axis: s.getPropertyValue('--color-chart-axis').trim() || '#64748b',
+        in:   s.getPropertyValue('--color-chart-in').trim()   || '#16a34a',
+        out:  s.getPropertyValue('--color-chart-out').trim()  || '#dc2626',
+      })
+    }
+    update()
+    const obs = new MutationObserver(update)
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => obs.disconnect()
+  }, [])
+  return colors
+}
+
 export function TimelineChart({ transactions, title, onSelectDate }: TimelineChartProps) {
   const { t } = useTranslation()
+  const chartColors = useChartColors()
   const [granularity, setGranularity] = useState<Granularity>('day')
   const [viewMode, setViewMode] = useState<ViewMode>('bar')
   const [selectedDot, setSelectedDot] = useState<DotData | null>(null)
@@ -224,19 +246,19 @@ export function TimelineChart({ transactions, title, onSelectDate }: TimelineCha
                 }
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 10, fill: '#64748b' }}
+                tick={{ fontSize: 10, fill: chartColors.axis }}
                 interval={Math.max(0, Math.floor(chartData.length / 20))}
               />
               <YAxis
-                tick={{ fontSize: 10, fill: '#64748b' }}
+                tick={{ fontSize: 10, fill: chartColors.axis }}
                 tickFormatter={formatAmount}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="inAmount" fill="#16a34a" radius={[2, 2, 0, 0]} name={t('results.timeline.in')} />
-              <Bar dataKey="outNeg" fill="#dc2626" radius={[0, 0, 2, 2]} name={t('results.timeline.out')} />
+              <Bar dataKey="inAmount" fill={chartColors.in} radius={[2, 2, 0, 0]} name={t('results.timeline.in')} />
+              <Bar dataKey="outNeg" fill={chartColors.out} radius={[0, 0, 2, 2]} name={t('results.timeline.out')} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -244,19 +266,19 @@ export function TimelineChart({ transactions, title, onSelectDate }: TimelineCha
         <div className="w-full overflow-x-auto" style={{ height: 240 }}>
           <ResponsiveContainer width={Math.max(600, dotData.length * 4)} height="100%">
             <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
               <XAxis
                 dataKey="x"
                 type="number"
                 tick={false}
-                axisLine={{ stroke: '#475569' }}
+                axisLine={{ stroke: chartColors.axis }}
               />
               <YAxis
                 dataKey="y"
                 type="number"
                 domain={[-2, 2]}
                 tick={false}
-                axisLine={{ stroke: '#475569' }}
+                axisLine={{ stroke: chartColors.axis }}
               />
               <ZAxis dataKey="size" range={[20, 500]} />
               <Tooltip
@@ -277,7 +299,7 @@ export function TimelineChart({ transactions, title, onSelectDate }: TimelineCha
               />
               <Scatter data={dotData} onClick={(data) => setSelectedDot(data as any)}>
                 {dotData.map((d, i) => (
-                  <Cell key={i} fill={d.direction === 'IN' ? '#16a34a' : '#dc2626'} fillOpacity={0.7} />
+                  <Cell key={i} fill={d.direction === 'IN' ? chartColors.in : chartColors.out} fillOpacity={0.7} />
                 ))}
               </Scatter>
             </ScatterChart>

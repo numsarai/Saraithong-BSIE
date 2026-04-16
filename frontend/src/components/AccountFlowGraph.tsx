@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import {
   Maximize2, Minimize2, X, Download, Filter, Pin, Star,
   Maximize, GitBranch, Sun, Tag, EyeOff, Eye, Paintbrush,
-  MousePointer, Expand, Shrink,
+  MousePointer, Expand, Shrink, Clock,
 } from 'lucide-react'
 
 interface FlowGraphProps {
@@ -39,90 +39,14 @@ function computeConditionalSize(flowTotal: number): number {
   return Math.max(25, Math.min(70, 25 + Math.log10(Math.max(flowTotal, 1)) * 8))
 }
 
-/**
- * Try to load pre-aggregated edges from the CSV export.
- * Falls back to aggregating from raw transaction rows.
- */
-async function fetchAggregatedEdges(account: string): Promise<AggEdge[] | null> {
-  try {
-    const res = await fetch(`/api/download/${account}/processed/aggregated_edges.csv`)
-    if (!res.ok) return null
-    const text = await res.text()
-    const lines = text.split('\n').filter(l => l.trim())
-    if (lines.length < 2) return null
-
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-    const fromIdx = headers.indexOf('from_node_id')
-    const toIdx = headers.indexOf('to_node_id')
-    const typeIdx = headers.indexOf('edge_type')
-    const countIdx = headers.indexOf('transaction_count')
-    const amountIdx = headers.indexOf('total_amount_abs')
-    const labelIdx = headers.indexOf('label')
-    if (fromIdx < 0 || toIdx < 0) return null
-
-    const subjectNode = `ACCOUNT:${account}`
-    const edges: AggEdge[] = []
-
-    for (let i = 1; i < lines.length; i++) {
-      const row = parseCsvLine(lines[i])
-      if (!row || row.length < Math.max(fromIdx, toIdx, countIdx, amountIdx) + 1) continue
-
-      const fromNode = row[fromIdx]
-      const toNode = row[toIdx]
-      const edgeType = typeIdx >= 0 ? row[typeIdx] : ''
-      const count = countIdx >= 0 ? parseInt(row[countIdx]) || 1 : 1
-      const amount = amountIdx >= 0 ? parseFloat(row[amountIdx]) || 0 : 0
-
-      let cp: string
-      let dir: 'IN' | 'OUT'
-
-      if (edgeType === 'RECEIVED_FROM' || toNode === subjectNode) {
-        cp = fromNode.replace('ACCOUNT:', '')
-        dir = 'IN'
-      } else if (edgeType === 'SENT_TO' || fromNode === subjectNode) {
-        cp = toNode.replace('ACCOUNT:', '')
-        dir = 'OUT'
-      } else {
-        continue
-      }
-
-      if (!cp || cp === account) continue
-
-      const cpName = labelIdx >= 0 ? extractNameFromLabel(row[labelIdx], cp) : cp
-
-      edges.push({ counterparty: cp, counterpartyName: cpName, direction: dir, totalAmount: amount, count })
-    }
-
-    return edges.length > 0 ? edges : null
-  } catch {
-    return null
-  }
-}
-
-function parseCsvLine(line: string): string[] {
-  const result: string[] = []
-  let current = ''
-  let inQuotes = false
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    if (ch === '"') {
-      inQuotes = !inQuotes
-    } else if (ch === ',' && !inQuotes) {
-      result.push(current.trim())
-      current = ''
-    } else {
-      current += ch
-    }
-  }
-  result.push(current.trim())
-  return result
-}
-
-function extractNameFromLabel(label: string, fallback: string): string {
-  if (!label || label.includes('transactions)') || label.includes('Sent To') || label.includes('Received From')) {
-    return fallback
-  }
-  return label
+/** Extract hour (0–23) from a transaction row, or null if unparseable. */
+function extractHour(row: any): number | null {
+  const dt = String(row.transaction_datetime || row.date || '')
+  // Handles "YYYY-MM-DD HH:mm" and "YYYY-MM-DDTHH:mm"
+  const m = dt.match(/[T ](\d{2}):/)
+  if (m) return parseInt(m[1], 10)
+  const d = new Date(dt)
+  return isNaN(d.getTime()) ? null : d.getHours()
 }
 
 function aggregateFromRows(rows: any[], subjectAccount: string): AggEdge[] {
@@ -362,39 +286,38 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
   const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<cytoscape.Core | null>(null)
-  const [flows, setFlows] = useState<AggEdge[]>([])
-  const [loading, setLoading] = useState(true)
   const [selectedCp, setSelectedCp] = useState<string | null>(null)
 
-  // New feature state
+  // Filter & layout state
   const [activeLayout, setActiveLayout] = useState<LayoutMode>('spread')
   const [minAmount, setMinAmount] = useState(0)
   const [minTxnCount, setMinTxnCount] = useState(0)
+  const [hourStart, setHourStart] = useState<number | null>(null)
+  const [hourEnd, setHourEnd]     = useState<number | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [pinnedNodes, setPinnedNodes] = useState<Set<string>>(new Set())
   const [conditionalFormatting, setConditionalFormatting] = useState(false)
   const [edgeLabelsVisible, setEdgeLabelsVisible] = useState(true)
   const [selectMode, setSelectMode] = useState(false)
   const [selectedCount, setSelectedCount] = useState(0)
+  const [hasHiddenElements, setHasHiddenElements] = useState(false)
   const removedElementsRef = useRef<cytoscape.CollectionReturnValue | null>(null)
 
-  // Load data: prefer aggregated CSV, fallback to raw rows
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
+  const isHourFiltered = hourStart !== null || hourEnd !== null
 
-    fetchAggregatedEdges(account).then(aggEdges => {
-      if (cancelled) return
-      if (aggEdges && aggEdges.length > 0) {
-        setFlows(aggEdges)
-      } else {
-        setFlows(aggregateFromRows(rows, account))
-      }
-      setLoading(false)
+  // Rows filtered by hour-of-day (used when hour filter is active)
+  const hourFilteredRows = useMemo(() => {
+    if (!isHourFiltered) return rows
+    const lo = hourStart ?? 0
+    const hi = hourEnd ?? 23
+    return rows.filter(r => {
+      const h = extractHour(r)
+      if (h === null) return false
+      return lo <= hi ? (h >= lo && h <= hi) : (h >= lo || h <= hi) // supports wrap-around (e.g. 22–04)
     })
+  }, [rows, hourStart, hourEnd, isHourFiltered])
 
-    return () => { cancelled = true }
-  }, [account, rows])
+  const flows = useMemo(() => aggregateFromRows(hourFilteredRows, account), [account, hourFilteredRows])
 
   // Filter flows by minAmount and minTxnCount
   const filteredFlows = useMemo(() =>
@@ -546,6 +469,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
     } else {
       removedElementsRef.current = removed
     }
+    setHasHiddenElements(true)
     setSelectedCount(0)
   }, [])
 
@@ -555,6 +479,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
     if (!cy || !removedElementsRef.current) return
     removedElementsRef.current.restore()
     removedElementsRef.current = null
+    setHasHiddenElements(false)
     if (conditionalFormatting) applyConditionalFormatting(true)
     if (!edgeLabelsVisible) cy.edges().style('label', '')
   }, [conditionalFormatting, applyConditionalFormatting, edgeLabelsVisible])
@@ -621,15 +546,15 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
     const inFlow = cpFlows.find(f => f.direction === 'IN')
     const outFlow = cpFlows.find(f => f.direction === 'OUT')
 
-    const txns = rows.filter(r => {
+    const txns = hourFilteredRows.filter(r => {
       const cp = String(r.counterparty_account_normalized || r.counterparty_account || r.from_account || r.to_account || '').trim()
       return cp === selectedCp
     }).slice(0, 50)
 
     return { cpName, inFlow, outFlow, txns, totalTxns: cpFlows.reduce((s, f) => s + f.count, 0) }
-  }, [selectedCp, filteredFlows, rows])
+  }, [selectedCp, filteredFlows, hourFilteredRows])
 
-  if (loading || flows.length === 0) return null
+  if (flows.length === 0) return null
 
   const graphHeight = isFullscreen ? '100%' : Math.min(900, 450 + cpCount * 2)
 
@@ -666,7 +591,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
         />
 
         {/* Floating toolbar inside canvas */}
-        <div className="absolute top-2 left-2 right-2 flex flex-wrap items-center gap-1.5 bg-slate-900/85 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-slate-700/50">
+        <div className="absolute top-2 left-2 right-2 flex flex-wrap items-center gap-1.5 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border shadow-sm">
           {/* Layouts */}
           <Button
             variant={activeLayout === 'spread' ? 'outline' : 'ghost'} size="sm"
@@ -693,28 +618,54 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
             <Sun size={13} />{t('results.flowGraph.layoutPeacock')}
           </Button>
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Filters */}
           <div className="flex items-center gap-1">
-            <Filter size={11} className="text-slate-400" />
-            <span className="text-[10px] text-slate-400">{t('results.flowGraph.minAmount')}:</span>
+            <Filter size={11} className="text-muted" />
+            <span className="text-[10px] text-muted">{t('results.flowGraph.minAmount')}:</span>
             <input
               type="number" value={minAmount || ''} placeholder="0"
               onChange={e => setMinAmount(Number(e.target.value) || 0)}
-              className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-[11px] text-slate-200 w-16 outline-none"
+              className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-16 outline-none"
             />
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-slate-400">{t('results.flowGraph.minTxnCount')}:</span>
+            <span className="text-[10px] text-muted">{t('results.flowGraph.minTxnCount')}:</span>
             <input
               type="number" value={minTxnCount || ''} placeholder="0"
               onChange={e => setMinTxnCount(Number(e.target.value) || 0)}
-              className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-[11px] text-slate-200 w-16 outline-none"
+              className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-16 outline-none"
             />
           </div>
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          {/* Hour-of-day filter */}
+          <div className="flex items-center gap-1">
+            <Clock size={11} className="text-muted" />
+            <span className="text-[10px] text-muted">{t('results.flowGraph.hourRange')}:</span>
+            <input
+              type="number" min={0} max={23}
+              value={hourStart ?? ''} placeholder="00"
+              onChange={e => {
+                const v = e.target.value
+                setHourStart(v === '' ? null : Math.max(0, Math.min(23, Number(v))))
+              }}
+              className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-10 outline-none text-center"
+            />
+            <span className="text-[10px] text-muted">–</span>
+            <input
+              type="number" min={0} max={23}
+              value={hourEnd ?? ''} placeholder="23"
+              onChange={e => {
+                const v = e.target.value
+                setHourEnd(v === '' ? null : Math.max(0, Math.min(23, Number(v))))
+              }}
+              className="bg-surface2 border border-border rounded px-1.5 py-0.5 text-[11px] text-text w-10 outline-none text-center"
+            />
+            <span className="text-[10px] text-muted">{t('results.flowGraph.hourLabel')}</span>
+          </div>
+
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Display toggles */}
           <Button variant={edgeLabelsVisible ? 'outline' : 'ghost'} size="sm" onClick={handleToggleEdgeLabels}>
@@ -724,7 +675,7 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
             <Paintbrush size={13} />
           </Button>
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Pin */}
           <Button
@@ -746,13 +697,13 @@ export function AccountFlowGraph({ account, bankKey, rows }: FlowGraphProps) {
               <Button variant="ghost" size="sm" onClick={handleHideSelected} disabled={selectedCount === 0}>
                 <EyeOff size={13} />
               </Button>
-              <Button variant="ghost" size="sm" onClick={handleShowAll} disabled={removedElementsRef.current == null}>
+              <Button variant="ghost" size="sm" onClick={handleShowAll} disabled={!hasHiddenElements}>
                 <Eye size={13} />
               </Button>
             </>
           )}
 
-          <div className="border-l border-slate-600 h-5 mx-0.5" />
+          <div className="border-l border-border h-5 mx-0.5" />
 
           {/* Actions */}
           <Button variant="ghost" size="sm" onClick={handleFit}><Maximize2 size={13} /></Button>

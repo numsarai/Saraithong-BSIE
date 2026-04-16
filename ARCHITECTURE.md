@@ -1,13 +1,14 @@
-# BSIE Architecture (v4.0)
+# BSIE Architecture (v4.1)
 
 ## Runtime Shape
 
 BSIE is a local-first FastAPI + React 19 financial intelligence platform with:
 
-- 21 API routers serving 103+ endpoints
-- 27 service modules for business logic
+- 22 API routers serving 125+ endpoints
+- 28 service modules for business logic
 - 20 database models in SQLite (WAL mode)
 - React 19 SPA with Cytoscape.js + Recharts visualization
+- SPNI integration API for cross-platform data export
 - i18n support (Thai/English)
 
 ## System Architecture
@@ -33,17 +34,18 @@ BSIE is a local-first FastAPI + React 19 financial intelligence platform with:
 │  │ CORS │ Timing │ MaxBodySize │ Auth (JWT optional)     │    │
 │  └───────────────────────────────────────────────────────┘    │
 │                                                               │
-│  ┌─ Routers (21) ───────────────────────────────────────┐    │
+│  ┌─ Routers (22) ───────────────────────────────────────┐    │
 │  │ ingestion │ search │ alerts │ fund_flow │ analytics   │    │
 │  │ graph │ review │ admin │ banks │ reports │ dashboard  │    │
-│  │ auth │ annotations │ workspace │ exports │ ...        │    │
+│  │ auth │ annotations │ workspace │ exports │ spni │ ... │    │
 │  └───────────────────────────────────────────────────────┘    │
 │                                                               │
-│  ┌─ Services (27) ──────────────────────────────────────┐    │
+│  ┌─ Services (28) ──────────────────────────────────────┐    │
 │  │ alert_service │ fund_flow_service │ anomaly_detection │    │
 │  │ sna_service │ auth_service │ report_service           │    │
 │  │ bulk_matching │ period_comparison │ report_template    │    │
-│  │ audit_service │ review_service │ search_service │ ... │    │
+│  │ audit_service │ review_service │ search_service       │    │
+│  │ spni_service │ ...                                    │    │
 │  └───────────────────────────────────────────────────────┘    │
 │                                                               │
 │  ┌─ Core Pipeline ──────────────────────────────────────┐    │
@@ -99,6 +101,16 @@ Persist to DB → Generate alerts → Generate graph analysis
 Output: Excel report + CSV + i2 (ANX/XIMP) + PDF report + graph files
 ```
 
+## SPNI Integration
+
+BSIE serves as a standalone data source module for the SPNI investigation platform via the Module Adapter Pattern:
+
+```
+[BSIE DB] → [spni_service] → [/api/spni/*] → [SPNI BSIEAdapter] → [SPNI Graph]
+```
+
+4 endpoints under `/api/spni/` allow SPNI to list parser runs, preview data, and export accounts + transactions + entities in a single call. Data is scoped by `parser_run_id` and supports filtering by account, date range, and amount.
+
 ## Key Design Decisions
 
 See [docs/adr/](docs/adr/) for Architecture Decision Records:
@@ -107,6 +119,7 @@ See [docs/adr/](docs/adr/) for Architecture Decision Records:
 - **ADR-002**: Cytoscape.js — graph-specialized, built-in interaction
 - **ADR-003**: Duplicate prevention — SHA-256 reuse, cleanup on re-process
 - **ADR-004**: Thai-first i18n — fallbackLng: 'th', TH Sarabun New font
+- **ADR-005**: Legacy table deprecation — migration to SQLAlchemy 2 models
 
 ## Database Schema
 

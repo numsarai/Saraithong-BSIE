@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from paths import STATIC_DIR, OUTPUT_DIR
-from persistence.models import Account, Alert, Transaction
+from persistence.models import Account, Alert, StatementBatch, Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,44 @@ def _fmt_amount(value: float | Decimal | None) -> str:
 def _fmt_date(value: Any) -> str:
     s = str(value or "")[:10]
     return s if len(s) >= 8 else "—"
+
+
+def _resolve_account_for_report(
+    session: Session,
+    normalized_account_number: str,
+    parser_run_id: str = "",
+) -> Account | None:
+    """Resolve the account row for a report, preferring the selected parser run."""
+    if parser_run_id:
+        account_row = session.scalars(
+            select(Account)
+            .join(StatementBatch, StatementBatch.account_id == Account.id)
+            .where(
+                StatementBatch.parser_run_id == parser_run_id,
+                Account.normalized_account_number == normalized_account_number,
+            )
+            .order_by(StatementBatch.created_at.desc())
+        ).first()
+        if account_row:
+            return account_row
+
+        account_row = session.scalars(
+            select(Account)
+            .join(Transaction, Transaction.account_id == Account.id)
+            .where(
+                Transaction.parser_run_id == parser_run_id,
+                Account.normalized_account_number == normalized_account_number,
+            )
+            .order_by(Transaction.transaction_datetime.asc())
+        ).first()
+        if account_row:
+            return account_row
+
+    return session.scalars(
+        select(Account)
+        .where(Account.normalized_account_number == normalized_account_number)
+        .order_by(Account.last_seen_at.desc())
+    ).first()
 
 
 class BSIEReport(FPDF):
@@ -115,9 +153,7 @@ def generate_account_report(
 ) -> Path:
     """Generate a single-account investigation PDF report."""
     norm = "".join(c for c in account if c.isdigit())
-    acct_row = session.scalars(
-        select(Account).where(Account.normalized_account_number == norm)
-    ).first()
+    acct_row = _resolve_account_for_report(session, norm, parser_run_id)
 
     # Gather transaction data
     tx_query = select(Transaction).where(
@@ -151,9 +187,10 @@ def generate_account_report(
     top_cps = sorted(cp_map.items(), key=lambda x: -(x[1]["in"] + x[1]["out"]))[:20]
 
     # Alerts
-    alerts = session.scalars(
-        select(Alert).where(Alert.account_id == (acct_row.id if acct_row else "")).order_by(Alert.severity.asc())
-    ).all()
+    alert_query = select(Alert).where(Alert.account_id == (acct_row.id if acct_row else ""))
+    if parser_run_id:
+        alert_query = alert_query.where(Alert.parser_run_id == parser_run_id)
+    alerts = session.scalars(alert_query.order_by(Alert.severity.asc())).all()
 
     # Build PDF
     pdf = BSIEReport()
@@ -291,16 +328,16 @@ def generate_case_report(
     pdf.info_row("วันที่จัดทำ:", datetime.now().strftime("%d/%m/%Y %H:%M"))
 
     # Per-account summaries
+    requested_account_ids: set[str] = set()
     for acct_num in accounts:
         norm = "".join(c for c in acct_num if c.isdigit())
         if not norm:
             continue
 
-        acct_row = session.scalars(
-            select(Account).where(Account.normalized_account_number == norm)
-        ).first()
+        acct_row = _resolve_account_for_report(session, norm)
         if not acct_row:
             continue
+        requested_account_ids.add(acct_row.id)
 
         txns = session.scalars(
             select(Transaction).where(Transaction.account_id == acct_row.id)
@@ -318,7 +355,13 @@ def generate_case_report(
         pdf.info_row("รายการ:", f"{len(txns):,}")
 
     # Combined alerts
-    all_alerts = session.scalars(select(Alert).order_by(Alert.severity.asc())).all()
+    all_alerts = []
+    if requested_account_ids:
+        all_alerts = session.scalars(
+            select(Alert)
+            .where(Alert.account_id.in_(requested_account_ids))
+            .order_by(Alert.severity.asc())
+        ).all()
     if all_alerts:
         pdf.add_page()
         pdf.section_title(f"การแจ้งเตือนทั้งหมด ({len(all_alerts)} รายการ)")

@@ -4,7 +4,8 @@ routers/alerts.py
 Alert management API routes: list, summary, config, and review.
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from persistence.base import get_db_session
@@ -16,7 +17,7 @@ from services.alert_service import (
     update_alert_config,
 )
 
-router = APIRouter(prefix="/api", tags=["alerts"])
+router = APIRouter(prefix="/api", tags=["alerts"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/alerts")

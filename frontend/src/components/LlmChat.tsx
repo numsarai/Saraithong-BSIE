@@ -98,7 +98,7 @@ export function LlmChat({ account, transactions, compact }: LlmChatProps) {
     } finally {
       setLoading(false)
     }
-  }, [loading, account, transactions])
+  }, [loading, account, transactions, attachedFile])
 
   const handleQuickPrompt = (key: string) => {
     const prompts: Record<string, string> = {

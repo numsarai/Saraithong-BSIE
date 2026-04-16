@@ -4,7 +4,8 @@ routers/review.py
 Review-related API routes extracted from app.py.
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from persistence.base import get_db_session
@@ -27,7 +28,7 @@ from services.search_service import (
     list_matches,
 )
 
-router = APIRouter(prefix="/api", tags=["review"])
+router = APIRouter(prefix="/api", tags=["review"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/duplicates")

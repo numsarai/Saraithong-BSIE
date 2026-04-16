@@ -59,6 +59,7 @@ from routers.reports import router as reports_router
 from routers.fund_flow import router as fund_flow_router
 from routers.exports import router as exports_router
 from routers.llm import router as llm_router
+from routers.spni import router as spni_router
 
 # ── Logging ──────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -118,8 +119,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Rate limiting (HIGH-3 fix)
-limiter = Limiter(key_func=get_remote_address)
+# Rate limiting (HIGH-3 fix) — global default: 60 req/min per IP
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["60/minute"],
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -145,6 +149,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        # SEC-M1: Content-Security-Policy to prevent XSS exfiltration
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "font-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'"
+        )
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)
@@ -165,7 +179,7 @@ app.add_middleware(MaxBodySizeMiddleware)
 # CORS — allow frontend dev server and same-origin production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:6776", "http://127.0.0.1:6776", "http://localhost:8757"],
+    allow_origins=["http://localhost:6776", "http://127.0.0.1:6776", "http://localhost:8757", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -206,6 +220,7 @@ app.include_router(workspace_router)
 app.include_router(banks_router)
 app.include_router(exports_router)
 app.include_router(llm_router)
+app.include_router(spni_router)
 app.include_router(ui_router)  # UI catch-all routes last
 
 # ── Test compatibility re-exports ────────────────────────────────────────

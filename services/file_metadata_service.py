@@ -8,7 +8,6 @@ Inspired by computer-forensics and metadata-extraction skills.
 from __future__ import annotations
 
 import hashlib
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -16,28 +15,55 @@ from typing import Any
 import openpyxl
 
 
+def _resolve_safe_path(
+    file_path: str | Path,
+    allowed_bases: list[Path],
+) -> Path | None:
+    """Resolve a file path and validate it stays under one of the allowed bases.
+
+    Returns the resolved path on success, ``None`` if the path escapes
+    every allowed base. The resolved path is the only handle callers should
+    use downstream — the original ``file_path`` input must be considered
+    untrusted data.
+    """
+    resolved = Path(file_path).resolve()  # codeql[py/path-injection]
+    for base in allowed_bases:
+        base_resolved = base.resolve()
+        if resolved == base_resolved or base_resolved in resolved.parents:
+            return resolved
+    return None
+
+
 def extract_file_metadata(file_path: str | Path) -> dict[str, Any]:
     """Extract metadata from a file for forensic verification."""
-    path = Path(file_path)
-    if not path.exists():
-        return {"error": "File not found", "path": str(path)}
+    from paths import INPUT_DIR, EVIDENCE_DIR, OUTPUT_DIR, EXPORTS_DIR
 
-    stat = path.stat()
+    allowed_dirs = [INPUT_DIR, EVIDENCE_DIR, OUTPUT_DIR, EXPORTS_DIR]
+    safe_path = _resolve_safe_path(file_path, allowed_dirs)
+
+    if safe_path is None:
+        return {"error": "Access denied — path outside allowed directories"}
+
+    # safe_path is provably under an allowed base at this point.
+    if not safe_path.is_file():  # codeql[py/path-injection]
+        return {"error": "File not found"}
+
+    stat = safe_path.stat()  # codeql[py/path-injection]
     result: dict[str, Any] = {
-        "path": str(path),
-        "filename": path.name,
-        "extension": path.suffix.lower(),
+        "path": str(safe_path),
+        "filename": safe_path.name,
+        "extension": safe_path.suffix.lower(),
         "file_size_bytes": stat.st_size,
         "file_size_display": _format_size(stat.st_size),
         "created_at": datetime.fromtimestamp(stat.st_birthtime).isoformat() if hasattr(stat, "st_birthtime") else None,
         "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
         "accessed_at": datetime.fromtimestamp(stat.st_atime).isoformat(),
-        "sha256": _compute_sha256(path),
+        "sha256": _compute_sha256(safe_path),
     }
 
     # Excel-specific metadata
-    if path.suffix.lower() in (".xlsx", ".xls"):
-        result["excel_metadata"] = _extract_excel_metadata(path)
+    if safe_path.suffix.lower() in (".xlsx", ".xls"):
+        result["excel_metadata"] = _extract_excel_metadata(safe_path)
 
     # Forensic checks
     result["integrity_checks"] = _run_integrity_checks(result)

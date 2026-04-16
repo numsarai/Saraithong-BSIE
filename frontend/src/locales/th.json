@@ -236,7 +236,9 @@
       "layoutHierarchy": "ลำดับชั้น",
       "layoutPeacock": "Peacock",
       "minAmount": "ยอดขั้นต่ำ",
-      "minTxnCount": "รายการขั้นต่ำ"
+      "minTxnCount": "รายการขั้นต่ำ",
+      "hourRange": "ช่วงเวลา",
+      "hourLabel": "น."
     },
     "insights": {
       "title": "ข้อสังเกตการสอบสวน"
@@ -467,6 +469,17 @@
     "title": "แผนที่ความร้อน (ชั่วโมง x วัน)",
     "byHour": "ยอดรวมตามชั่วโมง",
     "byDay": "ยอดรวมตามวัน"
+  },
+  "dateFilter": {
+    "label": "กรองช่วงเวลา",
+    "from": "จาก",
+    "to": "ถึง",
+    "preset7d": "7 วัน",
+    "preset30d": "30 วัน",
+    "preset90d": "90 วัน",
+    "presetAll": "ทั้งหมด",
+    "reset": "รีเซ็ต",
+    "showing": "แสดง"
   },
   "linkChart": {
     "title": "กราฟความสัมพันธ์",

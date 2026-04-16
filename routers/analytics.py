@@ -4,7 +4,8 @@ routers/analytics.py
 Analytics API: anomaly detection, period comparison, bulk cross-matching.
 """
 
-from fastapi import APIRouter, Request
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from persistence.base import get_db_session
@@ -18,7 +19,7 @@ from services.threat_hunting_service import run_threat_hunt
 from services.regulatory_export_service import generate_str_report, generate_ctr_report
 from services.case_tapestry_service import build_case_tapestry
 
-router = APIRouter(prefix="/api/analytics", tags=["analytics"])
+router = APIRouter(prefix="/api/analytics", tags=["analytics"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/anomalies")

@@ -8,8 +8,9 @@ No data leaves the machine.
 
 import logging
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from services.auth_service import require_auth
+from pydantic import BaseModel, Field
 
 from services.llm_service import (
     chat,
@@ -22,13 +23,24 @@ from services.llm_service import (
 )
 
 logger = logging.getLogger("bsie.llm.router")
-router = APIRouter(prefix="/api/llm", tags=["llm"])
+router = APIRouter(prefix="/api/llm", tags=["llm"], dependencies=[Depends(require_auth)])
+
+
+import re as _re
+
+_MODEL_PATTERN = _re.compile(r"^[a-zA-Z0-9_:\-\.]{1,100}$")
+
+
+def _validate_model(model: str) -> str:
+    if not _MODEL_PATTERN.match(model):
+        raise ValueError("Invalid model name")
+    return model
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(max_length=4000)
     account: str = ""
-    transactions: list[dict] = []
+    transactions: list[dict] = Field(default_factory=list)
     model: str = "gemma4:latest"
 
 
@@ -38,7 +50,7 @@ class SummarizeRequest(BaseModel):
 
 
 class ClassifyRequest(BaseModel):
-    transaction: dict = {}
+    transaction: dict = Field(default_factory=dict)
     model: str = "gemma4:latest"
 
 
@@ -51,13 +63,15 @@ async def api_llm_status():
 @router.get("/accounts")
 async def api_llm_accounts():
     """List all accounts in the database with summary stats."""
-    return get_all_accounts_summary()
+    import asyncio
+    return await asyncio.to_thread(get_all_accounts_summary)
 
 
 @router.get("/account/{account}")
 async def api_llm_account_summary(account: str):
     """Get detailed summary for a specific account from the database."""
-    return get_account_summary(account)
+    import asyncio
+    return await asyncio.to_thread(get_account_summary, account)
 
 
 @router.post("/chat")
@@ -169,12 +183,13 @@ async def api_llm_analyze_file(
             import fitz  # PyMuPDF
 
             doc = fitz.open(stream=file_bytes, filetype="pdf")
+            page_count = doc.page_count
             page = doc[0]
             pix = page.get_pixmap(dpi=200)
             img_bytes = pix.tobytes("png")
             doc.close()
             result = await chat_with_file(
-                f"{message}\n(ไฟล์ PDF: {filename}, {doc.page_count} หน้า — แสดงหน้าแรก)",
+                f"{message}\n(ไฟล์ PDF: {filename}, {page_count} หน้า — แสดงหน้าแรก)",
                 img_bytes, "image/png", model=model,
             )
 

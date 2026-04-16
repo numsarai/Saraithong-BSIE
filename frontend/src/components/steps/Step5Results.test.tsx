@@ -3,6 +3,36 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { act } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
+vi.mock('@/components/AccountFlowGraph', () => ({
+  AccountFlowGraph: ({ rows }: { rows: Array<{ transaction_datetime?: string }> }) => (
+    <div
+      data-testid="account-flow-graph"
+      data-count={String(rows.length)}
+      data-first-datetime={String(rows[0]?.transaction_datetime || '')}
+    />
+  ),
+}))
+
+vi.mock('@/components/TimelineChart', () => ({
+  TimelineChart: ({ transactions }: { transactions: Array<{ transaction_datetime?: string }> }) => (
+    <div
+      data-testid="timeline-chart"
+      data-count={String(transactions.length)}
+      data-first-datetime={String(transactions[0]?.transaction_datetime || '')}
+    />
+  ),
+}))
+
+vi.mock('@/components/TimeWheel', () => ({
+  TimeWheel: ({ transactions }: { transactions: Array<{ transaction_datetime?: string }> }) => (
+    <div
+      data-testid="time-wheel"
+      data-count={String(transactions.length)}
+      data-first-datetime={String(transactions[0]?.transaction_datetime || '')}
+    />
+  ),
+}))
+
 import { Step5Results } from '@/components/steps/Step5Results'
 import { useStore } from '@/store'
 
@@ -80,6 +110,33 @@ vi.mock('@/api', () => ({
       },
     ],
   })),
+  getResultsTimeline: vi.fn(async () => ({
+    items: [
+      {
+        date: '2026-03-01',
+        posted_date: '2026-03-01',
+        transaction_datetime: '2026-03-01T08:15:00Z',
+        amount: 1000,
+        direction: 'IN',
+        transaction_type: 'transfer_in',
+        counterparty_account: '2222222222',
+        counterparty_name: 'Alice',
+      },
+      {
+        date: '2026-03-02',
+        posted_date: '2026-03-02',
+        transaction_datetime: '2026-03-02T19:45:00Z',
+        amount: 350,
+        direction: 'OUT',
+        transaction_type: 'transfer_out',
+        counterparty_account: '3333333333',
+        counterparty_name: 'Bob',
+      },
+    ],
+    total: 2,
+  })),
+  getAccountInsights: vi.fn(async () => ({ insights: [] })),
+  generateAccountReport: vi.fn(async () => undefined),
   getOverrides: vi.fn(async () => ({
     overrides: [
       {
@@ -104,7 +161,7 @@ vi.mock('sonner', () => ({
   }),
 }))
 
-const { deleteOverride, getResults } = await import('@/api')
+const { deleteOverride, getResults, getResultsTimeline } = await import('@/api')
 
 function renderWithQueryClient() {
   const queryClient = new QueryClient({
@@ -252,5 +309,15 @@ describe('Step5Results date formatting', () => {
     await screen.findByText('31 03 2026')
 
     expect(getResults).toHaveBeenCalledWith('1234567890', 1, 100, 'RUN-STEP5')
+  })
+
+  it('feeds graph and time-based charts from the full timeline dataset', async () => {
+    renderWithQueryClient()
+
+    expect(await screen.findByTestId('account-flow-graph')).toHaveAttribute('data-count', '2')
+    expect(screen.getByTestId('account-flow-graph')).toHaveAttribute('data-first-datetime', '2026-03-01T08:15:00Z')
+    expect(screen.getByTestId('timeline-chart')).toHaveAttribute('data-count', '2')
+    expect(screen.getByTestId('time-wheel')).toHaveAttribute('data-count', '2')
+    expect(getResultsTimeline).toHaveBeenCalledWith('1234567890', 'RUN-STEP5')
   })
 })

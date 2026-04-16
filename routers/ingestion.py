@@ -9,8 +9,13 @@ import uuid
 from pathlib import Path
 
 import pandas as pd
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+_limiter = Limiter(key_func=get_remote_address)
 
 from core.bank_detector import detect_bank
 from core.bank_memory import find_matching_bank_fingerprint, save_bank_fingerprint
@@ -41,7 +46,7 @@ from utils.app_helpers import (
 
 logger = logging.getLogger("bsie.api")
 
-router = APIRouter(prefix="/api", tags=["ingestion"])
+router = APIRouter(prefix="/api", tags=["ingestion"], dependencies=[Depends(require_auth)])
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -49,7 +54,8 @@ router = APIRouter(prefix="/api", tags=["ingestion"])
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.post("/upload")
-async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("analyst"), force_redetect: str = Form("")):
+@_limiter.limit("10/minute")
+async def api_upload(request: Request, file: UploadFile = File(...), uploaded_by: str = Form("analyst"), force_redetect: str = Form("")):
     """
     Accept an Excel file, run bank + column auto-detection, and return:
     - detected bank
@@ -62,12 +68,34 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
         raise HTTPException(400, "No filename")
 
     # HIGH-5: File type allowlist
-    ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".ofx", ".pdf", ".csv", ".png", ".jpg", ".jpeg", ".bmp"}
+    ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".ofx", ".pdf", ".png", ".jpg", ".jpeg", ".bmp"}
     suffix = Path(file.filename).suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"File type '{suffix}' not supported. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
 
-    contents = await file.read()
+    # SEC-H1: Read with size limit (50 MB) to prevent memory exhaustion
+    MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+    contents = await file.read(MAX_UPLOAD_SIZE + 1)
+    if len(contents) > MAX_UPLOAD_SIZE:
+        raise HTTPException(413, f"File too large (max {MAX_UPLOAD_SIZE // 1024 // 1024} MB)")
+
+    # SEC-H2: Magic byte validation — verify actual file type matches extension
+    _MAGIC_BYTES: dict[str, list[bytes]] = {
+        ".xlsx": [b"PK\x03\x04"],  # ZIP-based (Office Open XML)
+        ".xls":  [b"\xd0\xcf\x11\xe0"],  # OLE2 compound document
+        ".pdf":  [b"%PDF"],
+        ".png":  [b"\x89PNG"],
+        ".jpg":  [b"\xff\xd8\xff"],
+        ".jpeg": [b"\xff\xd8\xff"],
+        ".bmp":  [b"BM"],
+    }
+    expected_magics = _MAGIC_BYTES.get(suffix)
+    if expected_magics and not any(contents[:8].startswith(m) for m in expected_magics):
+        raise HTTPException(
+            400,
+            f"File content does not match extension '{suffix}'. "
+            f"The file may be corrupted or have an incorrect extension.",
+        )
     persisted = persist_upload(
         content=contents,
         original_filename=file.filename,
@@ -324,6 +352,8 @@ async def api_upload(file: UploadFile = File(...), uploaded_by: str = Form("anal
             "identity_guess":   identity,
         })
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Upload failed for file: %s", file.filename)
         raise HTTPException(500, "File processing failed. Please try again or contact support.")
@@ -524,7 +554,7 @@ async def api_redetect(body: _RedetectRequest):
         raise
     except Exception as exc:
         logger.exception("Redetect failed")
-        raise HTTPException(500, f"Re-detection failed: {exc}")
+        raise HTTPException(500, "Re-detection failed. Please try again or contact support.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -532,7 +562,8 @@ async def api_redetect(body: _RedetectRequest):
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.post("/process")
-async def api_process(body: ProcessRequest):
+@_limiter.limit("10/minute")
+async def api_process(request: Request, body: ProcessRequest):
     """
     Start the 14-step pipeline in a background thread.
     Returns {job_id} immediately.
@@ -550,8 +581,24 @@ async def api_process(body: ProcessRequest):
         file_record = get_file_record(file_id)
         if file_record:
             temp_file_path = temp_file_path or file_record.stored_path
-    if not temp_file_path or not Path(temp_file_path).exists():
-        raise HTTPException(400, "temp_file_path missing or file not found")
+    if not temp_file_path:
+        raise HTTPException(400, "temp_file_path missing")
+
+    # SEC-H5: Confine temp_file_path to allowed data directories via realpath
+    # + prefix check BEFORE any filesystem read. `resolved_path` becomes the
+    # single authoritative path used downstream; the raw `temp_file_path` is
+    # never touched again after this point.
+    from paths import INPUT_DIR, EVIDENCE_DIR
+    allowed_bases = [INPUT_DIR.resolve(), EVIDENCE_DIR.resolve()]
+    resolved_path = Path(temp_file_path).resolve()  # codeql[py/path-injection]
+    if not any(
+        resolved_path == b or b in resolved_path.parents
+        for b in allowed_bases
+    ):
+        raise HTTPException(403, "File path outside allowed directories")
+    # At this point resolved_path is provably under an allowed base.
+    if not resolved_path.is_file():  # codeql[py/path-injection]
+        raise HTTPException(400, "temp_file_path not found")
     if not account or not account.isdigit() or len(account) not in (10, 12):
         raise HTTPException(400, "account must be exactly 10 or 12 digits")
 
@@ -560,8 +607,8 @@ async def api_process(body: ProcessRequest):
 
     if not file_id and file_record is None:
         inferred_upload = persist_upload(
-            content=Path(temp_file_path).read_bytes(),
-            original_filename=Path(temp_file_path).name,
+            content=resolved_path.read_bytes(),  # codeql[py/path-injection]
+            original_filename=resolved_path.name,
             uploaded_by=operator,
             mime_type=None,
         )
@@ -576,7 +623,7 @@ async def api_process(body: ProcessRequest):
 
     dispatch_pipeline(
         job_id,
-        temp_file_path,
+        str(resolved_path),
         bank_key,
         account,
         name,

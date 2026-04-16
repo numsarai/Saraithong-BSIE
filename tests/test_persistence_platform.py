@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pandas as pd
+import pytest
 
 from database import init_db
 from persistence.base import get_db_session
@@ -11,7 +12,7 @@ from persistence.models import Account, AuditLog, ExportJob, FileRecord, ParserR
 from pipeline.process_account import process_account
 from services.account_resolution_service import best_known_account_holder_name
 from services.export_service import create_export_job, run_export_job
-from services.file_ingestion_service import persist_upload
+from services.file_ingestion_service import _normalize_file_id, persist_upload
 from services.persistence_pipeline_service import create_parser_run
 from services.review_service import update_account_fields, update_transaction_fields
 from services.search_service import search_transactions
@@ -72,6 +73,47 @@ def test_persist_upload_creates_file_record_and_duplicate_hint():
     with get_db_session() as session:
         rows = session.query(FileRecord).filter(FileRecord.file_hash_sha256 == first["file_hash_sha256"]).all()
         assert len(rows) == 1  # Only one record for duplicate files
+
+
+def test_persist_upload_repairs_missing_duplicate_evidence_path(tmp_path: Path):
+    init_db()
+    unique_account = f"{uuid4().int % 10**10:010d}"
+    payload = _sample_ofx(unique_account).encode("utf-8")
+
+    first = persist_upload(content=payload, original_filename="stale-duplicate.ofx", uploaded_by="tester")
+    canonical_path = Path(first["stored_path"])
+    legacy_path = tmp_path / "legacy-workspace" / "data" / "evidence" / first["file_id"] / "original.ofx"
+
+    if canonical_path.exists():
+        canonical_path.unlink()
+
+    with get_db_session() as session:
+        row = session.get(FileRecord, first["file_id"])
+        assert row is not None
+        row.stored_path = str(legacy_path)
+        row.storage_key = "legacy/original.ofx"
+        session.add(row)
+        session.commit()
+
+    second = persist_upload(content=payload, original_filename="stale-duplicate.ofx", uploaded_by="tester")
+
+    assert second["duplicate_file_status"] == "exact_duplicate"
+    assert second["file_id"] == first["file_id"]
+    repaired_path = Path(second["stored_path"])
+    assert repaired_path.resolve() == canonical_path.resolve()
+    assert repaired_path.exists()
+    assert repaired_path.read_bytes() == payload
+
+    with get_db_session() as session:
+        row = session.get(FileRecord, first["file_id"])
+        assert row is not None
+        assert Path(row.stored_path).resolve() == canonical_path.resolve()
+        assert row.storage_key == f"{first['file_id']}/original.ofx"
+
+
+def test_canonical_evidence_path_rejects_invalid_file_id():
+    with pytest.raises(ValueError):
+        _normalize_file_id("../escape")
 
 
 def test_ofx_pipeline_persists_parser_run_batch_and_transactions(tmp_path: Path):

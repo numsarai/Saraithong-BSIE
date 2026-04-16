@@ -4,14 +4,15 @@ routers/annotations.py
 Graph annotations API: notes and tags on nodes.
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from persistence.base import get_db_session, utcnow
 from persistence.models import GraphAnnotation
 
-router = APIRouter(prefix="/api/annotations", tags=["annotations"])
+router = APIRouter(prefix="/api/annotations", tags=["annotations"], dependencies=[Depends(require_auth)])
 
 
 @router.get("")

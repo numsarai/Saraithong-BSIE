@@ -5,14 +5,15 @@ Workspace management: save/load link chart state.
 """
 
 import uuid
-from fastapi import APIRouter, HTTPException, Request
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from persistence.base import get_db_session, utcnow
 from persistence.models import AdminSetting
 
-router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
+router = APIRouter(prefix="/api/workspaces", tags=["workspaces"], dependencies=[Depends(require_auth)])
 
 WORKSPACE_PREFIX = "workspace:"
 

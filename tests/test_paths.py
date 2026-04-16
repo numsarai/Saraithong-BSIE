@@ -1,4 +1,5 @@
 """Tests for paths.py — verifies all constants are defined and correct in dev mode."""
+import os
 import sys
 from pathlib import Path
 
@@ -16,9 +17,12 @@ def test_bundle_dir_is_project_root():
     assert paths.BUNDLE_DIR == expected
 
 
-def test_user_data_dir_equals_bundle_dir_in_dev():
-    """In dev mode, USER_DATA_DIR should equal BUNDLE_DIR (project root)."""
-    assert paths.USER_DATA_DIR == paths.BUNDLE_DIR
+def test_user_data_dir_uses_isolated_runtime_root_under_pytest():
+    """Pytest should isolate writable runtime state away from the project root."""
+    configured_runtime = os.environ.get("BSIE_TEST_RUNTIME_DIR")
+    assert configured_runtime
+    assert paths.USER_DATA_DIR == Path(configured_runtime)
+    assert paths.USER_DATA_DIR != paths.BUNDLE_DIR
 
 
 def test_read_only_dirs_are_under_bundle_dir():

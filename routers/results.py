@@ -6,9 +6,12 @@ Result retrieval and file search endpoints.
 
 import json
 import logging
+import re
+from pathlib import Path
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from services.auth_service import require_auth
+from fastapi import Depends, APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
@@ -23,14 +26,45 @@ from services.search_service import (
 
 logger = logging.getLogger("bsie.api")
 
-router = APIRouter(prefix="/api", tags=["results"])
+router = APIRouter(prefix="/api", tags=["results"], dependencies=[Depends(require_auth)])
+
+
+_SAFE_ACCOUNT_RE = re.compile(r"^\d{10,12}$")
+_SAFE_PART_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+
+
+def _safe_account(account: str) -> str:
+    """Validate and normalize an account number to digits-only, 10-12 chars.
+
+    Pure string validation (regex only, no filesystem access) so CodeQL's
+    taint analysis recognizes the output as a path-safe identifier.
+    Raises HTTPException(400) if the input cannot produce a valid account.
+    """
+    digits = "".join(c for c in str(account or "") if c.isdigit())
+    if not _SAFE_ACCOUNT_RE.fullmatch(digits):
+        raise HTTPException(400, "Invalid account number")
+    return digits
+
+
+def _canonical_output_path(safe_account: str, *parts: str) -> Path:
+    """Build an OUTPUT_DIR path from already-sanitized components.
+
+    ``safe_account`` MUST already have been validated via ``_safe_account``.
+    Each extra ``part`` must match ``_SAFE_PART_RE`` — callers pass only
+    hardcoded literals (e.g. ``"processed"``, ``"meta.json"``), so the
+    regex is a defense-in-depth assert, not dynamic input handling.
+    """
+    for part in parts:
+        if not _SAFE_PART_RE.fullmatch(part):
+            raise HTTPException(400, "Invalid output path component")
+    return OUTPUT_DIR.joinpath(safe_account, *parts)
 
 
 @router.get("/results/{account}")
 async def api_results(account: str, page: int = 1, page_size: int = 100, parser_run_id: str = ""):
     """Return paginated transaction results for an account."""
-    safe = "".join(c for c in account if c.isdigit())
-    processed_dir = OUTPUT_DIR / safe / "processed"
+    safe = _safe_account(account)
+    processed_dir = _canonical_output_path(safe, "processed")
     meta = {}
     rows = []
     total = 0
@@ -67,9 +101,14 @@ async def api_results(account: str, page: int = 1, page_size: int = 100, parser_
         end = start + page_size
         rows = df.iloc[start:end].to_dict(orient="records")
 
-    meta_path = OUTPUT_DIR / safe / "meta.json"
-    if not meta and meta_path.exists():
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    # Always merge meta.json (financial stats) into meta from DB (parsing info).
+    # meta.json is the authoritative source for total_in/out, category_counts, etc.
+    meta_path = _canonical_output_path(safe, "meta.json")
+    if meta_path.exists():
+        file_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        # Preserve parser-run-specific fields when reviewing a historical run.
+        # The account-level meta.json still fills in export stats such as total_in/out.
+        meta = {**file_meta, **meta} if parser_run_id else {**meta, **file_meta}
     if not rows and not txn_path.exists():
         raise HTTPException(404, f"No results for account {safe}")
 
@@ -101,7 +140,7 @@ async def api_results(account: str, page: int = 1, page_size: int = 100, parser_
 @router.get("/results/{account}/timeline")
 async def api_results_timeline(account: str, parser_run_id: str = ""):
     """Return lightweight date+amount+direction data for ALL transactions — for timeline charts."""
-    safe = "".join(c for c in account if c.isdigit())
+    safe = _safe_account(account)
 
     with get_db_session() as session:
         account_row = session.scalars(
@@ -123,7 +162,11 @@ async def api_results_timeline(account: str, parser_run_id: str = ""):
             result = session.execute(tx_query).all()
             items = [
                 {
-                    "date": str(row.posted_date or "")[:10] if row.posted_date else str(row.transaction_datetime or "")[:10],
+                    "date": row.posted_date.isoformat() if row.posted_date else (
+                        row.transaction_datetime.isoformat()[:10] if row.transaction_datetime else ""
+                    ),
+                    "transaction_datetime": row.transaction_datetime.isoformat() if row.transaction_datetime else "",
+                    "posted_date": row.posted_date.isoformat() if row.posted_date else "",
                     "amount": float(row.amount or 0),
                     "direction": str(row.direction or ""),
                     "transaction_type": str(row.transaction_type or ""),
@@ -135,12 +178,37 @@ async def api_results_timeline(account: str, parser_run_id: str = ""):
             return JSONResponse({"account": safe, "items": items, "total": len(items)})
 
     # Fallback to CSV
-    txn_path = OUTPUT_DIR / safe / "processed" / "transactions.csv"
+    txn_path = _canonical_output_path(safe, "processed", "transactions.csv")
     if txn_path.exists():
         df = pd.read_csv(txn_path, dtype=str, encoding="utf-8-sig", usecols=lambda c: c in {
-            "date", "amount", "direction", "transaction_type", "counterparty_account", "counterparty_name",
+            "date",
+            "time",
+            "transaction_datetime",
+            "posted_date",
+            "amount",
+            "direction",
+            "transaction_type",
+            "counterparty_account",
+            "counterparty_name",
         }).fillna("")
-        items = df.to_dict(orient="records")
+        items = []
+        for row in df.to_dict(orient="records"):
+            date_value = str(row.get("date", "") or "").strip()[:10]
+            time_value = str(row.get("time", "") or "").strip()
+            transaction_datetime = str(row.get("transaction_datetime", "") or "").strip()
+            if not transaction_datetime:
+                transaction_datetime = f"{date_value}T{time_value}" if date_value and time_value else date_value
+            posted_date = str(row.get("posted_date", "") or "").strip()[:10] or date_value
+            items.append({
+                "date": date_value,
+                "transaction_datetime": transaction_datetime,
+                "posted_date": posted_date,
+                "amount": row.get("amount", ""),
+                "direction": row.get("direction", ""),
+                "transaction_type": row.get("transaction_type", ""),
+                "counterparty_account": row.get("counterparty_account", ""),
+                "counterparty_name": row.get("counterparty_name", ""),
+            })
         return JSONResponse({"account": safe, "items": items, "total": len(items)})
 
     return JSONResponse({"account": safe, "items": [], "total": 0})

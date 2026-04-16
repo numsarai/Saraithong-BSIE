@@ -1,4 +1,4 @@
-# BSIE Features Reference (v4.0)
+# BSIE Features Reference (v4.1)
 
 ## Data Intake
 
@@ -93,6 +93,17 @@
 | Report Templates | Configurable sections, analysis criteria, custom thresholds |
 | CSV exports | transactions, entities, links, reconciliation, graph data |
 
+## SPNI Integration (Module Adapter Pattern)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/spni/health` | Health check — verify BSIE is reachable |
+| `GET /api/spni/runs` | List completed parser runs with account/transaction counts |
+| `GET /api/spni/runs/{id}/preview` | Preview: counts, accounts, date range before import |
+| `GET /api/spni/export?run_id=...` | Batch export accounts + transactions + entities |
+
+Export supports filtering by `accounts`, `date_from`, `date_to`, `amount_min`, `amount_max` with pagination (`limit`, `offset`). Data is scoped by `parser_run_id`.
+
 ## Security & Infrastructure
 
 | Feature | Details |
@@ -101,14 +112,14 @@
 | i18n | Thai/English, ~500 translation keys, TH Sarabun New font |
 | Audit Trail | Every data mutation logged with who/when/what/why |
 | Chain of Custody | Full object history via /api/audit-trail/{type}/{id} |
-| CORS | Configured for frontend dev + production |
+| CORS | Configured for frontend dev, production, and SPNI (localhost:3000) |
 | Request Timing | Log slow requests >1s, X-Process-Time-Ms header |
 | MaxBodySize | Reject uploads >50 MB |
 | CI/CD | GitHub Actions: lint, type check, test, build |
-| Tests | 244 total (212 backend pytest + 32 frontend vitest) |
+| Tests | 261 total (229 backend pytest + 32 frontend vitest) |
 | Rate Limiting | slowapi on login endpoint (10 req/min) |
-| Security Headers | X-Frame-Options, X-Content-Type-Options, Referrer-Policy, X-XSS-Protection |
-| File Validation | Upload allowlist: .xlsx/.xls/.ofx/.pdf/.csv/.png/.jpg/.bmp |
+| Security Headers | X-Frame-Options, X-Content-Type-Options, Referrer-Policy, X-XSS-Protection, CSP |
+| File Validation | Upload allowlist: .xlsx/.xls/.ofx/.pdf/.png/.jpg/.jpeg/.bmp |
 
 ## Investigation Workspace (13 Tabs)
 

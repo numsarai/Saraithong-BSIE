@@ -148,6 +148,15 @@ def test_build_copilot_context_pack_scopes_transactions_and_citations(tmp_path: 
     assert pack["evidence"]["summary"]["transaction_count"] == 2
     assert pack["evidence"]["summary"]["total_in"] == 2500.0
     assert pack["evidence"]["summary"]["total_out"] == 1500.0
+    graph_metrics = pack["evidence"]["graph_metrics"]
+    assert graph_metrics["transaction_edge_count"] == 2
+    assert graph_metrics["unique_counterparty_count"] == 2
+    assert graph_metrics["inbound_counterparty_count"] == 1
+    assert graph_metrics["outbound_counterparty_count"] == 1
+    assert graph_metrics["directional_degree"] == 2
+    assert graph_metrics["flow_in_value"] == 2500.0
+    assert graph_metrics["flow_out_value"] == 1500.0
+    assert graph_metrics["account_metrics"][0]["citation_id"] == "account:acct-copilot-1"
     citation_ids = {item["id"] for item in pack["citations"]}
     assert {"run:run-copilot-1", "file:file-copilot-1", "account:acct-copilot-1"} <= citation_ids
     assert {"txn:txn-copilot-1", "txn:txn-copilot-2", "alert:alert-copilot-1"} <= citation_ids
@@ -206,6 +215,7 @@ def test_answer_copilot_question_calls_llm_without_auto_context_and_audits(tmp_p
     assert calls[0]["model"] == "qwen3.5:9b"
     assert "Deterministic context pack" in calls[0]["message"]
     assert "Task mode: freeform" in calls[0]["message"]
+    assert "When discussing graph_metrics" in calls[0]["message"]
     assert "When discussing review_history or audit_events" in calls[0]["message"]
     assert audit.object_type == "llm_copilot"
     assert audit.action_type == "copilot_answered"

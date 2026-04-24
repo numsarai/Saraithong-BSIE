@@ -13,7 +13,51 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Evidence Copilot Review History Context
+## Done (latest session) — Evidence Copilot Graph Metrics Context
+
+### What I changed
+- Added `evidence.graph_metrics` to the deterministic copilot context pack.
+- Metrics are SQL aggregates over normalized transaction/counterparty links matching the current copilot scope.
+- Included transaction-edge count, unique counterparties, inbound/outbound counterparty counts, directional degree, flow in/out counts and values, net/total flow, per-account metrics, and top flow edges.
+- Updated the copilot prompt so graph metric claims cite scoped account ids and supporting top transaction ids when available.
+- Added regression coverage for graph metric values and prompt guardrails.
+- Added DEC-041 and updated the roadmap.
+
+### Files changed
+- `services/copilot_service.py`
+- `tests/test_copilot_service.py`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `380 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/copilot_service.py tests/test_copilot_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_copilot_service.py -q` -> `6 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `380 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-041: Evidence Copilot graph metrics are deterministic scoped aggregates.
+
+### Warnings / Next
+- `graph_metrics` are lightweight scoped aggregates, not a replacement for full graph exports/SNA/i2 artifacts.
+- Case tag scope is still pending.
+- Next useful slice: add case tag scope to `copilot_scope`, then use it to widen review history and graph metrics safely.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Evidence Copilot Review History Context
 
 ### What I changed
 - Enriched `services/copilot_service.py` deterministic context packs with `evidence.review_history`.

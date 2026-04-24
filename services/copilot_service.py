@@ -239,6 +239,109 @@ def _audit_event_dict(row: AuditLog) -> dict[str, Any]:
     }
 
 
+def _build_account_graph_metric(session: Session, account: Account, base_conditions: list[Any]) -> dict[str, Any]:
+    account_conditions = [
+        *base_conditions,
+        Transaction.account_id == account.id,
+        Transaction.counterparty_account_normalized.isnot(None),
+        Transaction.counterparty_account_normalized != "",
+    ]
+    inbound_cp = case((Transaction.direction == "IN", Transaction.counterparty_account_normalized))
+    outbound_cp = case((Transaction.direction == "OUT", Transaction.counterparty_account_normalized))
+    in_amount = case((Transaction.direction == "IN", func.abs(Transaction.amount)), else_=0)
+    out_amount = case((Transaction.direction == "OUT", func.abs(Transaction.amount)), else_=0)
+    in_count = case((Transaction.direction == "IN", 1), else_=0)
+    out_count = case((Transaction.direction == "OUT", 1), else_=0)
+    row = session.execute(
+        select(
+            func.count(Transaction.id),
+            func.count(func.distinct(Transaction.counterparty_account_normalized)),
+            func.count(func.distinct(inbound_cp)),
+            func.count(func.distinct(outbound_cp)),
+            func.sum(in_amount),
+            func.sum(out_amount),
+            func.sum(in_count),
+            func.sum(out_count),
+        ).where(*account_conditions)
+    ).one()
+    inbound_counterparty_count = int(row[2] or 0)
+    outbound_counterparty_count = int(row[3] or 0)
+    flow_in_value = _as_float(row[4])
+    flow_out_value = _as_float(row[5])
+    return {
+        "citation_id": f"account:{account.id}",
+        "account_id": account.id,
+        "display_account_number": account.display_account_number or account.normalized_account_number or "",
+        "transaction_edge_count": int(row[0] or 0),
+        "unique_counterparty_count": int(row[1] or 0),
+        "inbound_counterparty_count": inbound_counterparty_count,
+        "outbound_counterparty_count": outbound_counterparty_count,
+        "directional_degree": inbound_counterparty_count + outbound_counterparty_count,
+        "flow_in_transactions": int(row[6] or 0),
+        "flow_out_transactions": int(row[7] or 0),
+        "flow_in_value": flow_in_value,
+        "flow_out_value": flow_out_value,
+        "net_flow_value": flow_in_value - flow_out_value,
+        "total_flow_value": flow_in_value + flow_out_value,
+    }
+
+
+def _build_graph_metrics(
+    session: Session,
+    *,
+    conditions: list[Any],
+    account_rows: list[Account],
+    top_flow_edges: list[dict[str, Any]],
+) -> dict[str, Any]:
+    edge_conditions = [
+        *conditions,
+        Transaction.counterparty_account_normalized.isnot(None),
+        Transaction.counterparty_account_normalized != "",
+    ]
+    inbound_cp = case((Transaction.direction == "IN", Transaction.counterparty_account_normalized))
+    outbound_cp = case((Transaction.direction == "OUT", Transaction.counterparty_account_normalized))
+    in_amount = case((Transaction.direction == "IN", func.abs(Transaction.amount)), else_=0)
+    out_amount = case((Transaction.direction == "OUT", func.abs(Transaction.amount)), else_=0)
+    in_count = case((Transaction.direction == "IN", 1), else_=0)
+    out_count = case((Transaction.direction == "OUT", 1), else_=0)
+    row = session.execute(
+        select(
+            func.count(Transaction.id),
+            func.count(func.distinct(Transaction.counterparty_account_normalized)),
+            func.count(func.distinct(inbound_cp)),
+            func.count(func.distinct(outbound_cp)),
+            func.sum(in_amount),
+            func.sum(out_amount),
+            func.sum(in_count),
+            func.sum(out_count),
+        ).where(*edge_conditions)
+    ).one()
+    inbound_counterparty_count = int(row[2] or 0)
+    outbound_counterparty_count = int(row[3] or 0)
+    flow_in_value = _as_float(row[4])
+    flow_out_value = _as_float(row[5])
+    return {
+        "scope_note": "graph metrics are deterministic aggregates from normalized transaction counterparty links in the current copilot scope",
+        "scoped_account_count": len(account_rows),
+        "transaction_edge_count": int(row[0] or 0),
+        "unique_counterparty_count": int(row[1] or 0),
+        "inbound_counterparty_count": inbound_counterparty_count,
+        "outbound_counterparty_count": outbound_counterparty_count,
+        "directional_degree": inbound_counterparty_count + outbound_counterparty_count,
+        "flow_in_transactions": int(row[6] or 0),
+        "flow_out_transactions": int(row[7] or 0),
+        "flow_in_value": flow_in_value,
+        "flow_out_value": flow_out_value,
+        "net_flow_value": flow_in_value - flow_out_value,
+        "total_flow_value": flow_in_value + flow_out_value,
+        "account_metrics": [
+            _build_account_graph_metric(session, account, conditions)
+            for account in account_rows[:10]
+        ],
+        "top_flow_edges": top_flow_edges,
+    }
+
+
 def build_copilot_context_pack(
     session: Session,
     scope: dict[str, Any],
@@ -368,6 +471,12 @@ def build_copilot_context_pack(
         }
         for row in counterparty_rows
     ]
+    graph_metrics = _build_graph_metrics(
+        session,
+        conditions=conditions,
+        account_rows=account_rows,
+        top_flow_edges=counterparties,
+    )
 
     alert_conditions = []
     if parser_run:
@@ -480,6 +589,7 @@ def build_copilot_context_pack(
         },
         "top_transactions": transactions,
         "top_counterparties": counterparties,
+        "graph_metrics": graph_metrics,
         "alerts": alerts,
         "review_history": review_history,
     }
@@ -511,6 +621,7 @@ def build_copilot_prompt(question: str, context_pack: dict[str, Any], *, task_mo
         "Answer in Thai unless the analyst explicitly asks otherwise.\n"
         "Use only the deterministic context pack below. Do not use outside knowledge, guesses, or hidden database context.\n"
         "Every factual claim must cite at least one evidence id exactly like [txn:<id>], [alert:<id>], [run:<id>], [file:<id>], or [account:<id>].\n"
+        "When discussing graph_metrics, cite scoped account ids and supporting transaction ids from top_transactions when available.\n"
         "When discussing review_history or audit_events, cite the underlying record id from each event's citation_id field.\n"
         "If the context pack does not contain enough evidence, say หลักฐานไม่พอ and explain what scoped evidence is missing.\n"
         "Do not mutate evidence, classify transactions, promote mappings, change alerts, or issue final investigative findings.\n\n"

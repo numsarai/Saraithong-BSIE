@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-041: Evidence Copilot graph metrics are deterministic scoped aggregates
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Evidence Copilot can cite transactions, alerts, and review history, but account-summary and report-draft tasks also need network shape: number of counterparties, directional degree, inbound/outbound flow, and top flow edges. Rebuilding full graph export artifacts for each chat request would be heavier than necessary for an interactive read-only context pack.
+- **Decision:** Add `evidence.graph_metrics` to the deterministic copilot context pack as bounded SQL aggregates over normalized transactions matching the current `copilot_scope`. Metrics include transaction-edge count, unique counterparties, inbound/outbound counterparty counts, directional degree, flow in/out counts and values, net/total flow, per-account metrics, and top flow edges already derived from scoped counterparties. The prompt instructs the model to cite scoped account ids and supporting transaction ids when discussing these metrics.
+- **Alternatives:** (1) Call the full graph export/analysis pipeline per copilot request -- richer but heavier and unnecessary for the first interactive slice. (2) Let the LLM infer network shape from top transactions -- unsafe and incomplete. (3) Wait for case-tag scope first -- useful later, but scoped parser run/file/account metrics already add value now.
+- **Consequences:** Evidence Copilot can answer network-shape questions from deterministic scoped aggregates without mutating evidence. These are summary metrics, not a replacement for full graph exports, SNA, or i2 artifacts.
+
 ### DEC-040: Evidence Copilot context includes scoped review and audit history
 - **Date:** 2026-04-24
 - **Status:** accepted

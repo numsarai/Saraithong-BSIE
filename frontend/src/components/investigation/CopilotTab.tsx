@@ -47,6 +47,14 @@ function normalizeAccount(value: string) {
   return value.replace(/\D/g, '')
 }
 
+function caseTagCountLabel(tag: CaseTagItem, linkedLabel: string) {
+  const counts = Object.entries(tag.linked_object_counts || {})
+    .filter(([, count]) => Number(count) > 0)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([type, count]) => `${type} ${count}`)
+  return counts.length ? `${linkedLabel} · ${counts.join(' · ')}` : linkedLabel
+}
+
 export function CopilotTab({
   operatorName,
   selectedRunId = '',
@@ -121,6 +129,7 @@ export function CopilotTab({
   ], [crossAccountNumber, filterFileId, filterRunId, selectedAccountNumber, selectedFileId, selectedRunId, t])
 
   const selectedCaseTagId = caseTags.some((tag) => tag.id === scope.case_tag_id) ? scope.case_tag_id : ''
+  const selectedCaseTag = caseTags.find((tag) => tag.id === selectedCaseTagId)
 
   const selectCaseTag = (caseTagId: string) => {
     const tag = caseTags.find((item) => item.id === caseTagId)
@@ -228,6 +237,22 @@ export function CopilotTab({
         {caseTagError && (
           <div className="text-xs text-danger">
             {t('investigation.copilot.caseTagLoadFailed')}
+          </div>
+        )}
+        {selectedCaseTag && (
+          <div className="rounded-lg border border-border bg-surface2 px-3 py-2">
+            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+              <div className="font-mono text-sm font-semibold text-text">{selectedCaseTag.tag}</div>
+              <div className="text-xs text-muted">
+                {caseTagCountLabel(
+                  selectedCaseTag,
+                  t('investigation.copilot.caseTagLinkedTotal', { count: Number(selectedCaseTag.linked_object_count || 0) }),
+                )}
+              </div>
+            </div>
+            {selectedCaseTag.description && (
+              <div className="mt-1 text-sm text-muted">{selectedCaseTag.description}</div>
+            )}
           </div>
         )}
 

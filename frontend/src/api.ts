@@ -355,6 +355,8 @@ export type CaseTagItem = {
   tag: string
   description?: string | null
   created_at?: string | null
+  linked_object_count?: number
+  linked_object_counts?: Record<string, number>
 }
 
 export async function listCaseTags(): Promise<{ items: CaseTagItem[] }> {

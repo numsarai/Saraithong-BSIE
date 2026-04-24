@@ -9,11 +9,61 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `381 passed`, frontend `48 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `382 passed`, frontend `48 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Evidence Copilot Case Tag Picker
+## Done (latest session) — Evidence Copilot Case Tag Evidence Summary
+
+### What I changed
+- Enriched `GET /api/case-tags` with deterministic `linked_object_count` and `linked_object_counts` from `case_tag_links`.
+- Extended the frontend `CaseTagItem` contract with those linked-evidence counts.
+- Evidence Copilot now displays the selected case tag description and linked-object summary below the picker before asking the LLM.
+- Added backend regression coverage for case-tag link counts.
+- Extended Investigation Desk coverage to verify the selected tag summary appears and still sends the correct copilot scope.
+- Updated DEC-042 wording and the roadmap to include linked-object counts.
+
+### Files changed
+- `routers/case_tags.py`
+- `tests/test_case_tags_api.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `381 passed`
+  - `npm test -- --run` in `frontend/` -> `48 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile routers/case_tags.py tests/test_case_tags_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_case_tags_api.py -q` -> `1 passed`
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `5 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `382 passed`
+  - `npm test -- --run` in `frontend/` -> `48 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- No new DEC number. DEC-042 remains the governing decision; wording now includes linked-object counts in the picker.
+
+### Warnings / Next
+- Counts are deterministic summaries only; case tags remain scope filters, not citation ids.
+- The picker still lists all tags. A future slice can add search/filtering or a dedicated case-tag detail drawer if tag volume grows.
+- Next useful slice: add a case-tag detail/navigation drawer for linked objects, or move toward the later local-first classification path.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Evidence Copilot Case Tag Picker
 
 ### What I changed
 - Added `listCaseTags()` to the frontend API contract for `GET /api/case-tags`.

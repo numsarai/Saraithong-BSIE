@@ -200,6 +200,8 @@ vi.mock('@/api', () => ({
         tag: 'CASE-ALPHA',
         description: 'Alpha evidence group',
         created_at: '2026-03-31T02:00:00Z',
+        linked_object_count: 2,
+        linked_object_counts: { transaction: 1, alert: 1 },
       },
     ],
   })),
@@ -360,6 +362,8 @@ describe('InvestigationDesk date formatting', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Evidence' }))
     expect(await screen.findByRole('option', { name: 'CASE-ALPHA' })).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Choose Case Tag'), { target: { value: 'CASE-TAG-1' } })
+    expect(await screen.findByText('Alpha evidence group')).toBeInTheDocument()
+    expect(await screen.findByText('2 linked · alert 1 · transaction 1')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Analyst focus'), { target: { value: 'Review tagged evidence' } })
     fireEvent.click(screen.getByRole('button', { name: 'Ask Copilot' }))
 

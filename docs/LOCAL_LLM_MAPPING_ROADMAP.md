@@ -324,7 +324,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] เพิ่ม scoped `review_history` จาก `review_decisions` และ `audit_logs` เข้า deterministic context pack
 - [x] เพิ่ม scoped `graph_metrics` จาก normalized transaction/counterparty links เข้า deterministic context pack
 - [x] เพิ่ม case filters / case tag scope ผ่าน `case_tag_id` / `case_tag` และ `case_tag_links`
-- [x] เพิ่ม Case Tag picker ใน Evidence UI จาก `/api/case-tags` พร้อม manual fallback fields
+- [x] เพิ่ม Case Tag picker ใน Evidence UI จาก `/api/case-tags` พร้อม linked object counts และ manual fallback fields
 - [x] แตก read-only tool modes: account summary, alert explanation, review checklist, และ draft report paragraph
 - [x] ห้าม mutate evidence, override, classify, promote, หรือ auto-generate findings โดยไม่มี analyst action ใน task prompt contract
 - [ ] ภายหลังย้าย classification path ให้ local-first หลัง scope/citation/audit stable

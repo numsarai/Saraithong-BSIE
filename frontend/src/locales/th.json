@@ -481,6 +481,7 @@
       "caseTagSelect": "เลือก tag",
       "caseTagLoading": "กำลังโหลด tags",
       "caseTagLoadFailed": "โหลด case tags ไม่สำเร็จ",
+      "caseTagLinkedTotal": "ลิงก์ {{count}} รายการ",
       "caseTagId": "Case Tag ID",
       "caseTag": "ชื่อ Case Tag",
       "scopeSelectedRun": "รันที่เลือก",

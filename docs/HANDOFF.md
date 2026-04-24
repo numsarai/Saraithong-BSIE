@@ -10,10 +10,86 @@
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
 - **Baseline:** backend `396 passed`, frontend `53 passed`, frontend build passed without Vite chunk-size warning
-- **Auth/DB:** local JWT auth available; current `.env` has `BSIE_AUTH_REQUIRED=false` for dev + local SQLite WAL (`bsie.db`)
+- **Auth/DB:** local JWT auth available; current `.env` has `BSIE_AUTH_REQUIRED=false` for dev + clean local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Production Readiness Data Hygiene Audit
+## Done (latest session) — Confirmed Clean Database Reset
+
+### What I changed
+- User explicitly confirmed the destructive reset phrase: `RESET BSIE DATABASE`.
+- Ran baseline verification before reset:
+  - `.venv/bin/python -m pytest tests/ -q` -> `396 passed`
+  - `npm test -- --run` in `frontend/` -> `53 passed`
+- Reset the local SQLite database through the running admin API with `create_pre_reset_backup=true`.
+- Pre-reset backup created by the reset flow:
+  - `data/backups/bsie_backup_20260424_134844_2845ee1e.json`
+  - backup total rows: `25350`
+  - note: `user confirmed reset for clean live-case database`
+- Earlier pre-cleanup backup remains available:
+  - `data/backups/bsie_backup_20260424_133826_d16fbdeb.json`
+- Verified post-reset DB state through API and SQLite.
+- Added DEC-054.
+
+### Current local database state
+- Data Hygiene Audit: `ready`.
+- Blockers: `0`.
+- Warnings: `0`.
+- Evidence/runtime counts:
+  - `files`: `0`
+  - `parser_runs`: `0`
+  - `transactions`: `0`
+  - `accounts`: `0`
+  - `raw_import_rows`: `0`
+  - `statement_batches`: `0`
+  - `entities`: `0`
+  - `audit_logs`: `0`
+  - `export_jobs`: `0`
+  - `job`: `0`
+  - `job_meta`: `0`
+- `users`: `1` active admin user remains.
+- `admin_settings`: `0`; backup settings now resolve from environment defaults (`BSIE_ENABLE_AUTO_BACKUP=1`, interval `24h`, retention off).
+- App endpoints verified:
+  - `GET /api/admin/data-hygiene` -> `ready`
+  - `GET /api/admin/db-status` -> SQLite schema present, key counts zero
+  - frontend `http://127.0.0.1:6777/` -> HTTP `200`
+- Backend and frontend are running:
+  - backend `127.0.0.1:8757`
+  - frontend `127.0.0.1:6777`
+
+### Files changed
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before reset:
+  - `.venv/bin/python -m pytest tests/ -q` -> `396 passed`
+  - `npm test -- --run` in `frontend/` -> `53 passed`
+- Post-reset verification:
+  - `GET /api/admin/data-hygiene` -> `ready`, `0` blockers, `0` warnings
+  - `GET /api/admin/db-status` -> investigation schema present, key evidence counts `0`
+  - SQLite spot-check -> `files=0`, `transactions=0`, `users=1`, `admin_settings=0`
+  - frontend HEAD request -> HTTP `200`
+
+### Decisions made
+- Added DEC-054: live-case database starts from an explicit reset after backup.
+- Reset was done through the admin reset flow, not by deleting the database file.
+
+### Warnings / Next
+- `BSIE_AUTH_REQUIRED=false` remains set in `.env` for local dev. Flip it to `true` before real investigator use beyond this local controlled setup.
+- The reset cleared mapping-memory/fingerprint tables too. New real uploads will rebuild operational memory from analyst-confirmed mappings.
+- Previous evidence/test data is available only through backups unless restored.
+- Next useful slice: set live-use configuration (`BSIE_AUTH_REQUIRED=true`, confirm admin login, save backup retention policy) before ingesting the first real case file.
+
+### Failed attempts
+- No failed reset attempts. Reset completed successfully through `POST /api/admin/reset`.
+
+### Environment changes
+- Local `bsie.db` was destructively reset after backup.
+- Created backup `data/backups/bsie_backup_20260424_134844_2845ee1e.json`.
+- The reset flow pruned old backup `bsie_backup_20260421_151915_6cae28f0.json` according to the pre-reset backup settings.
+- No dependencies installed.
+
+## Done (previous session) — Production Readiness Data Hygiene Audit
 
 ### What I changed
 - Added a read-only Data Hygiene Audit for production readiness checks before any destructive cleanup or live-case rollout.

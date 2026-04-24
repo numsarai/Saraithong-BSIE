@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-054: Live-case database starts from an explicit reset after backup
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** The data hygiene audit showed no stale transaction accumulation from repeated processing, but the local database contained many sample/test-like files and queued/failed parser runs. The user explicitly confirmed the destructive reset phrase `RESET BSIE DATABASE` to start a clean live-case repository.
+- **Decision:** Reset the local SQLite database only after creating a pre-reset backup through the admin reset flow. The reset clears evidence, parser-run, mapping-memory, audit, job, case-tag, and admin-setting tables while preserving the local user table. Post-reset data hygiene must report `ready` with zero blockers/warnings before new real case files are ingested.
+- **Alternatives:** (1) Keep the mixed database and manually ignore sample/test records -- too risky for live case work. (2) Build selective cleanup first -- safer for mixed evidence, but slower and unnecessary after explicit operator reset confirmation. (3) Delete the database file directly -- simpler, but bypasses backup and table-level reset safeguards.
+- **Consequences:** The current database is now clean for live-case ingestion, but all prior evidence/test records must be restored from backup if needed. Backup settings stored in the database were reset; effective backup settings now come from environment defaults until saved again.
+
 ### DEC-053: Production readiness includes read-only data hygiene audit before cleanup
 - **Date:** 2026-04-24
 - **Status:** accepted

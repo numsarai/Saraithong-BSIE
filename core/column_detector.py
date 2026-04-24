@@ -64,7 +64,7 @@ BASE_FIELD_KEYWORDS: Dict[str, List[str]] = {
         "คงเหลือ", "ยอดเงินคงเหลือ", "จำนวนเงินคงเหลือ", "bal",
         "avail balance", "available balance", "available",
         "closing balance", "ending balance", "remaining balance",
-        "ยอดคงเหลือหลังรายการ", "ยอดหลังทำรายการ", "balance after transaction",
+        "ยอดคงเหลือหลังรายการ", "ยอดหลังรายการ", "ยอดหลังทำรายการ", "balance after transaction",
     ],
     "channel": [
         "ช่องทาง", "channel", "transaction channel", "medium", "via",

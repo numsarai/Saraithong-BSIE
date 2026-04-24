@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-025: Balance-like mapping suggestions prefer curated statement-balance aliases
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Some statements expose multiple balance-like headers, and LLM/profile suggestions may choose a lower-priority alias such as `ยอดหลังรายการ` even when the bank/config-curated statement balance column `ยอดคงเหลือ` is also present. This left the TTB benchmark with one avoidable miss despite valid mapping semantics.
+- **Decision:** Repair suggested mappings before analyst confirmation so `balance` prefers curated aliases (`ยอดคงเหลือ`, `Outstanding Balance`, `Ledger Balance`, etc.) over lower-priority after-transaction synonyms when both are available. Keep lower-priority aliases usable when no stronger alias exists.
+- **Alternatives:** (1) Let the LLM decide every time — keeps ambiguity and benchmark variance. (2) Reject lower-priority balance aliases in validation — too strict because some statements only expose those headers. (3) Change benchmark expectation only — hides the ambiguity instead of improving suggestions.
+- **Consequences:** Auto/profile/variant/LLM suggestions become more stable without mutating confirmed mappings. Future balance aliases should be added to the preference list with care because the ordering is now a deterministic contract.
+
 ### DEC-024: Direction-marker amount layouts are first-class mapping paths
 - **Date:** 2026-04-24
 - **Status:** accepted

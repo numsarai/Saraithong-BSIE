@@ -100,6 +100,42 @@ def test_mapping_assist_preserves_direction_marker_amount_path(monkeypatch):
     assert result["validation"]["amount_mode"] == "direction_marker"
 
 
+def test_mapping_assist_repairs_ambiguous_balance_to_curated_alias(monkeypatch):
+    async def fake_chat(*args, **kwargs):
+        return {
+            "model": kwargs["model"],
+            "response": """
+            {
+              "mapping": {
+                "date": "วันที่",
+                "description": "คำอธิบายรายการ",
+                "amount": "ยอดเงิน",
+                "balance": "ยอดหลังรายการ",
+                "channel": "ช่องทาง",
+                "counterparty_account": "บัญชีปลายทาง"
+              },
+              "confidence": 0.86,
+              "reasons": ["balance-like headers are present"],
+              "warnings": []
+            }
+            """,
+        }
+
+    monkeypatch.setattr("services.mapping_assist_service.chat", fake_chat)
+
+    result = asyncio.run(
+        suggest_mapping_with_llm(
+            bank="ttb",
+            columns=["วันที่", "คำอธิบายรายการ", "ยอดเงิน", "ยอดคงเหลือ", "ยอดหลังรายการ", "ช่องทาง", "บัญชีปลายทาง"],
+            sample_rows=[{"วันที่": "2026-01-10", "คำอธิบายรายการ": "TRANSFER TO", "ยอดเงิน": "-1,100.00", "ยอดคงเหลือ": "18,900.00", "ยอดหลังรายการ": "18,900.00"}],
+            current_mapping={"balance": "ยอดหลังรายการ"},
+        )
+    )
+
+    assert result["mapping"]["balance"] == "ยอดคงเหลือ"
+    assert result["validation"]["ok"] is True
+
+
 def test_mapping_assist_rejects_non_json_llm_response(monkeypatch):
     async def fake_chat(*args, **kwargs):
         return {"model": "qwen2.5:14b", "response": "not json"}

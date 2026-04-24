@@ -25,6 +25,25 @@ from tasks import run_pipeline_sync
 
 logger = logging.getLogger("bsie.api")
 
+BALANCE_COLUMN_PREFERENCES = (
+    "ยอดคงเหลือ",
+    "ยอดเงินคงเหลือ",
+    "จำนวนเงินคงเหลือ",
+    "outstanding balance",
+    "ledger balance",
+    "running balance",
+    "balance",
+    "bal",
+    "คงเหลือ",
+    "closing balance",
+    "ending balance",
+    "remaining balance",
+    "ยอดคงเหลือหลังรายการ",
+    "ยอดหลังรายการ",
+    "ยอดหลังทำรายการ",
+    "balance after transaction",
+)
+
 
 # ---------------------------------------------------------------------------
 # Pipeline dispatch
@@ -138,7 +157,42 @@ def repair_suggested_mapping(
         repaired["debit"] = None
         repaired["credit"] = None
 
+    _prefer_curated_balance_column(repaired, available_columns)
+
     return repaired
+
+
+def _normalized_column_key(value: object) -> str:
+    return str(value or "").strip().lower()
+
+
+def _balance_preference_rank(column: object) -> int | None:
+    normalized = _normalized_column_key(column)
+    for index, alias in enumerate(BALANCE_COLUMN_PREFERENCES):
+        if normalized == _normalized_column_key(alias):
+            return index
+    return None
+
+
+def _prefer_curated_balance_column(mapping: dict, available_columns: list[str]) -> None:
+    current = mapping.get("balance")
+    if not current:
+        return
+
+    current_rank = _balance_preference_rank(current)
+    best_column = current
+    best_rank = current_rank
+
+    for column in available_columns:
+        rank = _balance_preference_rank(column)
+        if rank is None:
+            continue
+        if best_rank is None or rank < best_rank:
+            best_column = column
+            best_rank = rank
+
+    if best_column != current:
+        mapping["balance"] = best_column
 
 
 def normalize_feedback_text(value: object) -> str:

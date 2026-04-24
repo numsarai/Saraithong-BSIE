@@ -2,6 +2,48 @@
 
 > Local-only benchmark log. Prompts are synthetic and do not include case evidence.
 
+## 2026-04-24 — Balance Alias Disambiguation Follow-up
+
+### Environment
+
+- Branch: `Smarter-BSIE`
+- Runtime: local Ollama via `OLLAMA_BASE_URL=http://localhost:11434`
+- Benchmark source: `scripts/benchmark_mapping_models.py`
+- Endpoint path: native Ollama `/api/chat` through `think=false`
+- Evidence data: none; all fixtures are synthetic
+
+This follow-up added deterministic suggestion repair for ambiguous balance-like columns. When a suggested mapping points `balance` to a lower-priority alias such as `ยอดหลังรายการ` while a curated statement-balance alias such as `ยอดคงเหลือ` is present, BSIE repairs the suggestion before validation and analyst review.
+
+Targeted TTB command:
+
+```bash
+.venv/bin/python scripts/benchmark_mapping_models.py --models gemma4:26b --fixture ttb_ambiguous_amount_balance --mode both --run-id balance-ttb-gemma26b-20260424120508
+```
+
+Targeted result:
+
+| Model | Fixture | Text score | Text validation | Vision score | Vision validation |
+|---|---|---:|---|---:|---|
+| `gemma4:26b` | `ttb_ambiguous_amount_balance` | 6 / 6 = 100.00% | `True` | 6 / 6 = 100.00% | `True` |
+
+8-bank re-run command:
+
+```bash
+.venv/bin/python scripts/benchmark_mapping_models.py --models gemma4:26b --mode both --run-id balance-8bank-gemma26b-20260424120540
+```
+
+8-bank re-run result:
+
+| Model | Text score | Text avg | Vision score | Vision avg | Notes |
+|---|---:|---:|---:|---:|---|
+| `gemma4:26b` | 55 / 55 = 100.00% | 6,148.77 ms | 55 / 55 = 100.00% | 6,805.12 ms | Validation passed for every fixture; no misses in the current synthetic set |
+
+### Takeaways
+
+- The previous TTB balance miss is now handled deterministically before analyst review.
+- The current 8-bank synthetic benchmark has no remaining `gemma4:26b` misses, but it is still synthetic and should not justify auto-apply behavior.
+- Next benchmark work should add more fixtures per bank and real-world layout variants without using case evidence.
+
 ## 2026-04-24 — Direction-Marker Mapping Follow-up
 
 ### Environment

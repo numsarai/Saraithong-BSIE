@@ -9,11 +9,58 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `353 passed`, frontend `37 passed`, frontend build passed
+- **Baseline:** backend `356 passed`, frontend `37 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Direction-Marker Amount Path
+## Done (latest session) — Balance Alias Disambiguation
+
+### What I changed
+- Added deterministic repair for ambiguous balance-like suggestions in `utils/app_helpers.py`.
+- Suggestions now prefer curated statement-balance aliases such as `ยอดคงเหลือ`, `Outstanding Balance`, and `Ledger Balance` over lower-priority after-transaction aliases such as `ยอดหลังรายการ` when both are available.
+- Kept `ยอดหลังรายการ` usable when no better balance alias exists.
+- Added `ยอดหลังรายการ` to deterministic balance aliases so statements that only expose that header can still be mapped.
+- Updated TTB config aliases and benchmark docs/decision roadmap.
+
+### Files changed
+- `utils/app_helpers.py`
+- `core/column_detector.py`
+- `config/ttb.json`
+- `tests/test_app_helpers.py`
+- `tests/test_mapping_assist_service.py`
+- `docs/LOCAL_LLM_BENCHMARKS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Benchmark results
+- Targeted TTB fixture:
+  - command: `.venv/bin/python scripts/benchmark_mapping_models.py --models gemma4:26b --fixture ttb_ambiguous_amount_balance --mode both --run-id balance-ttb-gemma26b-20260424120508`
+  - result: `gemma4:26b` text `6/6`, vision `6/6`, validation `True` for both.
+- 8-bank rerun for `gemma4:26b`:
+  - command: `.venv/bin/python scripts/benchmark_mapping_models.py --models gemma4:26b --mode both --run-id balance-8bank-gemma26b-20260424120540`
+  - result: text `55/55` = `100.00%`, vision `55/55` = `100.00%`, validation `True` for every fixture.
+
+### Tests run
+- `.venv/bin/python -m pytest tests/test_app_helpers.py tests/test_mapping_assist_service.py tests/test_benchmark_mapping_models.py -q` -> `11 passed`
+- `.venv/bin/python -m py_compile utils/app_helpers.py core/column_detector.py services/mapping_assist_service.py scripts/benchmark_mapping_models.py` -> passed
+- `.venv/bin/python -m json.tool config/ttb.json` -> passed
+- `.venv/bin/python -m pytest tests/ -q` -> `356 passed`
+- `git diff --check` -> passed
+- Frontend was not rerun in this slice because no frontend files changed.
+
+### Decisions made
+- Added DEC-025: balance-like mapping suggestions prefer curated statement-balance aliases.
+
+### Warnings / Next
+- The current synthetic 8-bank benchmark has no `gemma4:26b` misses, but it is still synthetic. Do not use this as justification for auto-apply.
+- Next useful benchmark work: add multiple variants per bank, especially real-world-looking but synthetic layouts with merged headers, missing balances, and OCR noise.
+
+### Environment changes
+- No dependencies installed.
+- Generated ignored benchmark artifacts under `artifacts/llm_mapping_benchmarks/`.
+
+## Done (previous session) — Direction-Marker Amount Path
 
 ### What I changed
 - Made `amount + direction_marker` a first-class mapping path for unsigned amount layouts with `DR`/`CR`, `IN`/`OUT`, or Thai deposit/withdraw markers.

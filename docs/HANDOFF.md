@@ -9,11 +9,60 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `383 passed`, frontend `48 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `385 passed`, frontend `48 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Evidence Copilot Case Tag Search
+## Done (latest session) — Local-first Classification Enrichment
+
+### What I changed
+- Moved optional AI classification enrichment to a local-first provider path.
+- `BSIE_ENABLE_LLM_CLASSIFICATION` still defaults off, preserving heuristic classification as the normal pipeline baseline.
+- When enabled, classification now defaults to `BSIE_CLASSIFICATION_LLM_PROVIDER=local` and calls local Ollama `/api/chat` with `think=false`, JSON output, and `OLLAMA_CLASSIFICATION_MODEL` / text-role fallback.
+- Kept the legacy OpenAI helper reachable only when `BSIE_CLASSIFICATION_LLM_PROVIDER=legacy_openai` and `LLM_API_KEY` is present.
+- Added fail-closed validation for local LLM output: transaction ids must match the input batch, transaction types must be allowlisted, confidence is clamped, and invalid/offline/timeout responses keep heuristic values.
+- Updated `.env.example` to remove stale Qwen 2.5 defaults from active local model roles and add `OLLAMA_CLASSIFICATION_MODEL`.
+- Added DEC-043 and marked the Phase 4 local-first classification item complete.
+
+### Files changed
+- `.env.example`
+- `services/classification_service.py`
+- `tests/test_classification_service.py`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `383 passed`
+  - `npm test -- --run` in `frontend/` -> `48 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/classification_service.py tests/test_classification_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_classification_service.py -q` -> `5 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `385 passed`
+  - `npm test -- --run` in `frontend/` -> `48 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-043: optional AI classification enrichment is local-first and fail-closed.
+- Heuristic classification remains the default evidence-preserving baseline.
+- Legacy OpenAI classification is no longer selected by the generic enabled flag alone; it requires explicit legacy provider selection.
+
+### Warnings / Next
+- AI classification is still enrichment, not an analyst review workflow. Keep `BSIE_ENABLE_LLM_CLASSIFICATION=0` unless deliberately testing local model quality.
+- Local model output is accepted only after structural validation, but accepted high-confidence type overrides can still set `classification_review_flag` on divergence rather than silently hiding the disagreement.
+- Next useful slice: add an analyst-facing classification review/preview surface before broader rollout, or add runtime status in admin/LLM UI showing the active classification provider/model.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+- `.env.example` changed to document local classification provider/model defaults; no live env vars were changed.
+
+## Done (previous session) — Evidence Copilot Case Tag Search
 
 ### What I changed
 - Added a Case Tag filter input to Evidence Copilot.

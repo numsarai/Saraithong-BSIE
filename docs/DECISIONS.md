@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-043: Optional AI classification enrichment is local-first
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** The transaction classification pipeline already had a guarded optional LLM enrichment step, but the enabled path still depended on `LLM_API_KEY` and the legacy OpenAI helper. That conflicted with the current local-only operating mode and made it too easy for classified bank-statement data to leave the machine if someone enabled the flag with an API key present.
+- **Decision:** Keep heuristic classification as the default and keep `BSIE_ENABLE_LLM_CLASSIFICATION=0` by default. When optional AI enrichment is enabled, `services/classification_service.py` now defaults to `BSIE_CLASSIFICATION_LLM_PROVIDER=local`, calls local Ollama `/api/chat` with `think=false` and JSON output, and uses `OLLAMA_CLASSIFICATION_MODEL` with `OLLAMA_TEXT_MODEL` / `OLLAMA_DEFAULT_MODEL` fallback. The local path sends bounded normalized transaction fields only, accepts only known transaction ids and allowlisted transaction types, clamps confidence, and fails closed to heuristic values when Ollama is unavailable, times out, or returns invalid JSON. The legacy OpenAI helper remains reachable only through explicit `legacy_openai` provider selection plus `LLM_API_KEY`.
+- **Alternatives:** (1) Remove the legacy helper immediately -- cleaner, but risks breaking older local test harnesses or one-off migration work. (2) Keep `LLM_API_KEY` as the main gate -- simple, but not local-first and unsafe for classified evidence. (3) Let Copilot classify transactions interactively -- violates the read-only copilot contract and weakens deterministic review gates.
+- **Consequences:** AI classification enrichment can now run self-hosted when deliberately enabled, while heuristic classification remains the evidence-preserving baseline. Invalid local model output cannot invent transaction ids or unsupported types into normalized evidence. Future work can add an analyst-facing review surface before enabling broader automatic type overrides.
+
 ### DEC-042: Evidence Copilot supports case tag scope through linked evidence objects
 - **Date:** 2026-04-24
 - **Status:** accepted

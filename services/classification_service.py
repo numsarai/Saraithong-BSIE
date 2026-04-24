@@ -1,14 +1,32 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
+import re
 from dataclasses import asdict, dataclass
+from typing import Any
 
+import httpx
 import pandas as pd
 
 from core.llm_agent import run_llm_pipeline
+from services.llm_service import REQUEST_TIMEOUT, resolve_model
 
 logger = logging.getLogger(__name__)
+
+SUPPORTED_TRANSACTION_TYPES = {
+    "IN_TRANSFER",
+    "OUT_TRANSFER",
+    "DEPOSIT",
+    "WITHDRAW",
+    "FEE",
+    "SALARY",
+    "IN_UNKNOWN",
+    "OUT_UNKNOWN",
+}
+LOCAL_CLASSIFICATION_BATCH_SIZE = 25
+LOCAL_CLASSIFICATION_MAX_TOKENS = 2048
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -35,6 +53,7 @@ def _env_float(name: str, default: float) -> float:
 @dataclass
 class ClassificationSettings:
     llm_enabled: bool
+    llm_provider: str
     llm_api_key_present: bool
     llm_model_name: str
     llm_max_transactions: int
@@ -44,17 +63,236 @@ class ClassificationSettings:
     review_on_ai_divergence: bool
 
 
+def _classification_provider() -> str:
+    provider = (
+        os.getenv("BSIE_CLASSIFICATION_LLM_PROVIDER")
+        or os.getenv("BSIE_LLM_CLASSIFICATION_PROVIDER")
+        or "local"
+    )
+    value = str(provider or "").strip().lower()
+    if value in {"", "local", "ollama", "local_ollama", "local_llm"}:
+        return "local"
+    if value in {"legacy", "legacy_openai", "openai"}:
+        return "legacy_openai"
+    return value
+
+
+def _classification_model_name(provider: str) -> str:
+    if provider == "legacy_openai":
+        return str(os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")).strip() or "gpt-4o-mini"
+    configured = (
+        os.getenv("OLLAMA_CLASSIFICATION_MODEL")
+        or os.getenv("OLLAMA_TEXT_MODEL")
+        or os.getenv("OLLAMA_DEFAULT_MODEL")
+        or "qwen3.5:9b"
+    )
+    return str(configured or "").strip() or "qwen3.5:9b"
+
+
 def get_classification_settings() -> ClassificationSettings:
+    provider = _classification_provider()
     return ClassificationSettings(
         llm_enabled=_env_flag("BSIE_ENABLE_LLM_CLASSIFICATION", False),
+        llm_provider=provider,
         llm_api_key_present=bool(str(os.getenv("LLM_API_KEY", "")).strip()),
-        llm_model_name=str(os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")).strip() or "gpt-4o-mini",
+        llm_model_name=_classification_model_name(provider),
         llm_max_transactions=_env_int("BSIE_LLM_MAX_TRANSACTIONS", 250),
         llm_min_confidence=max(0.0, min(1.0, _env_float("BSIE_LLM_MIN_CONFIDENCE", 0.85))),
         allow_counterparty_name_override=_env_flag("BSIE_LLM_ALLOW_NAME_OVERRIDE", True),
         allow_transaction_type_override=_env_flag("BSIE_LLM_ALLOW_TYPE_OVERRIDE", True),
         review_on_ai_divergence=_env_flag("BSIE_LLM_REVIEW_ON_DIVERGENCE", True),
     )
+
+
+def _ollama_root_url() -> str:
+    root = (os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip() or "http://localhost:11434").rstrip("/")
+    if root.endswith("/v1"):
+        root = root[:-3].rstrip("/")
+    return root or "http://localhost:11434"
+
+
+def _ollama_api_url(path: str) -> str:
+    return f"{_ollama_root_url()}/{path.lstrip('/')}"
+
+
+def _safe_text(value: Any, *, limit: int = 240) -> str:
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value or "").strip()[:limit]
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _safe_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().lower()
+    return text in {"1", "true", "yes", "y", "on"}
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    content = str(text or "").strip()
+    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, flags=re.DOTALL | re.IGNORECASE)
+    if fence_match:
+        content = fence_match.group(1).strip()
+    elif "{" in content and "}" in content:
+        content = content[content.find("{"):content.rfind("}") + 1]
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _classification_payload(df: pd.DataFrame) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for index, row in df.iterrows():
+        txn_id = _safe_text(row.get("transaction_id", f"temp_{index}"), limit=120) or f"temp_{index}"
+        date_text = _safe_text(row.get("date"), limit=40) or _safe_text(row.get("transaction_date"), limit=40)
+        description = (
+            _safe_text(row.get("description"), limit=320)
+            or _safe_text(row.get("description_normalized"), limit=320)
+            or _safe_text(row.get("description_raw"), limit=320)
+        )
+        payload.append(
+            {
+                "transaction_id": txn_id,
+                "date": date_text,
+                "direction": _safe_text(row.get("direction"), limit=12),
+                "amount": _safe_float(row.get("amount")),
+                "description": description,
+                "channel": _safe_text(row.get("channel"), limit=80),
+                "counterparty_account": _safe_text(row.get("counterparty_account"), limit=80),
+                "counterparty_name": _safe_text(row.get("counterparty_name"), limit=160),
+                "heuristic_transaction_type": _safe_text(
+                    row.get("heuristic_transaction_type", row.get("transaction_type", "")),
+                    limit=40,
+                ),
+                "heuristic_confidence": _safe_float(row.get("heuristic_confidence", row.get("confidence", 0.0))),
+            }
+        )
+    return payload
+
+
+def _build_local_classification_prompt(transactions: list[dict[str, Any]]) -> str:
+    prompt_data = json.dumps(transactions, ensure_ascii=False, indent=2)
+    allowed = ", ".join(sorted(SUPPORTED_TRANSACTION_TYPES))
+    return (
+        "You are BSIE's local-only transaction classification assistant.\n"
+        "Analyze only the transaction rows provided below. Do not use external knowledge, do not invent accounts, names, dates, or amounts, "
+        "and keep empty strings when evidence is missing.\n"
+        f"Allowed transaction_type values: {allowed}.\n"
+        "Return only a compact JSON object with this shape:\n"
+        "{\"results\":[{\"transaction_id\":\"...\",\"transaction_type\":\"...\",\"counterparty_name\":\"\",\"confidence\":0.0,"
+        "\"nlp_promptpay\":false,\"nlp_accounts\":\"\"}]}\n"
+        "transaction_id must exactly match the input. confidence must be a number from 0.0 to 1.0. "
+        "nlp_accounts must be a comma-separated string of account numbers found in the description only.\n\n"
+        f"Transactions:\n{prompt_data}"
+    )
+
+
+def _clean_llm_results(raw: dict[str, Any], allowed_ids: set[str]) -> dict[str, dict[str, Any]]:
+    items = raw.get("results")
+    if items is None:
+        items = raw.get("classifications")
+    if not isinstance(items, list):
+        return {}
+
+    results: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        txn_id = _safe_text(item.get("transaction_id"), limit=120)
+        if txn_id not in allowed_ids:
+            continue
+        tx_type = _safe_text(item.get("transaction_type"), limit=40).upper()
+        if tx_type not in SUPPORTED_TRANSACTION_TYPES:
+            continue
+        confidence = max(0.0, min(1.0, _safe_float(item.get("confidence"))))
+        results[txn_id] = {
+            "transaction_type": tx_type,
+            "counterparty_name": _safe_text(item.get("counterparty_name"), limit=160),
+            "confidence": confidence,
+            "nlp_promptpay": _safe_bool(item.get("nlp_promptpay")),
+            "nlp_accounts": _safe_text(item.get("nlp_accounts"), limit=240),
+        }
+    return results
+
+
+def _post_ollama_classification_chat(prompt: str, settings: ClassificationSettings) -> str:
+    selected_model = resolve_model(settings.llm_model_name, "text")
+    payload = {
+        "model": selected_model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a local BSIE assistant for Thai bank statement processing. "
+                    "Return valid JSON only. Do not think step by step."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "stream": False,
+        "format": "json",
+        "think": False,
+        "options": {
+            "temperature": 0,
+            "num_predict": LOCAL_CLASSIFICATION_MAX_TOKENS,
+        },
+    }
+    with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+        response = client.post(_ollama_api_url("/api/chat"), json=payload)
+        response.raise_for_status()
+        data = response.json()
+    return str(data.get("message", {}).get("content", "") or "")
+
+
+def _run_local_llm_pipeline(df: pd.DataFrame, settings: ClassificationSettings) -> dict[str, dict[str, Any]]:
+    payload = _classification_payload(df)
+    results: dict[str, dict[str, Any]] = {}
+    for start in range(0, len(payload), LOCAL_CLASSIFICATION_BATCH_SIZE):
+        batch = payload[start:start + LOCAL_CLASSIFICATION_BATCH_SIZE]
+        allowed_ids = {str(item["transaction_id"]) for item in batch}
+        prompt = _build_local_classification_prompt(batch)
+        try:
+            content = _post_ollama_classification_chat(prompt, settings)
+        except httpx.ConnectError:
+            logger.warning("  -> Local Ollama unavailable. Keeping heuristic classification.")
+            return {}
+        except httpx.TimeoutException:
+            logger.warning("  -> Local Ollama classification timed out. Keeping heuristic classification.")
+            return {}
+        except httpx.RequestError as exc:
+            logger.warning("  -> Local Ollama classification request failed: %s", exc)
+            return {}
+        except httpx.HTTPStatusError as exc:
+            logger.warning("  -> Local Ollama classification failed: %s", exc)
+            return {}
+        except RuntimeError as exc:
+            logger.warning("  -> Local Ollama classification failed: %s", exc)
+            return {}
+
+        cleaned = _clean_llm_results(_extract_json_object(content), allowed_ids)
+        results.update(cleaned)
+    return results
+
+
+def _run_classification_provider(df: pd.DataFrame, settings: ClassificationSettings) -> dict[str, dict[str, Any]]:
+    if settings.llm_provider == "local":
+        return _run_local_llm_pipeline(df, settings)
+    if settings.llm_provider == "legacy_openai":
+        return run_llm_pipeline(df)
+    logger.warning("  -> Unsupported classification LLM provider '%s'. Keeping heuristic classification.", settings.llm_provider)
+    return {}
 
 
 def apply_ai_classification_enrichment(df: pd.DataFrame) -> pd.DataFrame:
@@ -85,7 +323,7 @@ def apply_ai_classification_enrichment(df: pd.DataFrame) -> pd.DataFrame:
         enriched["classification_model"] = "heuristic-only"
         return enriched
 
-    if not settings.llm_api_key_present:
+    if settings.llm_provider == "legacy_openai" and not settings.llm_api_key_present:
         logger.info("  -> No LLM_API_KEY. Keeping heuristic classification.")
         enriched["classification_reason"] = "rule_nlp_hybrid|llm_unavailable"
         enriched["classification_model"] = "heuristic-only"
@@ -101,7 +339,7 @@ def apply_ai_classification_enrichment(df: pd.DataFrame) -> pd.DataFrame:
         enriched["classification_model"] = "heuristic-only"
         return enriched
 
-    llm_results = run_llm_pipeline(enriched)
+    llm_results = _run_classification_provider(enriched, settings)
     if not llm_results:
         logger.warning("  -> AI classification returned empty results; keeping heuristic values.")
         enriched["classification_reason"] = "rule_nlp_hybrid|llm_empty"

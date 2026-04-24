@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from decimal import Decimal
 
 from sqlalchemy import create_engine, select, func
 from sqlalchemy.orm import Session
@@ -8,11 +9,12 @@ from sqlmodel import SQLModel
 
 from persistence.base import Base, utcnow
 from persistence.legacy_models import Job
-from persistence.models import Account, AdminSetting, AuditLog, FileRecord, ParserRun
+from persistence.models import Account, AdminSetting, AuditLog, FileRecord, ParserRun, Transaction
 from services.admin_service import (
     RESET_CONFIRMATION_TEXT,
     RESTORE_CONFIRMATION_TEXT,
     create_database_backup,
+    get_data_hygiene_report,
     get_backup_settings,
     get_database_backup_preview,
     list_database_backups,
@@ -192,6 +194,95 @@ def test_backup_settings_round_trip(tmp_path: Path, monkeypatch):
         row = session.get(AdminSetting, "database_backup")
         assert row is not None
         assert row.updated_by == "tester"
+
+
+def test_data_hygiene_report_flags_sample_and_duplicate_signals(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    _seed_sample_data(engine)
+
+    with Session(engine) as session:
+        file_two = FileRecord(
+            id="file-2",
+            original_filename="real-copy.xlsx",
+            stored_path="/tmp/real-copy.xlsx",
+            file_hash_sha256="abc123",
+            mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            file_size_bytes=128,
+            uploaded_by="analyst",
+            uploaded_at=utcnow(),
+            import_status="processed",
+        )
+        file_three = FileRecord(
+            id="file-3",
+            original_filename="real.xlsx",
+            stored_path="/tmp/real.xlsx",
+            file_hash_sha256="def456",
+            mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            file_size_bytes=256,
+            uploaded_by="analyst",
+            uploaded_at=utcnow(),
+            import_status="processed",
+        )
+        run_two = ParserRun(
+            id="run-2",
+            file_id="file-2",
+            parser_version="test",
+            mapping_profile_version="v1",
+            status="done",
+            bank_detected="scb",
+            started_at=utcnow(),
+            finished_at=utcnow(),
+        )
+        stale_run = ParserRun(
+            id="run-stale",
+            file_id="file-3",
+            parser_version="test",
+            mapping_profile_version="v1",
+            status="superseded",
+            bank_detected="scb",
+            started_at=utcnow(),
+        )
+        session.add_all([file_two, file_three, run_two, stale_run])
+        session.add_all([
+            Transaction(
+                id="txn-1",
+                file_id="file-1",
+                parser_run_id="run-1",
+                amount=Decimal("100.00"),
+                direction="IN",
+                transaction_fingerprint="fp-dup",
+                duplicate_status="exact_duplicate",
+            ),
+            Transaction(
+                id="txn-2",
+                file_id="file-2",
+                parser_run_id="run-2",
+                amount=Decimal("100.00"),
+                direction="IN",
+                transaction_fingerprint="fp-dup",
+                duplicate_status="exact_duplicate",
+            ),
+            Transaction(
+                id="txn-stale",
+                file_id="file-3",
+                parser_run_id="run-stale",
+                amount=Decimal("50.00"),
+                direction="OUT",
+                transaction_fingerprint="fp-stale",
+            ),
+        ])
+        session.commit()
+
+    report = get_data_hygiene_report(bind_engine=engine)
+
+    assert report["read_only"] is True
+    assert report["overall_status"] == "blocked"
+    assert report["summary"]["sample_like_files"] == 1
+    assert report["summary"]["test_actor_files"] == 1
+    assert report["summary"]["duplicate_file_hash_groups"] == 1
+    assert report["summary"]["duplicate_fingerprint_groups"] == 1
+    assert report["summary"]["transactions_on_non_done_runs"] == 1
+    assert any(item["id"] == "duplicate_file_hash_groups" and item["severity"] == "blocker" for item in report["checks"])
 
 
 def test_legacy_auto_backup_format_is_coerced_to_json(tmp_path: Path):

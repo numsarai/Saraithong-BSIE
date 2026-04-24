@@ -12,6 +12,7 @@ import {
   getDatabaseBackupPreview,
   getDatabaseBackups,
   getDatabaseBackupSettings,
+  getDataHygiene,
   getDbStatus,
   getDuplicates,
   getExportJobs,
@@ -214,6 +215,11 @@ export function InvestigationDesk() {
   const dbStatusQuery = useQuery({
     queryKey: ['investigation', 'db-status'],
     queryFn: () => getDbStatus(),
+  })
+  const dataHygieneQuery = useQuery({
+    queryKey: ['investigation', 'data-hygiene'],
+    queryFn: () => getDataHygiene(),
+    enabled: tab === 'database',
   })
   const backupsQuery = useQuery({
     queryKey: ['investigation', 'backups'],
@@ -590,6 +596,7 @@ export function InvestigationDesk() {
   }
 
   const dbStatus = dbStatusQuery.data
+  const dataHygiene = dataHygieneQuery.data
   const backups = backupsQuery.data?.items || []
   const accountDetail = accountDetailQuery.data
   const transactionDetail = transactionDetailQuery.data
@@ -1081,6 +1088,7 @@ export function InvestigationDesk() {
       {tab === 'database' && (
         <DatabaseTab
           dbStatus={dbStatus}
+          dataHygiene={dataHygiene}
           backups={backups}
           selectedBackupFilename={selectedBackupFilename}
           setSelectedBackupFilename={setSelectedBackupFilename}

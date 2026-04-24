@@ -56,6 +56,27 @@ vi.mock('@/api', () => ({
   getDatabaseBackupPreview: vi.fn(async () => ({ counts: {} })),
   getDatabaseBackups: vi.fn(async () => ({ items: [], reset_confirmation_text: 'RESET BSIE DATABASE', restore_confirmation_text: 'RESTORE BSIE DATABASE' })),
   getDatabaseBackupSettings: vi.fn(async () => ({ enabled: false, interval_hours: 24, backup_format: 'json', effective_backup_format: 'json', retention_enabled: false, retain_count: 20, source: 'environment_defaults' })),
+  getDataHygiene: vi.fn(async () => ({
+    overall_status: 'review_required',
+    summary: {
+      sample_like_files: 2,
+      test_actor_files: 1,
+      duplicate_file_hash_groups: 0,
+      duplicate_fingerprint_groups: 1,
+      files_with_multiple_done_runs: 0,
+      transactions_on_non_done_runs: 0,
+      parser_run_status_counts: { queued: 1, failed: 0 },
+    },
+    checks: [
+      { id: 'sample_like_files', label: 'Sample/test-like filenames', count: 2, severity: 'warning', detail: 'sample files' },
+      { id: 'duplicate_file_hash_groups', label: 'Duplicate file hashes', count: 0, severity: 'ok', detail: 'same file hash' },
+    ],
+    samples: {
+      repeated_filenames: [{ original_filename: 'sample.xlsx', uploaded_by: 'tester', files: 2, distinct_hashes: 2 }],
+      duplicate_fingerprint_files: [{ original_filename: 'named.ofx', duplicate_transactions: 2, duplicate_groups: 1 }],
+    },
+    recommendations: ['Create a backup, then reset or clean sample/test data before using the current database as a live case repository.'],
+  })),
   getDbStatus: vi.fn(async () => ({ database_backend: 'sqlite', database_runtime_source: 'local_sqlite', table_count: 22, has_investigation_schema: true, key_record_counts: {}, tables: [], database_url_masked: 'sqlite:///bsie.db' })),
   getDuplicates: vi.fn(async () => ({ items: [] })),
   getExportJobs: vi.fn(async () => ({ items: [] })),
@@ -314,6 +335,16 @@ describe('InvestigationDesk date formatting', () => {
     vi.clearAllMocks()
     useStore.getState().reset()
     useStore.setState({ operatorName: 'Case Reviewer' })
+  })
+
+  it('shows database hygiene audit signals', async () => {
+    renderWithQueryClient()
+
+    expect(await screen.findByText('Data Hygiene Audit')).toBeInTheDocument()
+    expect(await screen.findByText('review required')).toBeInTheDocument()
+    expect(await screen.findByText('Sample/test-like filenames')).toBeInTheDocument()
+    expect(await screen.findByText('sample.xlsx')).toBeInTheDocument()
+    expect(await screen.findByText('named.ofx')).toBeInTheDocument()
   })
 
   it('renders file, parser run, and audit dates as DD MM YYYY', async () => {

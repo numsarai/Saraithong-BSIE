@@ -9,11 +9,83 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `394 passed`, frontend `52 passed`, frontend build passed without Vite chunk-size warning
-- **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
+- **Baseline:** backend `396 passed`, frontend `53 passed`, frontend build passed without Vite chunk-size warning
+- **Auth/DB:** local JWT auth available; current `.env` has `BSIE_AUTH_REQUIRED=false` for dev + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 5 Rollback Review Marking
+## Done (latest session) — Production Readiness Data Hygiene Audit
+
+### What I changed
+- Added a read-only Data Hygiene Audit for production readiness checks before any destructive cleanup or live-case rollout.
+- New endpoint: `GET /api/admin/data-hygiene`.
+- The audit reports sample/test-like filenames, files uploaded by test actors, duplicate file hashes, repeated parser runs, multiple completed runs on one file, transactions attached to non-done runs, duplicate transaction fingerprints, same source-row duplicates, files without parser runs, queued/failed runs, and recommendations.
+- Database Readiness UI now shows the audit status, key counts, check list, recommendations, and top repeated/duplicate signals.
+- Added DEC-053 and regression tests.
+- Ran schema initialization on the local database so newly added tables such as `bank_template_variants` exist in `bsie.db`.
+- Created a pre-cleanup safety backup: `data/backups/bsie_backup_20260424_133826_d16fbdeb.json`.
+
+### Current local database audit result
+- Overall hygiene status: `review_required`.
+- Blockers: `0`.
+- Warnings: `4`.
+- Sample/test-like files: `179`, covering `6556` transactions.
+- Files uploaded by test actors: `122`.
+- Duplicate file hash groups: `0`.
+- Files with multiple completed parser runs: `0`.
+- Transactions attached to non-done/superseded/failed/queued runs: `0`.
+- Same file/source-row duplicate transaction groups: `0`.
+- Duplicate transaction fingerprint groups: `28`, covering `56` transactions.
+- Parser run statuses: `190 superseded`, `93 done`, `22 failed`, `12 queued`.
+- Files without parser runs: `126`.
+
+### Files changed
+- `services/admin_service.py`
+- `routers/admin.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/InvestigationDesk.tsx`
+- `frontend/src/components/investigation/DatabaseTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `tests/test_admin_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `394 passed`
+  - `npm test -- --run` in `frontend/` -> `52 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/admin_service.py routers/admin.py tests/test_admin_service.py tests/test_app_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_admin_service.py::test_data_hygiene_report_flags_sample_and_duplicate_signals tests/test_app_api.py::test_admin_data_hygiene_endpoint_is_read_only -q` -> `2 passed`
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `10 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `396 passed`
+  - `npm test -- --run` in `frontend/` -> `53 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-053: production readiness includes read-only data hygiene audit before cleanup.
+- Cleanup/reset is intentionally not automatic. The current DB mixes sample/test-like data with operational-looking records, so destructive cleanup requires explicit operator confirmation.
+
+### Warnings / Next
+- The current local DB is not clean enough to be the final live-case repository as-is because it contains many sample/test-like files and queued/failed parser runs.
+- Current `.env` still has `BSIE_AUTH_REQUIRED=false` for developer convenience; switch to `true` before live investigator use.
+- There is no evidence that repeated processing of the same file accumulated stale transactions: no duplicate file hashes, no multiple done runs per file, no transactions on non-done runs, and no same source-row duplicate groups.
+- Next useful slice: choose one of two operational paths:
+  - create a fresh/reset live-case database after preserving the backup, then ingest only real case files; or
+  - build an explicit reviewed cleanup workflow to remove/retire selected sample/test files without resetting everything.
+
+### Failed attempts
+- Directly running the audit service before schema initialization failed because the local database had not yet created the recently added `bank_template_variants` table. Ran `init_database()` to initialize missing schema, then reran the audit successfully.
+
+### Environment changes
+- Ran `init_database()` against local `bsie.db`, creating missing schema objects without deleting data.
+- Created backup `data/backups/bsie_backup_20260424_133826_d16fbdeb.json`.
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but generated dist files remain untracked.
+
+## Done (previous session) — Phase 5 Rollback Review Marking
 
 ### What I changed
 - Added an audited rollback-review marking workflow for risky trusted template variants without demoting the variant or enabling auto-pass.

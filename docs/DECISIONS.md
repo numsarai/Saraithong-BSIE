@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-053: Production readiness includes read-only data hygiene audit before cleanup
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Before moving from controlled pilot to live case use, investigators need to know whether the current local database contains sample/test evidence, repeated uploads, stale parser-run output, or duplicate transaction signals. Destructive cleanup/reset must not happen silently because the database may contain real evidence mixed with sample data.
+- **Decision:** Add a read-only admin data hygiene audit at `GET /api/admin/data-hygiene` and surface it in the Database Readiness tab. The audit reports sample/test-like filenames, test actor uploads, duplicate file hashes, repeated parser runs, transactions attached to non-done runs, same source-row duplicates, duplicate transaction fingerprints, queued/failed runs, and recommendations. Cleanup remains a separate explicit operator action with backup/reset safeguards.
+- **Alternatives:** (1) Reset the database immediately after detecting sample data -- faster, but unsafe when real evidence may be mixed in. (2) Add only ad hoc SQL inspection -- useful once, but not repeatable from the app. (3) Treat duplicate fingerprints as blockers -- too strict because mirrored statements can legitimately produce duplicate transaction fingerprints that need analyst review rather than automatic deletion.
+- **Consequences:** BSIE can repeatedly assess database hygiene before live rollout without mutating evidence. The current database can be backed up and then reset/cleaned only after explicit operator confirmation.
+
 ### DEC-052: Rollback review marks risky trusted variants without demotion
 - **Date:** 2026-04-24
 - **Status:** accepted

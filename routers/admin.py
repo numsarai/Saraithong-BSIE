@@ -35,6 +35,7 @@ from services.admin_service import (
     RESET_CONFIRMATION_TEXT,
     RESTORE_CONFIRMATION_TEXT,
     create_database_backup,
+    get_data_hygiene_report,
     get_database_backup_preview,
     get_backup_settings,
     list_database_backups,
@@ -98,6 +99,11 @@ async def api_db_status():
             ),
         }
     )
+
+
+@router.get("/data-hygiene")
+async def api_data_hygiene():
+    return JSONResponse(get_data_hygiene_report())
 
 
 @router.get("/backups")

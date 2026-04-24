@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import Table, func, select, text
+from sqlalchemy import Table, func, inspect, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlmodel import SQLModel
@@ -247,6 +247,368 @@ def _count_rows(bind_engine: Engine) -> dict[str, int]:
         for spec in TABLE_SPECS:
             counts[spec.name] = int(conn.execute(select(func.count()).select_from(spec.table)).scalar_one())
     return counts
+
+
+def _count_existing_rows(bind_engine: Engine) -> dict[str, int]:
+    table_names = set(inspect(bind_engine).get_table_names())
+    counts: dict[str, int] = {}
+    with bind_engine.connect() as conn:
+        for spec in TABLE_SPECS:
+            if spec.name not in table_names:
+                counts[spec.name] = 0
+                continue
+            counts[spec.name] = int(conn.execute(select(func.count()).select_from(spec.table)).scalar_one())
+    return counts
+
+
+SAMPLE_FILENAME_CONDITION = """
+(
+    lower(original_filename) GLOB '*sample*'
+    OR lower(original_filename) GLOB '*test*'
+    OR lower(original_filename) GLOB '*demo*'
+    OR lower(original_filename) GLOB '*dummy*'
+    OR lower(original_filename) GLOB '*example*'
+    OR lower(original_filename) GLOB '*fixture*'
+    OR original_filename GLOB '*ทดสอบ*'
+    OR original_filename GLOB '*ตัวอย่าง*'
+)
+"""
+
+
+def _fetch_one_mapping(conn, sql: str) -> dict[str, Any]:
+    row = conn.execute(text(sql)).mappings().first()
+    return dict(row or {})
+
+
+def _fetch_all_mappings(conn, sql: str) -> list[dict[str, Any]]:
+    return [dict(row) for row in conn.execute(text(sql)).mappings().all()]
+
+
+def _int_value(row: dict[str, Any], key: str) -> int:
+    value = row.get(key)
+    return int(value or 0)
+
+
+def _status_counts(rows: list[dict[str, Any]], *, status_key: str, count_key: str) -> dict[str, int]:
+    return {str(row.get(status_key) or ""): _int_value(row, count_key) for row in rows}
+
+
+def _hygiene_check(check_id: str, label: str, count: int, *, severity_when_found: str, detail: str) -> dict[str, Any]:
+    return {
+        "id": check_id,
+        "label": label,
+        "count": int(count),
+        "status": "attention" if count else "ok",
+        "severity": severity_when_found if count else "ok",
+        "detail": detail,
+    }
+
+
+def get_data_hygiene_report(*, bind_engine: Engine | None = None) -> dict[str, Any]:
+    """Return a read-only database hygiene report for production readiness checks."""
+    bind_engine = bind_engine or engine
+    with bind_engine.connect() as conn:
+        record_counts = _count_existing_rows(bind_engine)
+        sample_row = _fetch_one_mapping(
+            conn,
+            f"""
+            WITH file_flags AS (
+                SELECT id, {SAMPLE_FILENAME_CONDITION} AS sample_like
+                FROM files
+            )
+            SELECT
+                COALESCE(SUM(CASE WHEN sample_like THEN 1 ELSE 0 END), 0) AS sample_like_files,
+                COUNT(*) AS total_files
+            FROM file_flags
+            """,
+        )
+        sample_txn_row = _fetch_one_mapping(
+            conn,
+            f"""
+            WITH file_flags AS (
+                SELECT id, {SAMPLE_FILENAME_CONDITION} AS sample_like
+                FROM files
+            )
+            SELECT COUNT(t.id) AS sample_like_transactions
+            FROM file_flags f
+            JOIN transactions t ON t.file_id = f.id
+            WHERE f.sample_like
+            """,
+        )
+        test_actor_row = _fetch_one_mapping(
+            conn,
+            """
+            SELECT COUNT(*) AS test_actor_files
+            FROM files
+            WHERE lower(uploaded_by) IN ('tester', 'test', 'fixture')
+            """,
+        )
+        duplicate_hash_row = _fetch_one_mapping(
+            conn,
+            """
+            SELECT COUNT(*) AS duplicate_file_hash_groups, COALESCE(SUM(file_count), 0) AS files_in_duplicate_hash_groups
+            FROM (
+                SELECT file_hash_sha256, COUNT(*) AS file_count
+                FROM files
+                GROUP BY file_hash_sha256
+                HAVING COUNT(*) > 1
+            )
+            """,
+        )
+        parser_status_rows = _fetch_all_mappings(
+            conn,
+            """
+            SELECT status, COUNT(*) AS run_count
+            FROM parser_runs
+            GROUP BY status
+            ORDER BY run_count DESC
+            """,
+        )
+        multiple_runs_row = _fetch_one_mapping(
+            conn,
+            """
+            SELECT COUNT(*) AS files_with_multiple_runs, COALESCE(SUM(run_count), 0) AS runs_on_files_with_multiple_runs
+            FROM (
+                SELECT file_id, COUNT(*) AS run_count
+                FROM parser_runs
+                GROUP BY file_id
+                HAVING COUNT(*) > 1
+            )
+            """,
+        )
+        multiple_done_row = _fetch_one_mapping(
+            conn,
+            """
+            SELECT COUNT(*) AS files_with_multiple_done_runs, COALESCE(SUM(done_runs), 0) AS done_runs_on_those_files
+            FROM (
+                SELECT file_id, COUNT(*) AS done_runs
+                FROM parser_runs
+                WHERE status = 'done'
+                GROUP BY file_id
+                HAVING COUNT(*) > 1
+            )
+            """,
+        )
+        stale_run_row = _fetch_one_mapping(
+            conn,
+            """
+            SELECT COUNT(t.id) AS transactions_on_non_done_runs
+            FROM transactions t
+            JOIN parser_runs pr ON pr.id = t.parser_run_id
+            WHERE pr.status <> 'done'
+            """,
+        )
+        orphan_file_row = _fetch_one_mapping(
+            conn,
+            """
+            SELECT COUNT(*) AS files_without_parser_runs
+            FROM files f
+            LEFT JOIN parser_runs pr ON pr.file_id = f.id
+            WHERE pr.id IS NULL
+            """,
+        )
+        duplicate_status_rows = _fetch_all_mappings(
+            conn,
+            """
+            SELECT duplicate_status, COUNT(*) AS txn_count
+            FROM transactions
+            GROUP BY duplicate_status
+            ORDER BY txn_count DESC
+            """,
+        )
+        duplicate_fingerprint_row = _fetch_one_mapping(
+            conn,
+            """
+            SELECT COUNT(*) AS duplicate_fingerprint_groups, COALESCE(SUM(txn_count), 0) AS transactions_in_duplicate_fingerprint_groups
+            FROM (
+                SELECT transaction_fingerprint, COUNT(*) AS txn_count
+                FROM transactions
+                WHERE transaction_fingerprint IS NOT NULL AND transaction_fingerprint <> ''
+                GROUP BY transaction_fingerprint
+                HAVING COUNT(*) > 1
+            )
+            """,
+        )
+        same_file_row_duplicate_row = _fetch_one_mapping(
+            conn,
+            """
+            SELECT COUNT(*) AS same_file_row_duplicate_groups, COALESCE(SUM(txn_count), 0) AS transactions_in_same_file_row_duplicate_groups
+            FROM (
+                SELECT file_id, COALESCE(source_row_id, '') AS source_row_key, COUNT(*) AS txn_count
+                FROM transactions
+                GROUP BY file_id, COALESCE(source_row_id, '')
+                HAVING COUNT(*) > 1 AND COALESCE(source_row_id, '') <> ''
+            )
+            """,
+        )
+        repeated_filename_rows = _fetch_all_mappings(
+            conn,
+            """
+            SELECT original_filename, uploaded_by, COUNT(*) AS files, COUNT(DISTINCT file_hash_sha256) AS distinct_hashes
+            FROM files
+            GROUP BY original_filename, uploaded_by
+            HAVING COUNT(*) > 1
+            ORDER BY files DESC, original_filename
+            LIMIT 20
+            """,
+        )
+        sample_like_rows = _fetch_all_mappings(
+            conn,
+            f"""
+            SELECT
+                substr(f.id, 1, 8) AS file_id_prefix,
+                f.original_filename,
+                f.uploaded_by,
+                f.import_status,
+                f.uploaded_at,
+                COUNT(t.id) AS transactions
+            FROM files f
+            LEFT JOIN transactions t ON t.file_id = f.id
+            WHERE {SAMPLE_FILENAME_CONDITION}
+            GROUP BY f.id, f.original_filename, f.uploaded_by, f.import_status, f.uploaded_at
+            ORDER BY f.uploaded_at DESC
+            LIMIT 30
+            """,
+        )
+        duplicate_fingerprint_file_rows = _fetch_all_mappings(
+            conn,
+            """
+            WITH dup AS (
+                SELECT transaction_fingerprint
+                FROM transactions
+                WHERE transaction_fingerprint IS NOT NULL AND transaction_fingerprint <> ''
+                GROUP BY transaction_fingerprint
+                HAVING COUNT(*) > 1
+            )
+            SELECT f.original_filename, COUNT(*) AS duplicate_transactions, COUNT(DISTINCT t.transaction_fingerprint) AS duplicate_groups
+            FROM transactions t
+            JOIN dup d ON d.transaction_fingerprint = t.transaction_fingerprint
+            JOIN files f ON f.id = t.file_id
+            GROUP BY f.original_filename
+            ORDER BY duplicate_transactions DESC, f.original_filename
+            LIMIT 20
+            """,
+        )
+
+    parser_status_counts = _status_counts(parser_status_rows, status_key="status", count_key="run_count")
+    duplicate_status_counts = _status_counts(duplicate_status_rows, status_key="duplicate_status", count_key="txn_count")
+    summary = {
+        "record_counts": record_counts,
+        "sample_like_files": _int_value(sample_row, "sample_like_files"),
+        "sample_like_transactions": _int_value(sample_txn_row, "sample_like_transactions"),
+        "test_actor_files": _int_value(test_actor_row, "test_actor_files"),
+        "duplicate_file_hash_groups": _int_value(duplicate_hash_row, "duplicate_file_hash_groups"),
+        "files_in_duplicate_hash_groups": _int_value(duplicate_hash_row, "files_in_duplicate_hash_groups"),
+        "parser_run_status_counts": parser_status_counts,
+        "files_with_multiple_runs": _int_value(multiple_runs_row, "files_with_multiple_runs"),
+        "runs_on_files_with_multiple_runs": _int_value(multiple_runs_row, "runs_on_files_with_multiple_runs"),
+        "files_with_multiple_done_runs": _int_value(multiple_done_row, "files_with_multiple_done_runs"),
+        "done_runs_on_files_with_multiple_done_runs": _int_value(multiple_done_row, "done_runs_on_those_files"),
+        "transactions_on_non_done_runs": _int_value(stale_run_row, "transactions_on_non_done_runs"),
+        "files_without_parser_runs": _int_value(orphan_file_row, "files_without_parser_runs"),
+        "duplicate_status_counts": duplicate_status_counts,
+        "duplicate_fingerprint_groups": _int_value(duplicate_fingerprint_row, "duplicate_fingerprint_groups"),
+        "transactions_in_duplicate_fingerprint_groups": _int_value(duplicate_fingerprint_row, "transactions_in_duplicate_fingerprint_groups"),
+        "same_file_row_duplicate_groups": _int_value(same_file_row_duplicate_row, "same_file_row_duplicate_groups"),
+        "transactions_in_same_file_row_duplicate_groups": _int_value(same_file_row_duplicate_row, "transactions_in_same_file_row_duplicate_groups"),
+    }
+
+    checks = [
+        _hygiene_check(
+            "sample_like_files",
+            "Sample/test-like filenames",
+            summary["sample_like_files"],
+            severity_when_found="warning",
+            detail="Files whose names look like sample, test, demo, fixture, ทดสอบ, or ตัวอย่าง.",
+        ),
+        _hygiene_check(
+            "test_actor_files",
+            "Files uploaded by test actors",
+            summary["test_actor_files"],
+            severity_when_found="warning",
+            detail="Files uploaded by tester/test/fixture accounts.",
+        ),
+        _hygiene_check(
+            "duplicate_file_hash_groups",
+            "Duplicate file hashes",
+            summary["duplicate_file_hash_groups"],
+            severity_when_found="blocker",
+            detail="Same SHA-256 appears in more than one file record.",
+        ),
+        _hygiene_check(
+            "files_with_multiple_done_runs",
+            "Multiple done parser runs on one file",
+            summary["files_with_multiple_done_runs"],
+            severity_when_found="blocker",
+            detail="One file has more than one completed parser run.",
+        ),
+        _hygiene_check(
+            "transactions_on_non_done_runs",
+            "Transactions attached to non-done runs",
+            summary["transactions_on_non_done_runs"],
+            severity_when_found="blocker",
+            detail="Transactions should not remain attached to failed, queued, or superseded parser runs.",
+        ),
+        _hygiene_check(
+            "same_file_row_duplicate_groups",
+            "Same file/source-row transaction duplicates",
+            summary["same_file_row_duplicate_groups"],
+            severity_when_found="blocker",
+            detail="The same source row in a file produced more than one transaction.",
+        ),
+        _hygiene_check(
+            "duplicate_fingerprint_groups",
+            "Duplicate transaction fingerprints",
+            summary["duplicate_fingerprint_groups"],
+            severity_when_found="warning",
+            detail="Potential duplicate transaction fingerprints across files/runs for analyst review.",
+        ),
+        _hygiene_check(
+            "queued_or_failed_runs",
+            "Queued or failed parser runs",
+            parser_status_counts.get("queued", 0) + parser_status_counts.get("failed", 0),
+            severity_when_found="warning",
+            detail="Parser runs that did not finish cleanly may need review before live operations.",
+        ),
+        _hygiene_check(
+            "files_without_parser_runs",
+            "Files without parser runs",
+            summary["files_without_parser_runs"],
+            severity_when_found="info",
+            detail="Uploaded files that have not produced parser runs yet.",
+        ),
+    ]
+    blocker_count = sum(1 for item in checks if item["severity"] == "blocker")
+    warning_count = sum(1 for item in checks if item["severity"] == "warning")
+    overall_status = "blocked" if blocker_count else "review_required" if warning_count else "ready"
+
+    recommendations: list[str] = []
+    if summary["sample_like_files"] or summary["test_actor_files"]:
+        recommendations.append("Create a backup, then reset or clean sample/test data before using the current database as a live case repository.")
+    if summary["duplicate_file_hash_groups"] == 0 and summary["files_with_multiple_done_runs"] == 0 and summary["transactions_on_non_done_runs"] == 0:
+        recommendations.append("No evidence of repeated-file processing accumulating stale transactions was found.")
+    if summary["duplicate_fingerprint_groups"]:
+        recommendations.append("Review duplicate transaction fingerprint groups; they may be legitimate mirrored statements or duplicate evidence packages.")
+    if parser_status_counts.get("queued", 0) or parser_status_counts.get("failed", 0):
+        recommendations.append("Review queued/failed parser runs and clear or reprocess them before operational rollout.")
+    if not recommendations:
+        recommendations.append("Database hygiene checks are clean for pilot use.")
+
+    return {
+        "generated_at": utcnow().isoformat(),
+        "read_only": True,
+        "overall_status": overall_status,
+        "blocker_count": blocker_count,
+        "warning_count": warning_count,
+        "summary": summary,
+        "checks": checks,
+        "samples": {
+            "sample_like_files": sample_like_rows,
+            "repeated_filenames": repeated_filename_rows,
+            "duplicate_fingerprint_files": duplicate_fingerprint_file_rows,
+        },
+        "recommendations": recommendations,
+    }
 
 
 def _resolve_backup_format(requested_format: str | None, bind_engine: Engine) -> str:

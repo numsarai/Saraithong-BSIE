@@ -592,6 +592,12 @@ export async function getDbStatus() {
   return r.json()
 }
 
+export async function getDataHygiene() {
+  const r = await apiFetch('/api/admin/data-hygiene')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function getDatabaseBackups() {
   const r = await apiFetch('/api/admin/backups')
   if (!r.ok) throw new Error(await r.text())

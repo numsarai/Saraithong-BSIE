@@ -1567,6 +1567,18 @@ def test_db_status_endpoint_reports_investigation_schema():
     assert "key_record_counts" in payload
 
 
+def test_admin_data_hygiene_endpoint_is_read_only():
+    response = client.get("/api/admin/data-hygiene")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["read_only"] is True
+    assert "overall_status" in payload
+    assert "summary" in payload
+    assert "checks" in payload
+    assert "recommendations" in payload
+
+
 def test_admin_backup_endpoints_round_trip(tmp_path):
     with (
         patch("routers.exports.BACKUPS_DIR", tmp_path),

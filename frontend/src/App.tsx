@@ -1,12 +1,13 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Toaster } from 'sonner'
 import { Sidebar } from '@/components/Sidebar'
-import { Step1Upload }     from '@/components/steps/Step1Upload'
-import { Step2Map }        from '@/components/steps/Step2Map'
-import { Step3Config }     from '@/components/steps/Step3Config'
-import { Step4Processing } from '@/components/steps/Step4Processing'
-import { Step5Results }    from '@/components/steps/Step5Results'
 import { useStore } from '@/store'
+
+const Step1Upload = lazy(() => import('@/components/steps/Step1Upload').then(m => ({ default: m.Step1Upload })))
+const Step2Map = lazy(() => import('@/components/steps/Step2Map').then(m => ({ default: m.Step2Map })))
+const Step3Config = lazy(() => import('@/components/steps/Step3Config').then(m => ({ default: m.Step3Config })))
+const Step4Processing = lazy(() => import('@/components/steps/Step4Processing').then(m => ({ default: m.Step4Processing })))
+const Step5Results = lazy(() => import('@/components/steps/Step5Results').then(m => ({ default: m.Step5Results })))
 
 // Lazy-load heavy pages to reduce initial bundle
 const BankManager = lazy(() => import('@/components/BankManager').then(m => ({ default: m.BankManager })))

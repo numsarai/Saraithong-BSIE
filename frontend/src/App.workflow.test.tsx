@@ -101,6 +101,7 @@ function makeUploadResponse(overrides: Record<string, unknown> = {}) {
 }
 
 async function uploadSample(container: HTMLElement, filename = 'sample.xlsx') {
+  await waitFor(() => expect(container.querySelector('input[type="file"]')).not.toBeNull())
   const input = container.querySelector('input[type="file"]') as HTMLInputElement | null
   expect(input).not.toBeNull()
   const file = new File(['bank data'], filename, {
@@ -158,12 +159,11 @@ describe('App workflow', () => {
     await act(async () => {
       fireEvent.click(continueButton)
       await flushAsyncWork()
-      await screen.findByText(/configure pipeline/i)
     })
 
     await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
     expect(previewMapping).toHaveBeenCalledTimes(1)
-    expect(screen.getByText(/configure pipeline/i)).toBeInTheDocument()
+    expect(await screen.findByText(/configure pipeline/i)).toBeInTheDocument()
   })
 
   it('allows fast progression for strong auto-detected uploads', async () => {
@@ -179,11 +179,10 @@ describe('App workflow', () => {
     await act(async () => {
       fireEvent.click(continueButton)
       await flushAsyncWork()
-      await screen.findByText(/configure pipeline/i)
     })
 
     await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
     expect(previewMapping).toHaveBeenCalledTimes(1)
-    expect(screen.getByText(/configure pipeline/i)).toBeInTheDocument()
+    expect(await screen.findByText(/configure pipeline/i)).toBeInTheDocument()
   })
 })

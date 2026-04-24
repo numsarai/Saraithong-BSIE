@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-032: Frontend workflow steps are lazy-loaded to keep the main bundle small
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Vite reported a large bundle because the main app imported every workflow step eagerly. `Step5Results` pulls graph/chart runtime dependencies through `AccountFlowGraph`, `TimelineChart`, `TimeWheel`, and related result views, so the initial app chunk carried code that is only needed after upload/mapping/configuration.
+- **Decision:** Lazy-load `Step1Upload` through `Step5Results` from `frontend/src/App.tsx` while keeping the existing lazy page boundaries for Dashboard, Bank Manager, Bulk Intake, and Investigation Desk. Raise Vite's `chunkSizeWarningLimit` to `900` because the remaining large chunk is the intentionally isolated Cytoscape graph runtime rather than the initial app bundle.
+- **Alternatives:** (1) Leave eager workflow imports and ignore the warning -- keeps the startup bundle unnecessarily large. (2) Disable all chunk warnings -- hides future regressions. (3) Hand-roll deeper graph library splitting now -- higher implementation risk for a known lazy chunk that no longer blocks first load.
+- **Consequences:** The initial app chunk dropped from about `1,209 kB` to about `360 kB`; Cytoscape remains a lazy graph chunk at about `803 kB`. Tests that interact with the upload workflow must wait for lazy-rendered step content before querying step-specific elements.
+
 ### DEC-031: OCR account presence scans raw accepted text tokens
 - **Date:** 2026-04-24
 - **Status:** accepted

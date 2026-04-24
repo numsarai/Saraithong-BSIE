@@ -25,5 +25,6 @@ export default defineConfig({
   build: {
     outDir: '../static/dist',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 900,
   },
 })

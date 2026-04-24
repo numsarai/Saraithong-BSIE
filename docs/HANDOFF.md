@@ -9,11 +9,46 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `370 passed`, frontend `45 passed`, frontend build passed
+- **Baseline:** backend `370 passed`, frontend `45 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Raw OCR Token Account Presence Verification
+## Done (latest session) — Frontend Workflow Code-Splitting
+
+### What I changed
+- `frontend/src/App.tsx` now lazy-loads the five workflow step components (`Step1Upload` through `Step5Results`) instead of importing them into the initial app chunk.
+- The existing page-level lazy boundaries for Dashboard, Bank Manager, Bulk Intake, and Investigation Desk remain in place.
+- `frontend/vite.config.ts` now sets `chunkSizeWarningLimit: 900` because the remaining large chunk is the deliberately isolated Cytoscape graph runtime.
+- `frontend/src/App.workflow.test.tsx` now waits for lazy-rendered workflow elements before querying them.
+
+### Files changed
+- `frontend/src/App.tsx`
+- `frontend/src/App.workflow.test.tsx`
+- `frontend/vite.config.ts`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `370 passed`
+  - `npm test -- --run` in `frontend/` -> `45 passed`
+- Full verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `370 passed`
+  - `npm test -- --run` in `frontend/` -> `45 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-032: frontend workflow steps are lazy-loaded to keep the main bundle small.
+
+### Warnings / Next
+- The initial app chunk is now about `360 kB`, down from about `1,209 kB` before this split.
+- Cytoscape remains about `803 kB` as a lazy graph-runtime chunk. If future graph work pushes that above the `900 kB` threshold, revisit deeper graph-specific splitting instead of raising the limit again.
+- Next useful slice: richer OCR review UI that displays token/page locations, or continue hardening unknown-bank/account conflict review screens.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Raw OCR Token Account Presence Verification
 
 ### What I changed
 - `core.image_loader.parse_image_file` now preserves accepted OCR text boxes as `ocr_tokens` alongside the reconstructed table DataFrame.

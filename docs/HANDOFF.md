@@ -9,11 +9,65 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `397 passed`, frontend `54 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `398 passed`, frontend `54 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth required (`BSIE_AUTH_REQUIRED=true`) + local SQLite WAL (`bsie.db`) now contains one processed real test statement
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Mapping Profile Guard and KBANK Reprocess
+## Done (latest session) — Results Timeline Fallback Restores Flow Graph
+
+### What I changed
+- Investigated why the results flow graph disappeared after the KBANK reprocess.
+- Root cause: the browser was still querying with the superseded parser run id `f6a2c23d-b839-4468-a26a-156def476b0e`.
+- `/api/results/{account}` fell back to the latest exported `transactions.csv`, so the transaction table still had rows.
+- `/api/results/{account}/timeline` returned an empty DB result immediately for the superseded run, so `AccountFlowGraph` received no timeline rows and disappeared.
+- Changed `api_results_timeline` to fall back to the latest exported `processed/transactions.csv` when a scoped `parser_run_id` has no timeline rows, matching the behavior of `api_results`.
+- Added regression coverage for a superseded/empty scoped timeline falling back to CSV.
+
+### Current local database/API state
+- Latest active parser run remains:
+  - `parser_run_id=17b77946-2690-4be3-a5e6-4954b3798f3a`
+  - `status=done`
+  - `transaction_count=1595`
+  - directions: `IN=620`, `OUT=975`
+- The old browser-held run id `f6a2c23d-b839-4468-a26a-156def476b0e` is still `superseded`.
+- Runtime verification after backend restart:
+  - old timeline request with `parser_run_id=f6a2c23d-b839-4468-a26a-156def476b0e` -> `1595` rows
+  - latest timeline request with `parser_run_id=17b77946-2690-4be3-a5e6-4954b3798f3a` -> `1595` rows
+  - both include IN and OUT directions for graph rendering
+
+### Files changed
+- `routers/results.py`
+- `tests/test_app_api.py`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `397 passed`
+  - `npm test -- --run` in `frontend/` -> `54 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile routers/results.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_app_api.py::test_results_timeline_endpoint_preserves_transaction_datetime tests/test_app_api.py::test_results_timeline_falls_back_to_latest_csv_when_scoped_run_is_superseded -q` -> `2 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `398 passed`
+  - `npm test -- --run` in `frontend/` -> `54 passed`
+
+### Decisions made
+- No architectural decision. This is a compatibility fix so the results page remains usable after a reprocess supersedes the parser run held in browser state.
+
+### Warnings / Next
+- The browser may still have a React Query cache for the old empty timeline. Refresh the page if the graph is still hidden.
+- Investigation Link Chart endpoints remain strict by `parser_run_id`; if the operator filters that workspace by a superseded run, it will correctly show no DB graph rows. Use the latest run id for DB-scoped graph analysis.
+- A future UI improvement should detect superseded parser runs explicitly and show a small banner with a jump-to-latest action instead of relying only on output-file fallback.
+
+### Failed attempts
+- The in-app browser window was not directly controllable through Computer Use because Codex itself is blocked for safety. Chrome was unrelated and on a new-tab page, so verification was done through local API/runtime checks.
+
+### Environment changes
+- Backend restarted in tmux session `bsie-backend-dev` with the timeline fallback code.
+- No dependencies installed.
+
+## Done (previous session) — Mapping Profile Guard and KBANK Reprocess
 
 ### What I changed
 - Investigated why the latest processed KBANK statement produced only inbound transactions.

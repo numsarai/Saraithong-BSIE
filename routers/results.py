@@ -163,6 +163,7 @@ async def api_results(account: str, page: int = 1, page_size: int = 100, parser_
 async def api_results_timeline(account: str, parser_run_id: str = ""):
     """Return lightweight date+amount+direction data for ALL transactions — for timeline charts."""
     safe = _safe_account(account)
+    items = []
 
     with get_db_session() as session:
         account_row = session.scalars(
@@ -197,7 +198,8 @@ async def api_results_timeline(account: str, parser_run_id: str = ""):
                 }
                 for row in result
             ]
-            return JSONResponse({"account": safe, "items": items, "total": len(items)})
+            if items or not parser_run_id:
+                return JSONResponse({"account": safe, "items": items, "total": len(items)})
 
     # Fallback to CSV
     txn_path = _canonical_output_path(safe, "processed", "transactions.csv")

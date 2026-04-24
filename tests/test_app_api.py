@@ -365,6 +365,56 @@ def test_results_timeline_endpoint_preserves_transaction_datetime(monkeypatch):
     assert payload["items"][0]["posted_date"] == "2026-03-05"
 
 
+def test_results_timeline_falls_back_to_latest_csv_when_scoped_run_is_superseded(tmp_path, monkeypatch):
+    account_dir = tmp_path / "1234567890" / "processed"
+    account_dir.mkdir(parents=True)
+    (account_dir / "transactions.csv").write_text(
+        "date,time,amount,direction,transaction_type,counterparty_account,counterparty_name\n"
+        "2026-03-05,14:45:00,1250.00,IN,IN_TRANSFER,2222222222,alice\n"
+        "2026-03-06,10:15:00,-500.00,OUT,OUT_TRANSFER,3333333333,bob\n",
+        encoding="utf-8-sig",
+    )
+
+    class DummyScalarResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def first(self):
+            return self._rows[0] if self._rows else None
+
+    class DummyAccount:
+        id = "ACCOUNT-1"
+
+    class EmptyExecuteResult:
+        def all(self):
+            return []
+
+    class DummySession:
+        def scalars(self, query):
+            return DummyScalarResult([DummyAccount()])
+
+        def execute(self, query):
+            return EmptyExecuteResult()
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _fake_session():
+        yield DummySession()
+
+    monkeypatch.setattr("routers.results.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("routers.results.get_db_session", _fake_session)
+
+    response = client.get("/api/results/1234567890/timeline", params={"parser_run_id": "SUPERSEDED-RUN"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 2
+    assert payload["items"][0]["direction"] == "IN"
+    assert payload["items"][1]["direction"] == "OUT"
+    assert payload["items"][0]["transaction_datetime"] == "2026-03-05T14:45:00"
+
+
 def test_upload_pdf_extraction_errors_return_client_error():
     with (
         patch("routers.ingestion.parse_pdf_file", return_value={"tables_found": 0, "df": pd.DataFrame()}),

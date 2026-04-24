@@ -82,6 +82,13 @@ def test_banks_endpoint_includes_logo_metadata():
     assert scb["template_status"] == "template_ready"
 
 
+def test_auth_status_endpoint_reports_requirement():
+    response = client.get("/api/auth/status")
+
+    assert response.status_code == 200
+    assert isinstance(response.json()["auth_required"], bool)
+
+
 def test_job_status_prefers_runtime_job_cache(monkeypatch):
     monkeypatch.setattr(
         "routers.jobs.get_runtime_job",

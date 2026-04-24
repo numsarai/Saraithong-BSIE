@@ -9,11 +9,104 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `396 passed`, frontend `53 passed`, frontend build passed without Vite chunk-size warning
-- **Auth/DB:** local JWT auth available; current `.env` has `BSIE_AUTH_REQUIRED=false` for dev + clean local SQLite WAL (`bsie.db`)
+- **Baseline:** backend `397 passed`, frontend `54 passed`, frontend build passed without Vite chunk-size warning
+- **Auth/DB:** local JWT auth required (`BSIE_AUTH_REQUIRED=true`) + clean local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Confirmed Clean Database Reset
+## Done (latest session) — Live-use Auth and Backup Retention
+
+### What I changed
+- Added frontend/backend auth wiring so the browser app remains usable after `BSIE_AUTH_REQUIRED=true`.
+- Added public `GET /api/auth/status` for the frontend to detect auth-required mode.
+- Frontend now:
+  - checks auth status on app load
+  - shows a login screen only when backend auth is required
+  - stores the JWT in local browser storage
+  - sends `Authorization: Bearer <token>` on API calls
+  - clears the token on 401
+  - exposes a logout action while signed in
+- Set local `.env` to `BSIE_AUTH_REQUIRED=true` (ignored by Git, not committed).
+- Restarted backend and frontend dev servers:
+  - backend `127.0.0.1:8757`
+  - frontend `127.0.0.1:6777`
+- Verified admin login through API without printing password/token.
+- Verified anonymous protected admin request returns `401`.
+- Saved backup retention settings after reset:
+  - `enabled=true`
+  - `interval_hours=24`
+  - `backup_format=json`
+  - `retention_enabled=true`
+  - `retain_count=20`
+  - `updated_by=numsarai`
+- Added DEC-055 and frontend coverage.
+
+### Current local database state
+- Data Hygiene Audit: `ready`.
+- Evidence/runtime tables remain clean:
+  - `files=0`
+  - `parser_runs=0`
+  - `transactions=0`
+  - `accounts=0`
+- Startup migrated `mapping_profile=16` from local JSON mapping-profile files; these are operational mapping memory, not evidence rows.
+- `audit_logs=1` from saving backup settings.
+- `admin_settings=1` for database backup policy.
+- `users=1` active admin user remains.
+
+### Files changed
+- `routers/auth.py`
+- `frontend/src/api.ts`
+- `frontend/src/App.tsx`
+- `frontend/src/App.workflow.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before config/code changes:
+  - `.venv/bin/python -m pytest tests/ -q` -> `396 passed`
+  - `npm test -- --run` in `frontend/` -> `53 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile routers/auth.py services/auth_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_app_api.py::test_admin_data_hygiene_endpoint_is_read_only tests/test_auth_service.py -q` -> `14 passed`
+  - `npm test -- --run src/App.workflow.test.tsx` in `frontend/` -> `3 passed`
+  - `npm run build` in `frontend/` -> passed
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `397 passed`
+  - `npm test -- --run` in `frontend/` -> `54 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+- Runtime verification:
+  - `GET /api/auth/status` -> `auth_required=true`
+  - anonymous `GET /api/admin/db-status` -> `401`
+  - `POST /api/auth/login` with configured admin -> `200`
+  - `GET /api/auth/me` with token -> `200`, admin user
+  - `POST /api/admin/backup-settings` with token -> `200`
+  - `GET /api/admin/data-hygiene` with token -> `ready`, `0` blockers, `0` warnings
+  - frontend `http://127.0.0.1:6777/` -> HTTP `200`
+
+### Decisions made
+- Added DEC-055: live-use mode requires frontend JWT login and retained backups.
+- Auth is now enabled locally; browser users must log in before accessing protected API-backed workflows.
+
+### Warnings / Next
+- The admin password still comes from local `.env`. Keep `.env` private and rotate the password before broader team use.
+- Browser tokens live in local storage; logout or clearing browser storage removes the token.
+- Local JSON mapping profiles still exist under `mapping_profiles/` and migrate into the empty DB on backend startup. Keep them if existing mapping memory is desired; archive them separately only if a completely memory-free live start is required.
+- Next useful slice: ingest the first real bank statement file and confirm the full analyst-in-the-loop workflow under auth.
+
+### Failed attempts
+- Restarting the frontend while an old Vite process still owned port `6777` initially caused a new dev server to bind `6778`; cleaned up duplicate Vite processes and restarted a single strict-port frontend on `6777`.
+
+### Environment changes
+- Local `.env` changed from `BSIE_AUTH_REQUIRED=false` to `BSIE_AUTH_REQUIRED=true`.
+- Database backup settings persisted to `admin_settings`.
+- Backend/frontend restarted in tmux sessions.
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but generated dist files remain untracked.
+
+## Done (previous session) — Confirmed Clean Database Reset
 
 ### What I changed
 - User explicitly confirmed the destructive reset phrase: `RESET BSIE DATABASE`.

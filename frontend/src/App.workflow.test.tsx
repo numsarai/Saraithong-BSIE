@@ -37,7 +37,12 @@ vi.mock('@/api', () => ({
   saveOverride: vi.fn(async () => ({ status: 'ok' })),
   llmChat: vi.fn(async () => ({ response: 'ok' })),
   askCopilot: vi.fn(async () => ({ status: 'ok', answer: 'ok', citations: [] })),
+  clearStoredAuthToken: vi.fn(),
+  getAuthStatus: vi.fn(async () => ({ auth_required: false })),
+  getCurrentUser: vi.fn(async () => ({ user: { username: 'Case Reviewer', role: 'admin' } })),
   getLlmStatus: vi.fn(async () => ({ status: 'ok', models: [] })),
+  getStoredAuthToken: vi.fn(() => ''),
+  login: vi.fn(async () => ({ token: 'TOKEN', user: { username: 'numsarai', role: 'admin' } })),
 }))
 
 vi.mock('sonner', () => ({
@@ -52,7 +57,7 @@ vi.mock('@/components/LlmChat', () => ({
   LlmChat: () => null,
 }))
 
-const { uploadFile, confirmMapping, getBanks, previewMapping } = await import('@/api')
+const { getAuthStatus, getStoredAuthToken, login, uploadFile, confirmMapping, getBanks, previewMapping } = await import('@/api')
 
 async function flushAsyncWork() {
   await Promise.resolve()
@@ -128,6 +133,21 @@ describe('App workflow', () => {
     act(() => {
       useStore.getState().reset()
     })
+  })
+
+  it('shows login when backend auth is required', async () => {
+    vi.mocked(getAuthStatus).mockResolvedValueOnce({ auth_required: true })
+    vi.mocked(getStoredAuthToken).mockReturnValueOnce('')
+
+    renderApp()
+
+    expect(await screen.findByText(/เข้าสู่ระบบ BSIE|Sign in to BSIE/i)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/ชื่อผู้ใช้|username/i), { target: { value: 'numsarai' } })
+    fireEvent.change(screen.getByLabelText(/รหัสผ่าน|password/i), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByRole('button', { name: /เข้าสู่ระบบ|sign in/i }))
+
+    await waitFor(() => expect(login).toHaveBeenCalledWith('numsarai', 'secret'))
+    expect(await screen.findByText('numsarai · admin')).toBeInTheDocument()
   })
 
   it('forces analyst review in the full upload flow for ambiguous bank detection', async () => {

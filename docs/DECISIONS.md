@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-055: Live-use mode requires frontend JWT login and retained backups
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** After resetting the local database for live-case use, enabling `BSIE_AUTH_REQUIRED=true` would protect the API but would also break the browser workflow unless the frontend could obtain and send JWT tokens. Backup retention also needed to be persisted after reset because `admin_settings` was cleared.
+- **Decision:** Add a public `GET /api/auth/status` endpoint so the frontend can detect whether auth is required, add a BSIE login screen when required, persist the local JWT in browser storage, attach `Authorization: Bearer ...` to API calls, and expose logout. Then enable `BSIE_AUTH_REQUIRED=true` in the local `.env`, restart backend/frontend, verify admin login, verify protected endpoints reject anonymous requests, and save database backup settings with retention enabled for the latest 20 backups.
+- **Alternatives:** (1) Enable backend auth without frontend login -- secure but unusable from the browser. (2) Keep auth disabled for convenience -- easier, but not suitable before real investigator use. (3) Hard-code a token into the frontend -- unsafe and not auditable.
+- **Consequences:** The local app now starts in authenticated mode and remains usable from the browser after login. Operators must log in before protected API access. The token is local-browser state; clearing browser storage or logging out returns the app to the login screen.
+
 ### DEC-054: Live-case database starts from an explicit reset after backup
 - **Date:** 2026-04-24
 - **Status:** accepted

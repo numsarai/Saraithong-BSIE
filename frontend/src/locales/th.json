@@ -1,4 +1,15 @@
 {
+  "auth": {
+    "title": "เข้าสู่ระบบ BSIE",
+    "subtitle": "ใช้บัญชีผู้สืบสวนในเครื่องนี้",
+    "username": "ชื่อผู้ใช้",
+    "password": "รหัสผ่าน",
+    "signIn": "เข้าสู่ระบบ",
+    "signingIn": "กำลังเข้าสู่ระบบ…",
+    "invalidCredentials": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+    "signedInAs": "{{username}} · {{role}}",
+    "logout": "ออกจากระบบ"
+  },
   "sidebar": {
     "steps": {
       "upload": "อัปโหลดไฟล์",

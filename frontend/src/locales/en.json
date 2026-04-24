@@ -1,4 +1,15 @@
 {
+  "auth": {
+    "title": "Sign in to BSIE",
+    "subtitle": "Use your local investigator account.",
+    "username": "Username",
+    "password": "Password",
+    "signIn": "Sign In",
+    "signingIn": "Signing in…",
+    "invalidCredentials": "Invalid username or password",
+    "signedInAs": "{{username}} · {{role}}",
+    "logout": "Logout"
+  },
   "sidebar": {
     "steps": {
       "upload": "Upload File",

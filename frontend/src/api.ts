@@ -1,8 +1,53 @@
 const API_BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '').replace(/\/$/, '')
+const AUTH_TOKEN_STORAGE_KEY = 'bsie.auth_token'
+
+export function getStoredAuthToken() {
+  if (typeof window === 'undefined') return ''
+  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || ''
+}
+
+export function setStoredAuthToken(token: string) {
+  if (typeof window === 'undefined') return
+  if (token) window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token)
+  else window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
+}
+
+export function clearStoredAuthToken() {
+  setStoredAuthToken('')
+}
 
 async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`
-  return globalThis.fetch(url, init)
+  const headers = new Headers(init.headers)
+  const token = getStoredAuthToken()
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`)
+  const response = await globalThis.fetch(url, { ...init, headers })
+  if (response.status === 401 && token) clearStoredAuthToken()
+  return response
+}
+
+export async function getAuthStatus() {
+  const r = await apiFetch('/api/auth/status')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function login(username: string, password: string) {
+  const r = await apiFetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  const payload = await r.json()
+  setStoredAuthToken(payload.token || '')
+  return payload
+}
+
+export async function getCurrentUser() {
+  const r = await apiFetch('/api/auth/me')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
 }
 
 export async function uploadFile(file: File, uploaded_by?: string, force_redetect?: boolean) {

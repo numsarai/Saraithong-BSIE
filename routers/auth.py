@@ -12,6 +12,7 @@ from slowapi.util import get_remote_address
 
 from persistence.base import get_db_session
 from services.auth_service import (
+    AUTH_REQUIRED,
     authenticate_user,
     create_token,
     create_user,
@@ -26,6 +27,11 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 limiter = Limiter(key_func=get_remote_address)
 
 ALLOWED_ROLES = {"analyst", "viewer", "admin"}
+
+
+@router.get("/status")
+async def api_auth_status():
+    return JSONResponse({"auth_required": AUTH_REQUIRED})
 
 
 @router.post("/login")

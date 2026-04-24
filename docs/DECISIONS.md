@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-036: Investigation copilot starts with read-only scoped context packs
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Phase 4 needs local LLM help inside analyst workflows, but a copilot that can read outside the selected evidence set, rely on auto-context, or answer without record-level citations would weaken evidentiary integrity.
+- **Decision:** Start investigation copilot with a single read-only backend path: `POST /api/llm/copilot`. The endpoint requires a `copilot_scope` with `parser_run_id`, `file_id`, or `account`, builds a deterministic context pack from DB records, calls the local text model with `auto_context=false`, and records an audit log with operator, model, context hash, prompt hash, and response status. Responses expose citation ids and flag missing-citation answers as `needs_review`.
+- **Alternatives:** (1) Extend generic `/api/llm/chat` with implicit DB context -- too broad and hard to audit. (2) Build a frontend copilot panel first -- attractive, but unsafe before backend scope/citation/audit contracts exist. (3) Let the LLM query tools dynamically -- too much autonomy for the first evidence-sensitive slice.
+- **Consequences:** Phase 4 begins with a narrow contract that can support account summaries, alert explanations, review checklists, and report drafting later. The copilot cannot mutate evidence, classify transactions, promote mappings, review alerts, or create findings.
+
 ### DEC-035: Qwen 2.5 baseline models are retired from the local LLM roadmap
 - **Date:** 2026-04-24
 - **Status:** accepted

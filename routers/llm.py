@@ -9,9 +9,16 @@ No data leaves the machine.
 import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from services.auth_service import require_auth
 from pydantic import BaseModel, Field
 
+from persistence.base import get_db_session
+from services.copilot_service import (
+    CopilotNotFoundError,
+    CopilotScopeError,
+    answer_copilot_question,
+)
 from services.llm_service import (
     benchmark_llm_roles,
     chat,
@@ -60,6 +67,20 @@ class BenchmarkRequest(BaseModel):
     iterations: int = Field(default=1, ge=1, le=5)
     include_vision: bool = False
     model_overrides: dict[str, str] = Field(default_factory=dict)
+
+
+class CopilotScopeRequest(BaseModel):
+    parser_run_id: str = Field(default="", max_length=64)
+    file_id: str = Field(default="", max_length=64)
+    account: str = Field(default="", max_length=64)
+
+
+class CopilotRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    scope: CopilotScopeRequest = Field(default_factory=CopilotScopeRequest)
+    operator: str = Field(default="analyst", max_length=255)
+    model: str = Field(default="", max_length=100)
+    max_transactions: int = Field(default=20, ge=1, le=50)
 
 
 @router.get("/status")
@@ -147,6 +168,42 @@ async def api_llm_benchmark(req: BenchmarkRequest):
         return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/copilot")
+async def api_llm_copilot(req: CopilotRequest):
+    """Answer a scoped, read-only investigation question with evidence citations."""
+    model = ""
+    if req.model.strip():
+        try:
+            model = _validate_model(req.model.strip())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    scope_payload = req.scope.model_dump() if hasattr(req.scope, "model_dump") else req.scope.dict()
+    with get_db_session() as session:
+        try:
+            result = await answer_copilot_question(
+                session,
+                question=req.question,
+                scope=scope_payload,
+                operator=req.operator,
+                model=model,
+                max_transactions=req.max_transactions,
+            )
+            session.commit()
+            return JSONResponse(result)
+        except CopilotNotFoundError as exc:
+            session.rollback()
+            raise HTTPException(status_code=404, detail=str(exc))
+        except CopilotScopeError as exc:
+            session.rollback()
+            raise HTTPException(status_code=400, detail=str(exc))
+        except ConnectionError as exc:
+            session.commit()
+            raise HTTPException(status_code=503, detail=str(exc))
+        except RuntimeError as exc:
+            session.commit()
+            raise HTTPException(status_code=502, detail=str(exc))
 
 
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/bmp"}

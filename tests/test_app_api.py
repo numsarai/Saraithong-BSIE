@@ -1250,6 +1250,50 @@ def test_llm_benchmark_endpoint_returns_local_only_payload():
     assert benchmark.call_args.kwargs["model_overrides"] == {"text": "qwen3.5:9b"}
 
 
+def test_llm_copilot_endpoint_returns_scoped_read_only_answer():
+    copilot_result = {
+        "status": "ok",
+        "source": "local_llm_investigation_copilot",
+        "read_only": True,
+        "mutations_allowed": False,
+        "model": "qwen3.5:9b",
+        "answer": "พบรายการออกสำคัญ [txn:TX-1]",
+        "scope": {"parser_run_id": "RUN-1", "file_id": "", "account": "1234567890", "account_digits": "1234567890"},
+        "context_hash": "a" * 64,
+        "prompt_hash": "b" * 64,
+        "citation_policy": {"status": "ok", "requires_review": False, "warning": ""},
+        "citations": [{"id": "txn:TX-1", "type": "txn", "object_id": "TX-1", "label": "OUT 1,000.00 THB"}],
+        "warnings": [],
+        "audit_id": "AUDIT-1",
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+    }
+    with (
+        patch("routers.llm.get_db_session", _fake_db_session),
+        patch("routers.llm.answer_copilot_question", new=AsyncMock(return_value=copilot_result)) as copilot,
+    ):
+        response = client.post(
+            "/api/llm/copilot",
+            json={
+                "question": "ช่วยสรุปบัญชีนี้",
+                "scope": {"parser_run_id": "RUN-1", "account": "123-456-7890"},
+                "operator": "Case Reviewer",
+                "max_transactions": 12,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "local_llm_investigation_copilot"
+    assert payload["read_only"] is True
+    assert payload["mutations_allowed"] is False
+    assert payload["citation_policy"]["status"] == "ok"
+    copilot.assert_awaited_once()
+    assert copilot.call_args.args[0].__class__.__name__ == "DummySession"
+    assert copilot.call_args.kwargs["scope"] == {"parser_run_id": "RUN-1", "file_id": "", "account": "123-456-7890"}
+    assert copilot.call_args.kwargs["operator"] == "Case Reviewer"
+    assert copilot.call_args.kwargs["max_transactions"] == 12
+
+
 def test_mapping_confirm_defaults_to_run_confirmation_without_shared_promotion():
     payload = {
         "bank": "scb",

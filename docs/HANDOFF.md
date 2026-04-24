@@ -9,11 +9,54 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `372 passed`, frontend `46 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `377 passed`, frontend `46 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Retired Qwen 2.5 Baseline And Clarified Phase 4
+## Done (latest session) — Phase 4 Copilot Scope/Context/Audit Backend Slice
+
+### What I changed
+- Added `services/copilot_service.py` for deterministic, read-only investigation copilot context packs.
+- Added `POST /api/llm/copilot` in `routers/llm.py`.
+- The endpoint requires a `copilot_scope` with at least one of `parser_run_id`, `file_id`, or `account`.
+- The service resolves scope to `FileRecord`, `ParserRun`, `Account`, `Transaction`, and `Alert` records, then returns citation ids such as `txn:<id>`, `alert:<id>`, `run:<id>`, `file:<id>`, and `account:<id>`.
+- LLM calls use `auto_context=false`, `think=false`, the configured text model, and a bounded output token budget.
+- The copilot prompt tells the model to answer only from the deterministic context pack and to cite evidence ids or state insufficient evidence.
+- Responses with no citation and no insufficient-evidence statement are returned as `needs_review`.
+- Audit logging records operator, model, scope, context hash, prompt hash, and response status under `object_type=llm_copilot`.
+
+### Files changed
+- `services/copilot_service.py`
+- `routers/llm.py`
+- `tests/test_copilot_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `372 passed`
+  - `npm test -- --run` in `frontend/` -> `46 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/copilot_service.py routers/llm.py tests/test_copilot_service.py tests/test_app_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_copilot_service.py tests/test_app_api.py::test_llm_copilot_endpoint_returns_scoped_read_only_answer -q` -> `5 passed`
+- Full verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `377 passed`
+  - `npm test -- --run` in `frontend/` -> `46 passed`
+
+### Decisions made
+- Added DEC-036: Investigation copilot starts with read-only scoped context packs.
+
+### Warnings / Next
+- No frontend copilot panel exists yet; this is backend/API foundation only.
+- Case tag scope is not implemented yet. Current scope supports `parser_run_id`, `file_id`, and `account`.
+- Next useful slices: add investigation UI panel, add explicit task modes, and expand context packs to graph metrics/review history while keeping citations.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Retired Qwen 2.5 Baseline And Clarified Phase 4
 
 ### What I changed
 - Retired `qwen2.5:14b` and `qwen2.5vl:7b` from the future local LLM roadmap.

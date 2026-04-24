@@ -1011,6 +1011,60 @@ def test_account_presence_endpoint_scans_stored_text_pdf_file(tmp_path):
     assert payload["locations"][0]["source_region"] == "page_text"
 
 
+@contextmanager
+def _file_record_session(file_record):
+    class DummySession:
+        def get(self, model, row_id):
+            return file_record
+
+    yield DummySession()
+
+
+def test_file_evidence_preview_serves_pdf_inline_from_evidence_storage(tmp_path):
+    file_id = "11111111-1111-1111-1111-111111111111"
+    evidence_dir = tmp_path / "evidence"
+    evidence_file = evidence_dir / file_id / "statement.pdf"
+    evidence_file.parent.mkdir(parents=True)
+    evidence_file.write_bytes(b"%PDF-1.4\npreview")
+    file_record = SimpleNamespace(
+        stored_path=str(evidence_file),
+        original_filename="statement.pdf",
+        mime_type="application/pdf",
+    )
+
+    with (
+        patch("routers.results.EVIDENCE_DIR", evidence_dir),
+        patch("routers.results.get_db_session", return_value=_file_record_session(file_record)),
+    ):
+        response = client.get(f"/api/files/{file_id}/evidence-preview")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert response.headers["content-disposition"].startswith("inline;")
+    assert response.content == b"%PDF-1.4\npreview"
+
+
+def test_file_evidence_preview_rejects_paths_outside_evidence_storage(tmp_path):
+    file_id = "11111111-1111-1111-1111-111111111111"
+    evidence_dir = tmp_path / "evidence"
+    evidence_dir.mkdir()
+    outside_file = tmp_path / "outside.pdf"
+    outside_file.write_bytes(b"%PDF-1.4\noutside")
+    file_record = SimpleNamespace(
+        stored_path=str(outside_file),
+        original_filename="outside.pdf",
+        mime_type="application/pdf",
+    )
+
+    with (
+        patch("routers.results.EVIDENCE_DIR", evidence_dir),
+        patch("routers.results.get_db_session", return_value=_file_record_session(file_record)),
+    ):
+        response = client.get(f"/api/files/{file_id}/evidence-preview")
+
+    assert response.status_code == 400
+
+
 def test_mapping_assist_endpoint_returns_suggestion_only_payload():
     assist_result = {
         "status": "ok",

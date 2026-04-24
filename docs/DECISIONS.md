@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-033: Evidence preview opens only stored PDF/image evidence by file_id
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Step 2 account-presence review can now show page/table/OCR-token locations, but investigators also need a safe way to open the original stored evidence from those location cards. Serving arbitrary stored paths would weaken evidence-storage confinement.
+- **Decision:** Add an inline evidence preview endpoint at `/api/files/{file_id}/evidence-preview` that resolves the file through the database record, validates a UUID-style `file_id`, confines the resolved path to `EVIDENCE_DIR`, and serves only PDF/image file types (`.pdf`, `.png`, `.jpg`, `.jpeg`, `.bmp`). Step 2 location cards link to this endpoint and include a PDF `#page=N` fragment when page lineage is available.
+- **Alternatives:** (1) Expose stored filesystem paths in the UI -- not acceptable for classified evidence handling. (2) Reuse export download endpoints -- those are account/output oriented and not scoped to stored source evidence. (3) Build a full region-highlighting document viewer immediately -- useful but larger than the current safe preview need.
+- **Consequences:** Analysts can jump from a deterministic account-presence match to the source PDF/image in a new browser tab. Excel evidence still shows row/column locations only; richer spreadsheet previews can be added separately.
+
 ### DEC-032: Frontend workflow steps are lazy-loaded to keep the main bundle small
 - **Date:** 2026-04-24
 - **Status:** accepted

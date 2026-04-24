@@ -42,6 +42,10 @@ vi.mock('@/api', () => ({
     file_context: { source_type: 'pdf_vision', page_count: 1, preview_page: 1 },
     validation: { ok: true, errors: [], warnings: [], amount_mode: 'debit_credit', mapped_fields: ['date', 'description', 'debit', 'credit'] },
   })),
+  evidencePreviewUrl: vi.fn((fileId: string, pageNumber?: number | null) => {
+    const suffix = pageNumber ? `#page=${pageNumber}` : ''
+    return `/api/files/${encodeURIComponent(fileId)}/evidence-preview${suffix}`
+  }),
   confirmMapping: vi.fn(async () => ({ status: 'ok' })),
   previewMapping: vi.fn(async () => ({
     status: 'ok',
@@ -509,6 +513,10 @@ describe('Step2Map analyst gate', () => {
     expect(screen.getByText(/OCR confidence 87%/i)).toBeInTheDocument()
     expect(screen.getByText(/Position: x 120.5, y 240.3/i)).toBeInTheDocument()
     expect(screen.getByText(/Preview: account 1234567890/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /open evidence/i })[0]).toHaveAttribute(
+      'href',
+      '/api/files/file-1/evidence-preview#page=2',
+    )
     expect(screen.getByText(/Possible leading-zero matches/i)).toBeInTheDocument()
     expect(screen.getByText(/Image OCR Page 2 R8C3/i)).toBeInTheDocument()
     expect(screen.getByText(/Possible leading-zero loss candidate also exists/i)).toBeInTheDocument()

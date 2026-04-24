@@ -6,18 +6,20 @@ Result retrieval and file search endpoints.
 
 import json
 import logging
+import mimetypes
 import re
+from uuid import UUID
 from pathlib import Path
 
 import pandas as pd
 from services.auth_service import require_auth
 from fastapi import Depends, APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import select
 
-from paths import OUTPUT_DIR
+from paths import EVIDENCE_DIR, OUTPUT_DIR
 from persistence.base import get_db_session
-from persistence.models import Account, ParserRun, StatementBatch, Transaction
+from persistence.models import Account, FileRecord, ParserRun, StatementBatch, Transaction
 from services.search_service import (
     get_file_detail,
     list_files,
@@ -31,6 +33,7 @@ router = APIRouter(prefix="/api", tags=["results"], dependencies=[Depends(requir
 
 _SAFE_ACCOUNT_RE = re.compile(r"^\d{10,12}$")
 _SAFE_PART_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+_EVIDENCE_PREVIEW_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".bmp"}
 
 
 def _safe_account(account: str) -> str:
@@ -58,6 +61,25 @@ def _canonical_output_path(safe_account: str, *parts: str) -> Path:
         if not _SAFE_PART_RE.fullmatch(part):
             raise HTTPException(400, "Invalid output path component")
     return OUTPUT_DIR.joinpath(safe_account, *parts)
+
+
+def _safe_file_id(file_id: str) -> str:
+    try:
+        return str(UUID(str(file_id))).lower()
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(400, "Invalid file identifier") from exc
+
+
+def _resolve_previewable_evidence_path(file_row: FileRecord) -> Path:
+    evidence_root = EVIDENCE_DIR.resolve()
+    resolved_path = Path(file_row.stored_path).expanduser().resolve()
+    if resolved_path != evidence_root and evidence_root not in resolved_path.parents:
+        raise HTTPException(400, "Source file is outside evidence storage")
+    if not resolved_path.exists() or not resolved_path.is_file():
+        raise HTTPException(404, "Source evidence file not found")
+    if resolved_path.suffix.lower() not in _EVIDENCE_PREVIEW_SUFFIXES:
+        raise HTTPException(415, "Evidence preview supports PDF and image files only")
+    return resolved_path
 
 
 @router.get("/results/{account}")
@@ -218,6 +240,23 @@ async def api_results_timeline(account: str, parser_run_id: str = ""):
 async def api_files(limit: int = 100, offset: int = 0):
     with get_db_session() as session:
         return JSONResponse({"items": list_files(session, limit=limit, offset=offset)})
+
+
+@router.get("/files/{file_id}/evidence-preview")
+async def api_file_evidence_preview(file_id: str):
+    safe_file_id = _safe_file_id(file_id)
+    with get_db_session() as session:
+        file_row = session.get(FileRecord, safe_file_id)
+    if not file_row:
+        raise HTTPException(404, "File not found")
+    evidence_path = _resolve_previewable_evidence_path(file_row)
+    media_type = file_row.mime_type or mimetypes.guess_type(evidence_path.name)[0] or "application/octet-stream"
+    return FileResponse(
+        str(evidence_path),
+        media_type=media_type,
+        filename=Path(file_row.original_filename or evidence_path.name).name,
+        content_disposition_type="inline",
+    )
 
 
 @router.get("/files/{file_id}")

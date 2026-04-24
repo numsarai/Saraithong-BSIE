@@ -88,6 +88,12 @@ export async function verifyAccountPresence(payload: {
   return r.json()
 }
 
+export function evidencePreviewUrl(fileId: string, pageNumber?: number | null) {
+  const page = Number(pageNumber || 0)
+  const suffix = Number.isFinite(page) && page > 0 ? `#page=${encodeURIComponent(String(page))}` : ''
+  return `${API_BASE}/api/files/${encodeURIComponent(fileId)}/evidence-preview${suffix}`
+}
+
 export async function assistMapping(payload: {
   bank: string
   detected_bank?: unknown

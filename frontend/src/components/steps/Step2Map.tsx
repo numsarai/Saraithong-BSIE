@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { normalizeOperatorName, useStore } from '@/store'
-import { assistMapping, assistVisionMapping, confirmMapping, getBanks, learnBank, previewMapping, verifyAccountPresence } from '@/api'
+import { assistMapping, assistVisionMapping, confirmMapping, evidencePreviewUrl, getBanks, learnBank, previewMapping, verifyAccountPresence } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
 import { BankLogo } from '@/components/BankLogo'
 import { evaluateReviewGate } from '@/lib/reviewGate'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Wand2, X, BookPlus, ArrowRight, ArrowLeftRight, Building2, Wallet, CircleDashed, FileSearch, BrainCircuit, DatabaseZap, ShieldAlert, ShieldCheck, Sparkles, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wand2, X, BookPlus, ArrowRight, ArrowLeftRight, Building2, Wallet, CircleDashed, FileSearch, BrainCircuit, DatabaseZap, ShieldAlert, ShieldCheck, Sparkles, Loader2, ExternalLink } from 'lucide-react'
 
 export function Step2Map() {
   const { t } = useTranslation()
@@ -331,6 +331,7 @@ export function Step2Map() {
   const possiblePresenceLocations = Array.isArray(accountPresence?.possible_locations) ? accountPresence.possible_locations : []
   const presenceSummaryItems = buildPresenceSummaryItems(accountPresence)
   const hasPresenceLocations = exactPresenceLocations.length > 0 || possiblePresenceLocations.length > 0
+  const previewableEvidenceFileId = isPreviewableEvidence(accountPresence, fileName) ? fileId : null
   const rankedCandidates = candidateKeys.map((key: string) => ({
     key,
     name: banks.find((bank: any) => bank.key === key)?.name || key.toUpperCase(),
@@ -520,6 +521,7 @@ export function Step2Map() {
                     title="Exact evidence matches"
                     locations={exactPresenceLocations}
                     tone="green"
+                    fileId={previewableEvidenceFileId}
                   />
                 )}
                 {possiblePresenceLocations.length > 0 && (
@@ -527,6 +529,7 @@ export function Step2Map() {
                     title="Possible leading-zero matches"
                     locations={possiblePresenceLocations}
                     tone="yellow"
+                    fileId={previewableEvidenceFileId}
                   />
                 )}
               </div>
@@ -1285,6 +1288,12 @@ function buildPresenceSummaryItems(accountPresence: any | null) {
   return items.slice(0, 8)
 }
 
+function isPreviewableEvidence(accountPresence: any | null, fileName: unknown) {
+  const fileType = String(accountPresence?.file_type || '').trim().toLowerCase()
+  if (fileType === 'pdf' || fileType === 'image') return true
+  return /\.(pdf|png|jpe?g|bmp)$/i.test(String(fileName || ''))
+}
+
 function appendCount(items: Array<{ label: string; value: string }>, label: string, value: unknown) {
   if (value === null || value === undefined || value === '') return
   const numeric = Number(value)
@@ -1296,10 +1305,12 @@ function AccountPresenceLocationList({
   title,
   locations,
   tone,
+  fileId,
 }: {
   title: string
   locations: any[]
   tone: 'green' | 'yellow'
+  fileId?: string | null
 }) {
   const toneClasses = tone === 'green'
     ? 'border-success/20 bg-success/[0.06]'
@@ -1329,6 +1340,17 @@ function AccountPresenceLocationList({
             </div>
             {location.value_preview && (
               <div className="mt-1 truncate text-[11px] text-text2">Preview: {String(location.value_preview)}</div>
+            )}
+            {fileId && (
+              <a
+                href={evidencePreviewUrl(fileId, location.page_number)}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-text2 hover:border-accent hover:text-accent"
+              >
+                <ExternalLink size={12} />
+                Open evidence
+              </a>
             )}
           </div>
         ))}

@@ -9,11 +9,53 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `370 passed`, frontend `46 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `372 passed`, frontend `46 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — OCR Account Presence Review UI
+## Done (latest session) — Evidence Preview Links From Account Presence
+
+### What I changed
+- Added `/api/files/{file_id}/evidence-preview` in `routers/results.py`.
+- The endpoint validates UUID-style `file_id`, resolves the DB `FileRecord`, confines the resolved path to `EVIDENCE_DIR`, and serves only PDF/image evidence inline.
+- Step 2 account-presence location cards now show an `Open evidence` link for previewable PDF/image evidence.
+- PDF links include `#page=N` when account-presence lineage reports a page number.
+- Added backend regressions for inline preview serving and path-confinement rejection.
+
+### Files changed
+- `routers/results.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `370 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `13 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile routers/results.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_app_api.py::test_file_evidence_preview_serves_pdf_inline_from_evidence_storage tests/test_app_api.py::test_file_evidence_preview_rejects_paths_outside_evidence_storage -q` -> `2 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `13 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+- Full verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `372 passed`
+  - `npm test -- --run` in `frontend/` -> `46 passed`
+
+### Decisions made
+- Added DEC-033: evidence preview opens only stored PDF/image evidence by `file_id`.
+
+### Warnings / Next
+- The preview endpoint intentionally does not serve Excel evidence. Excel account-presence locations remain row/column references for now.
+- The browser can open the PDF/image and PDF page fragment, but BSIE does not yet draw a highlighted OCR bounding box overlay on the document itself.
+- Next useful slice: build a small evidence preview drawer with OCR/page highlight metadata, or move into Phase 4 investigation copilot scope locking.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — OCR Account Presence Review UI
 
 ### What I changed
 - Step 2 now surfaces richer account-presence lineage after `Verify Evidence`.

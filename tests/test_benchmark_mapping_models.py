@@ -1,4 +1,12 @@
-from scripts.benchmark_mapping_models import build_markdown, parse_models, score_mapping, summarize_runs
+from scripts.benchmark_mapping_models import FIXTURES, build_markdown, parse_models, score_mapping, summarize_runs
+
+
+def test_fixtures_cover_supported_bank_keys_with_unique_ids():
+    fixture_ids = [fixture["id"] for fixture in FIXTURES]
+    banks = {fixture["bank"] for fixture in FIXTURES}
+
+    assert len(fixture_ids) == len(set(fixture_ids))
+    assert banks == {"scb", "kbank", "bbl", "ktb", "bay", "ttb", "gsb", "baac"}
 
 
 def test_parse_models_trims_and_rejects_empty_values():

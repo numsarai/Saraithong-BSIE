@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-023: Mapping model benchmarks must cover all supported bank keys before policy changes
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** The first task-specific fixture benchmark covered only three layouts. Expanding the same harness to all eight supported bank keys revealed a much larger gap between `gemma4:26b` and smaller Gemma variants, especially on noisy, mixed-header, direction-marker, and account-format edge cases.
+- **Decision:** Treat all-supported-bank synthetic fixture coverage as the minimum benchmark bar before changing mapping-assist model defaults or any future automation policy. Keep `gemma4:26b` as the mapping-assist default based on the expanded 8-bank result.
+- **Alternatives:** (1) Use only smoke/JSON benchmarks — too weak for mapping accuracy. (2) Benchmark only the banks currently being tested manually — faster but misses regressions in less common bank formats. (3) Use real case statements — not acceptable for a reusable benchmark.
+- **Consequences:** Future fixture work should add more layouts per bank, but every benchmark comparison should continue reporting all supported bank keys and edge-case coverage.
+
 ### DEC-022: Mapping model selection uses a reproducible synthetic fixture harness
 - **Date:** 2026-04-24
 - **Status:** accepted

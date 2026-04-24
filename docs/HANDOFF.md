@@ -9,11 +9,76 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `347 passed`, frontend `37 passed`, frontend build passed
+- **Baseline:** backend `348 passed`, frontend `37 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Reproducible Mapping Model Benchmark Harness
+## Done (latest session) — Expanded 8-Bank Mapping Benchmark Fixtures
+
+### What I changed
+- Expanded `scripts/benchmark_mapping_models.py` fixtures from 3 layouts to 8 bank-covering fixtures:
+  - `scb`: `thai_debit_credit`
+  - `kbank`: `english_signed_amount`
+  - `ktb`: `ocr_noisy_signed_amount`
+  - `bbl`: `bbl_leading_zero_counterparty`
+  - `bay`: `bay_direction_marker_amount`
+  - `ttb`: `ttb_ambiguous_amount_balance`
+  - `gsb`: `gsb_mymo_mixed_headers`
+  - `baac`: `baac_scientific_counterparty`
+- Added unit coverage that fixture IDs are unique and all 8 supported bank keys are represented.
+- Ran expanded harness against `gemma4:26b` alone and then all default Gemma models.
+- Updated benchmark docs, decision log, roadmap, and this handoff.
+
+### Benchmark command
+
+```bash
+.venv/bin/python scripts/benchmark_mapping_models.py --run-id 20260424-expanded-8bank-gemma-comparison
+```
+
+### Benchmark results
+- `gemma4:26b`:
+  - text `53/54` = `98.15%`, avg `5,749.02 ms`
+  - vision `53/54` = `98.15%`, avg `6,790.99 ms`
+- `gemma4:e4b`:
+  - text `18/54` = `33.33%`, avg `7,658.07 ms`
+  - vision `21/54` = `38.89%`, avg `7,181.56 ms`
+- `gemma4:e2b`:
+  - text `20/54` = `37.04%`, avg `3,553.45 ms`
+  - vision `4/54` = `7.41%`, avg `4,573.94 ms`
+
+### Notes
+- `gemma4:26b` missed only the intentionally ambiguous TTB balance choice (`ยอดหลังรายการ` vs expected `ยอดคงเหลือ`).
+- BAY direction-marker fixture scored correct on expected fields for `gemma4:26b`, but validation returned `false` because current mapping validation has no explicit direction-marker field for unsigned amount + `DR`/`CR`.
+
+### Files changed
+- `scripts/benchmark_mapping_models.py`
+- `tests/test_benchmark_mapping_models.py`
+- `docs/LOCAL_LLM_BENCHMARKS.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- `.venv/bin/python -m py_compile scripts/benchmark_mapping_models.py tests/test_benchmark_mapping_models.py` -> passed
+- `.venv/bin/python -m pytest tests/test_benchmark_mapping_models.py -q` -> `4 passed`
+- `.venv/bin/python -m pytest tests/ -q` -> `348 passed`
+- Expanded live harness:
+  - `.venv/bin/python scripts/benchmark_mapping_models.py --models gemma4:26b --run-id 20260424-expanded-8bank-gemma26b` -> passed
+  - `.venv/bin/python scripts/benchmark_mapping_models.py --run-id 20260424-expanded-8bank-gemma-comparison` -> passed
+
+### Decisions made
+- Keep `gemma4:26b` as mapping-assist default; expanded fixtures make this much more convincing.
+- All future mapping model comparisons should include every supported bank key.
+
+### Warnings / Next
+- Add deterministic support for direction-marker amount layouts (`DR`/`CR`, `IN`/`OUT`) so BAY-like fixtures can validate cleanly without pretending they are signed amount or debit/credit columns.
+- Add more than one fixture per bank before considering any stronger automation policy.
+
+### Environment changes
+- No dependencies installed by Codex.
+- Generated ignored benchmark artifacts under `artifacts/llm_mapping_benchmarks/`.
+
+## Done (previous session) — Reproducible Mapping Model Benchmark Harness
 
 ### What I changed
 - Added `scripts/benchmark_mapping_models.py`.

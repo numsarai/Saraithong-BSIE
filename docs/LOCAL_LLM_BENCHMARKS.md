@@ -2,6 +2,56 @@
 
 > Local-only benchmark log. Prompts are synthetic and do not include case evidence.
 
+## 2026-04-24 — Expanded 8-Bank Mapping Fixture Benchmark
+
+### Environment
+
+- Branch: `Smarter-BSIE`
+- Runtime: local Ollama via `OLLAMA_BASE_URL=http://localhost:11434`
+- Benchmark source: `scripts/benchmark_mapping_models.py`
+- Endpoint path: native Ollama `/api/chat` through `think=false`
+- Evidence data: none; all fixtures are synthetic
+
+The reusable harness now includes one or more fixtures for every supported BSIE bank key: `scb`, `kbank`, `bbl`, `ktb`, `bay`, `ttb`, `gsb`, and `baac`.
+
+Expanded fixture set:
+
+| Fixture | Bank | Edge case |
+|---|---|---|
+| `thai_debit_credit` | `scb` | Thai debit/credit columns |
+| `english_signed_amount` | `kbank` | English signed amount columns |
+| `ocr_noisy_signed_amount` | `ktb` | Thai OCR-like abbreviated headers |
+| `bbl_leading_zero_counterparty` | `bbl` | Counterparty accounts with leading zeros |
+| `bay_direction_marker_amount` | `bay` | Unsigned amount plus direction marker |
+| `ttb_ambiguous_amount_balance` | `ttb` | Ambiguous balance columns |
+| `gsb_mymo_mixed_headers` | `gsb` | MyMo-style uppercase mixed headers |
+| `baac_scientific_counterparty` | `baac` | Counterparty account rendered as scientific notation |
+
+Command:
+
+```bash
+.venv/bin/python scripts/benchmark_mapping_models.py --run-id 20260424-expanded-8bank-gemma-comparison
+```
+
+### Results
+
+| Model | Text score | Text avg | Vision score | Vision avg | Notes |
+|---|---:|---:|---:|---:|---|
+| `gemma4:26b` | 53 / 54 = 98.15% | 5,749.02 ms | 53 / 54 = 98.15% | 6,790.99 ms | Best by a wide margin; missed only the intentionally ambiguous TTB balance choice |
+| `gemma4:e4b` | 18 / 54 = 33.33% | 7,658.07 ms | 21 / 54 = 38.89% | 7,181.56 ms | Handles clean fixtures, weak on noisy/mixed/edge-case layouts |
+| `gemma4:e2b` | 20 / 54 = 37.04% | 3,553.45 ms | 4 / 54 = 7.41% | 4,573.94 ms | Fast but too lossy for mapping assist |
+
+Additional validation notes:
+
+- `bay_direction_marker_amount` scored correct on expected fields for `gemma4:26b`, but validation was `false` because the current mapping schema/validator has no explicit direction-marker field for unsigned amount + `DR`/`CR` layouts.
+- `ttb_ambiguous_amount_balance` exposed the intended ambiguity: `gemma4:26b` selected `ยอดหลังรายการ` while the fixture expected `ยอดคงเหลือ`.
+
+### Takeaways
+
+- The expanded fixture set strengthens the decision to keep `gemma4:26b` as mapping-assist default.
+- The next deterministic backend improvement should consider direction-marker amount layouts so BAY-like exports can validate without forcing debit/credit columns.
+- Keep `gemma4:e4b` and `gemma4:e2b` out of primary mapping assist unless a future prompt or model update improves edge-case recall.
+
 ## 2026-04-24 — Mapping Assist Fixture Benchmark
 
 ### Environment

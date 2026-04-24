@@ -54,6 +54,10 @@ function hasScope(scope: CopilotScope) {
   return Boolean(scope.parser_run_id.trim() || scope.file_id.trim() || scope.account.trim() || scope.case_tag_id.trim() || scope.case_tag.trim())
 }
 
+function hasClassificationScope(scope: CopilotScope) {
+  return Boolean(scope.parser_run_id.trim() || scope.file_id.trim() || scope.account.trim())
+}
+
 function normalizeAccount(value: string) {
   return value.replace(/\D/g, '')
 }
@@ -256,7 +260,24 @@ export function CopilotTab({
     }
   }
 
-  const previewItem = Array.isArray(classificationPreview?.items) ? classificationPreview.items[0] : null
+  const submitScopedClassificationPreview = async () => {
+    if (!hasClassificationScope(scope)) return
+    setIsPreviewingClassification(true)
+    setClassificationPreviewError('')
+    try {
+      const payload = await previewClassification({
+        scope,
+        max_transactions: Math.max(1, Math.min(25, Number(maxTransactions || 10))),
+      })
+      setClassificationPreview(payload)
+    } catch (err: any) {
+      setClassificationPreviewError(err.message || String(err))
+    } finally {
+      setIsPreviewingClassification(false)
+    }
+  }
+
+  const previewItems = Array.isArray(classificationPreview?.items) ? classificationPreview.items.slice(0, 10) : []
 
   return (
     <div className="space-y-4">
@@ -519,10 +540,14 @@ export function CopilotTab({
               className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
             />
           </label>
-          <div className="flex items-end">
+          <div className="flex flex-col justify-end gap-2">
             <Button onClick={submitClassificationPreview} disabled={isPreviewingClassification || !classificationForm.description.trim()}>
               {isPreviewingClassification ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
               {isPreviewingClassification ? t('investigation.copilot.previewingClassification') : t('investigation.copilot.previewClassificationAction')}
+            </Button>
+            <Button variant="outline" onClick={submitScopedClassificationPreview} disabled={isPreviewingClassification || !hasClassificationScope(scope)}>
+              {isPreviewingClassification ? <Loader2 size={16} className="animate-spin" /> : <Target size={16} />}
+              {t('investigation.copilot.previewScopeClassification')}
             </Button>
           </div>
         </div>
@@ -531,33 +556,48 @@ export function CopilotTab({
             {classificationPreviewError}
           </div>
         )}
-        {previewItem && (
+        {classificationPreview && (
+          <div className="flex flex-wrap gap-2 text-xs text-muted">
+            <Badge variant={classificationPreview.status === 'ok' ? 'green' : 'yellow'}>{classificationPreview.status}</Badge>
+            <Badge variant="blue">{classificationPreview.preview_input || 'manual'}</Badge>
+            <span>{t('investigation.copilot.previewSummary', {
+              total: Number(classificationPreview.total || 0),
+              suggestions: Number(classificationPreview.suggestion_count || 0),
+              review: Number(classificationPreview.review_count || 0),
+            })}</span>
+          </div>
+        )}
+        {previewItems.length > 0 && (
           <div className="space-y-3 rounded-lg border border-border bg-surface2 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={previewItem.review_required ? 'yellow' : 'green'}>{previewItem.action}</Badge>
-              <Badge variant="blue">{classificationPreview.model || 'local'}</Badge>
-              <span className="font-mono text-xs text-muted">{previewItem.transaction_id}</span>
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-md border border-border bg-surface px-3 py-2">
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('investigation.copilot.previewCurrent')}</div>
-                <div className="font-mono text-sm text-text">{previewItem.current?.transaction_type || '—'}</div>
-                <div className="text-xs text-muted">{Number(previewItem.current?.confidence || 0).toFixed(2)}</div>
-                {previewItem.current?.counterparty_name && <div className="text-xs text-muted">{previewItem.current.counterparty_name}</div>}
+            {previewItems.map((previewItem: any) => (
+              <div key={previewItem.transaction_id} className="space-y-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={previewItem.review_required ? 'yellow' : 'green'}>{previewItem.action}</Badge>
+                  <Badge variant="blue">{classificationPreview.model || 'local'}</Badge>
+                  <span className="font-mono text-xs text-muted">{previewItem.transaction_id}</span>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-md border border-border bg-surface px-3 py-2">
+                    <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('investigation.copilot.previewCurrent')}</div>
+                    <div className="font-mono text-sm text-text">{previewItem.current?.transaction_type || '—'}</div>
+                    <div className="text-xs text-muted">{Number(previewItem.current?.confidence || 0).toFixed(2)}</div>
+                    {previewItem.current?.counterparty_name && <div className="text-xs text-muted">{previewItem.current.counterparty_name}</div>}
+                  </div>
+                  <div className="rounded-md border border-border bg-surface px-3 py-2">
+                    <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('investigation.copilot.previewAi')}</div>
+                    <div className="font-mono text-sm text-text">{previewItem.ai?.transaction_type || '—'}</div>
+                    <div className="text-xs text-muted">{Number(previewItem.ai?.confidence || 0).toFixed(2)}</div>
+                    {previewItem.ai?.counterparty_name && <div className="text-xs text-muted">{previewItem.ai.counterparty_name}</div>}
+                  </div>
+                  <div className="rounded-md border border-border bg-surface px-3 py-2">
+                    <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('investigation.copilot.previewSuggested')}</div>
+                    <div className="font-mono text-sm text-text">{previewItem.suggested?.transaction_type || '—'}</div>
+                    <div className="text-xs text-muted">{previewItem.reason || '—'}</div>
+                    {previewItem.suggested?.counterparty_name && <div className="text-xs text-muted">{previewItem.suggested.counterparty_name}</div>}
+                  </div>
+                </div>
               </div>
-              <div className="rounded-md border border-border bg-surface px-3 py-2">
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('investigation.copilot.previewAi')}</div>
-                <div className="font-mono text-sm text-text">{previewItem.ai?.transaction_type || '—'}</div>
-                <div className="text-xs text-muted">{Number(previewItem.ai?.confidence || 0).toFixed(2)}</div>
-                {previewItem.ai?.counterparty_name && <div className="text-xs text-muted">{previewItem.ai.counterparty_name}</div>}
-              </div>
-              <div className="rounded-md border border-border bg-surface px-3 py-2">
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('investigation.copilot.previewSuggested')}</div>
-                <div className="font-mono text-sm text-text">{previewItem.suggested?.transaction_type || '—'}</div>
-                <div className="text-xs text-muted">{previewItem.reason || '—'}</div>
-                {previewItem.suggested?.counterparty_name && <div className="text-xs text-muted">{previewItem.suggested.counterparty_name}</div>}
-              </div>
-            </div>
+            ))}
           </div>
         )}
       </Card>

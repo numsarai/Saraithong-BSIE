@@ -14,7 +14,7 @@ from services.auth_service import require_auth
 from pydantic import BaseModel, Field
 
 from persistence.base import get_db_session
-from services.classification_service import build_classification_preview
+from services.classification_service import build_classification_preview, build_scoped_classification_preview
 from services.copilot_service import (
     CopilotNotFoundError,
     CopilotScopeError,
@@ -65,7 +65,9 @@ class ClassifyRequest(BaseModel):
 
 class ClassificationPreviewRequest(BaseModel):
     transactions: list[dict] = Field(default_factory=list)
+    scope: dict = Field(default_factory=dict)
     model: str = Field(default="", max_length=100)
+    max_transactions: int = Field(default=10, ge=1, le=25)
 
 
 class BenchmarkRequest(BaseModel):
@@ -162,8 +164,10 @@ async def api_llm_classify(req: ClassifyRequest):
 @router.post("/classification-preview")
 async def api_llm_classification_preview(req: ClassificationPreviewRequest):
     """Run a read-only local transaction classification preview."""
-    if not req.transactions:
-        raise HTTPException(status_code=400, detail="ต้องระบุรายการธุรกรรมอย่างน้อย 1 รายการ")
+    has_transactions = bool(req.transactions)
+    has_scope = any(str((req.scope or {}).get(key) or "").strip() for key in ("parser_run_id", "file_id", "account"))
+    if not has_transactions and not has_scope:
+        raise HTTPException(status_code=400, detail="ต้องระบุรายการธุรกรรมหรือ scope อย่างน้อย 1 รายการ")
     model = ""
     if req.model.strip():
         try:
@@ -172,11 +176,23 @@ async def api_llm_classification_preview(req: ClassificationPreviewRequest):
             raise HTTPException(status_code=400, detail=str(exc))
     try:
         import asyncio
-        result = await asyncio.to_thread(
-            build_classification_preview,
-            req.transactions,
-            model=model,
-        )
+        if has_transactions:
+            result = await asyncio.to_thread(
+                build_classification_preview,
+                req.transactions,
+                model=model,
+            )
+        else:
+            def run_scoped_preview():
+                with get_db_session() as session:
+                    return build_scoped_classification_preview(
+                        session,
+                        req.scope,
+                        model=model,
+                        max_transactions=req.max_transactions,
+                    )
+
+            result = await asyncio.to_thread(run_scoped_preview)
         return JSONResponse(result)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

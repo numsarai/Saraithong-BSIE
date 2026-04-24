@@ -1362,6 +1362,44 @@ def test_llm_classification_preview_endpoint_is_read_only():
     assert preview.call_args.kwargs["model"] == "qwen3.5:9b"
 
 
+def test_llm_classification_preview_endpoint_accepts_scope():
+    preview_result = {
+        "status": "ok",
+        "source": "local_llm_classification_preview",
+        "read_only": True,
+        "mutations_allowed": False,
+        "provider": "local",
+        "model": "qwen3.5:9b",
+        "preview_input": "scope",
+        "scope": {"parser_run_id": "RUN-1", "file_id": "FILE-1", "account": "1234567890", "account_digits": "1234567890"},
+        "total": 1,
+        "suggestion_count": 1,
+        "review_count": 1,
+        "min_confidence": 0.85,
+        "items": [],
+        "warnings": [],
+    }
+    with (
+        patch("routers.llm.get_db_session", _fake_db_session),
+        patch("routers.llm.build_scoped_classification_preview", return_value=preview_result) as preview,
+    ):
+        response = client.post(
+            "/api/llm/classification-preview",
+            json={
+                "scope": {"parser_run_id": "RUN-1", "file_id": "FILE-1", "account": "123-456-7890"},
+                "max_transactions": 7,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["preview_input"] == "scope"
+    preview.assert_called_once()
+    assert preview.call_args.args[0].__class__.__name__ == "DummySession"
+    assert preview.call_args.args[1] == {"parser_run_id": "RUN-1", "file_id": "FILE-1", "account": "123-456-7890"}
+    assert preview.call_args.kwargs["max_transactions"] == 7
+
+
 def test_mapping_confirm_defaults_to_run_confirmation_without_shared_promotion():
     payload = {
         "bank": "scb",

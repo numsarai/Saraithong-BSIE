@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-045: Classification preview can load scoped persisted transactions
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** DEC-044 added a read-only manual classification preview, but manually copying transaction fields is too error-prone for actual investigator review. The preview needs to inspect persisted transactions from the same evidence scope controls already used by Evidence Copilot while still avoiding any writes or hidden broad database access.
+- **Decision:** Extend `POST /api/llm/classification-preview` so callers may provide either explicit `transactions` or a supported scope (`parser_run_id`, `file_id`, `account`) plus `max_transactions`. Scoped preview queries persisted transactions through the existing search serialization path, normalizes account input to digits for account matching, caps rows at 25, then sends those bounded rows through the same local-only preview contract. Case tags remain unsupported for classification preview until a dedicated case-tag-to-transaction review policy is designed.
+- **Alternatives:** (1) Force users to copy/paste fields from result tables -- safe but clumsy and likely to introduce transcription errors. (2) Let the LLM query arbitrary database context -- too broad and unauditable. (3) Support case tags immediately -- useful later, but tags can point to mixed object types and need a clearer transaction selection policy first.
+- **Consequences:** Analysts can preview local classification suggestions over real scoped evidence without mutating records. Future apply/review workflows can build on the same scoped transaction retrieval, but must add explicit analyst confirmation and audit logging before changing persisted classification.
+
 ### DEC-044: Classification preview is read-only and local-only
 - **Date:** 2026-04-24
 - **Status:** accepted

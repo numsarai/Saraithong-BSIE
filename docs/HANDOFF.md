@@ -9,11 +9,66 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `388 passed`, frontend `49 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `391 passed`, frontend `50 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Read-only Classification Preview
+## Done (latest session) — Scoped Classification Preview
+
+### What I changed
+- Extended `POST /api/llm/classification-preview` to accept either explicit `transactions` or a supported evidence scope.
+- Supported scoped preview inputs are `parser_run_id`, `file_id`, and `account`; account input is normalized to digits for matching.
+- Scoped preview queries persisted transactions through the existing search serialization path, caps rows at 25, and sends bounded rows through the same local-only preview contract.
+- AI Copilot Evidence mode now has `Preview From Scope`, reusing the current scope fields and `max_transactions` control.
+- The preview result display now handles multiple scoped rows, shows `status`, `preview_input`, total suggestions, and review counts.
+- Added DEC-045 and roadmap status for scoped persisted transaction preview.
+
+### Files changed
+- `routers/llm.py`
+- `services/classification_service.py`
+- `tests/test_classification_service.py`
+- `tests/test_app_api.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `388 passed`
+  - `npm test -- --run` in `frontend/` -> `49 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/classification_service.py routers/llm.py tests/test_classification_service.py tests/test_app_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_classification_service.py tests/test_app_api.py::test_llm_classification_preview_endpoint_is_read_only tests/test_app_api.py::test_llm_classification_preview_endpoint_accepts_scope -q` -> `11 passed`
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `7 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `391 passed`
+  - `npm test -- --run` in `frontend/` -> `50 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-045: classification preview can load scoped persisted transactions.
+- Case tags are not yet supported by classification preview because tags can point to mixed object types and need a clear transaction selection policy first.
+
+### Warnings / Next
+- `Preview From Scope` is still read-only and does not write audit logs because it does not mutate evidence.
+- Next useful slice: add a transaction picker/table for scoped preview results so analysts can choose exactly which scoped row(s) to inspect, then later design an explicit audited apply workflow.
+- If the backend server was already running without reload, restart it before using `/api/llm/classification-preview` with scope from the browser.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but generated dist files remain untracked.
+
+## Done (previous session) — Read-only Classification Preview
 
 ### What I changed
 - Added a read-only local classification preview contract at `POST /api/llm/classification-preview`.

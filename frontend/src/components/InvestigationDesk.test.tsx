@@ -465,4 +465,19 @@ describe('InvestigationDesk date formatting', () => {
     expect((await screen.findAllByText('WITHDRAW')).length).toBeGreaterThanOrEqual(2)
     expect((await screen.findAllByText('ATM Withdrawal')).length).toBeGreaterThanOrEqual(2)
   })
+
+  it('previews classification from the current evidence scope', async () => {
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'AI Copilot' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Evidence' }))
+    fireEvent.change(screen.getByLabelText('Parser Run ID'), { target: { value: 'RUN-1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Preview From Scope' }))
+
+    await waitFor(() => expect(previewClassification).toHaveBeenCalledWith({
+      scope: { parser_run_id: 'RUN-1', file_id: '', account: '', case_tag_id: '', case_tag: '' },
+      max_transactions: 20,
+    }))
+    expect(await screen.findByText('review_divergence')).toBeInTheDocument()
+  })
 })

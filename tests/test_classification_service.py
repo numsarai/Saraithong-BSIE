@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pandas as pd
 
-from services.classification_service import apply_ai_classification_enrichment, build_classification_preview
+from services.classification_service import (
+    apply_ai_classification_enrichment,
+    build_classification_preview,
+    build_scoped_classification_preview,
+)
 
 
 def _sample_df() -> pd.DataFrame:
@@ -230,3 +234,74 @@ def test_build_classification_preview_keeps_low_confidence_as_review_only(monkey
     assert result["items"][0]["review_required"] is True
     assert result["items"][0]["would_apply"] is False
     assert result["items"][0]["suggested"]["transaction_type"] == "OUT_TRANSFER"
+
+
+def test_build_scoped_classification_preview_queries_scope_rows(monkeypatch):
+    from services import classification_service
+
+    captured = {}
+
+    def fake_search_transactions(session, **kwargs):
+        captured["session"] = session
+        captured["kwargs"] = kwargs
+        return [
+            {
+                "id": "TXN-SCOPE-1",
+                "parser_run_id": "RUN-1",
+                "file_id": "FILE-1",
+                "transaction_datetime": "2026-04-24T10:30:00Z",
+                "amount": -500.0,
+                "direction": "OUT",
+                "description_normalized": "ATM WDL",
+                "channel": "ATM",
+                "transaction_type": "OUT_TRANSFER",
+                "counterparty_name_normalized": "",
+                "counterparty_account_normalized": "",
+            }
+        ]
+
+    monkeypatch.setattr(classification_service, "search_transactions", fake_search_transactions)
+    monkeypatch.setattr(
+        classification_service,
+        "_run_local_llm_pipeline",
+        lambda df, settings: {
+            "TXN-SCOPE-1": {
+                "transaction_type": "WITHDRAW",
+                "counterparty_name": "ATM Withdrawal",
+                "confidence": 0.91,
+                "nlp_promptpay": False,
+                "nlp_accounts": "",
+            }
+        },
+    )
+
+    dummy_session = object()
+    result = build_scoped_classification_preview(
+        dummy_session,
+        {"parser_run_id": "RUN-1", "file_id": "FILE-1", "account": "123-456-7890"},
+        max_transactions=3,
+    )
+
+    assert captured["session"] is dummy_session
+    assert captured["kwargs"]["parser_run_id"] == "RUN-1"
+    assert captured["kwargs"]["file_id"] == "FILE-1"
+    assert captured["kwargs"]["account"] == "1234567890"
+    assert captured["kwargs"]["limit"] == 3
+    assert result["preview_input"] == "scope"
+    assert result["scope"]["account_digits"] == "1234567890"
+    assert result["items"][0]["transaction_id"] == "TXN-SCOPE-1"
+    assert result["items"][0]["ai"]["transaction_type"] == "WITHDRAW"
+
+
+def test_build_scoped_classification_preview_returns_empty_scope_result(monkeypatch):
+    from services import classification_service
+
+    monkeypatch.setattr(classification_service, "search_transactions", lambda session, **kwargs: [])
+
+    result = build_scoped_classification_preview(object(), {"parser_run_id": "RUN-EMPTY"})
+
+    assert result["status"] == "no_transactions"
+    assert result["read_only"] is True
+    assert result["mutations_allowed"] is False
+    assert result["items"] == []
+    assert "no_transactions_matched_scope" in result["warnings"]

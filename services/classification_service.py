@@ -12,6 +12,7 @@ import pandas as pd
 
 from core.llm_agent import run_llm_pipeline
 from services.llm_service import REQUEST_TIMEOUT, resolve_model
+from services.search_service import search_transactions
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,10 @@ def _safe_bool(value: Any) -> bool:
         return value
     text = str(value or "").strip().lower()
     return text in {"1", "true", "yes", "y", "on"}
+
+
+def _account_digits(value: Any) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
@@ -309,27 +314,47 @@ def _preview_settings(model: str = "") -> ClassificationSettings:
 
 
 def _preview_record(row: dict[str, Any], index: int) -> dict[str, Any]:
-    txn_id = _safe_text(row.get("transaction_id"), limit=120) or f"preview_{index + 1}"
+    txn_id = (
+        _safe_text(row.get("transaction_id"), limit=120)
+        or _safe_text(row.get("id"), limit=120)
+        or f"preview_{index + 1}"
+    )
     current_type = (
         _safe_text(row.get("transaction_type"), limit=40)
         or _safe_text(row.get("heuristic_transaction_type"), limit=40)
     )
-    confidence = row.get("confidence", row.get("heuristic_confidence", 0.0))
+    confidence = row.get("confidence", row.get("heuristic_confidence", row.get("parse_confidence", 0.0)))
     description = (
         _safe_text(row.get("description"), limit=320)
         or _safe_text(row.get("description_normalized"), limit=320)
         or _safe_text(row.get("description_raw"), limit=320)
     )
+    date_text = (
+        _safe_text(row.get("date"), limit=40)
+        or _safe_text(row.get("transaction_date"), limit=40)
+        or _safe_text(row.get("posted_date"), limit=40)
+        or _safe_text(row.get("transaction_datetime"), limit=40)
+    )
+    counterparty_account = (
+        _safe_text(row.get("counterparty_account"), limit=80)
+        or _safe_text(row.get("counterparty_account_normalized"), limit=80)
+        or _safe_text(row.get("counterparty_account_raw"), limit=80)
+    )
+    counterparty_name = (
+        _safe_text(row.get("counterparty_name"), limit=160)
+        or _safe_text(row.get("counterparty_name_normalized"), limit=160)
+        or _safe_text(row.get("counterparty_name_raw"), limit=160)
+    )
     return {
         "transaction_id": txn_id,
-        "date": _safe_text(row.get("date") or row.get("transaction_date"), limit=40),
+        "date": date_text,
         "direction": _safe_text(row.get("direction"), limit=12).upper(),
         "amount": _safe_float(row.get("amount")),
         "description": description,
         "description_raw": description,
         "channel": _safe_text(row.get("channel"), limit=80),
-        "counterparty_account": _safe_text(row.get("counterparty_account"), limit=80),
-        "counterparty_name": _safe_text(row.get("counterparty_name"), limit=160),
+        "counterparty_account": counterparty_account,
+        "counterparty_name": counterparty_name,
         "transaction_type": current_type.upper(),
         "confidence": max(0.0, min(1.0, _safe_float(confidence))),
         "heuristic_transaction_type": current_type.upper(),
@@ -412,7 +437,13 @@ def _preview_item(record: dict[str, Any], llm: dict[str, Any] | None, settings: 
     }
 
 
-def build_classification_preview(transactions: list[dict[str, Any]], *, model: str = "") -> dict[str, Any]:
+def build_classification_preview(
+    transactions: list[dict[str, Any]],
+    *,
+    model: str = "",
+    source_scope: dict[str, Any] | None = None,
+    preview_input: str = "manual",
+) -> dict[str, Any]:
     """
     Run a read-only local classification preview over analyst-provided transaction rows.
 
@@ -451,6 +482,8 @@ def build_classification_preview(transactions: list[dict[str, Any]], *, model: s
         "mutations_allowed": False,
         "provider": "local",
         "model": settings.llm_model_name,
+        "preview_input": preview_input,
+        "scope": source_scope or {},
         "total": len(items),
         "suggestion_count": len(suggestions),
         "review_count": len(review_items),
@@ -458,6 +491,87 @@ def build_classification_preview(transactions: list[dict[str, Any]], *, model: s
         "items": items,
         "warnings": warnings,
     }
+
+
+def _scope_identity(scope: dict[str, Any]) -> dict[str, str]:
+    parser_run_id = _safe_text(scope.get("parser_run_id"), limit=64)
+    file_id = _safe_text(scope.get("file_id"), limit=64)
+    account = _safe_text(scope.get("account"), limit=64)
+    account_digits = _account_digits(account)
+    return {
+        "parser_run_id": parser_run_id,
+        "file_id": file_id,
+        "account": account,
+        "account_digits": account_digits,
+    }
+
+
+def _scoped_preview_transactions(session: Any, scope: dict[str, Any], *, max_transactions: int) -> list[dict[str, Any]]:
+    scope_ids = _scope_identity(scope)
+    limit = max(1, min(CLASSIFICATION_PREVIEW_MAX_TRANSACTIONS, int(max_transactions or 1)))
+    return search_transactions(
+        session,
+        account=scope_ids["account_digits"] or scope_ids["account"],
+        file_id=scope_ids["file_id"],
+        parser_run_id=scope_ids["parser_run_id"],
+        limit=limit,
+        offset=0,
+    )
+
+
+def build_scoped_classification_preview(
+    session: Any,
+    scope: dict[str, Any],
+    *,
+    model: str = "",
+    max_transactions: int = 10,
+) -> dict[str, Any]:
+    scope_ids = _scope_identity(scope)
+    if not (scope_ids["parser_run_id"] or scope_ids["file_id"] or scope_ids["account"] or scope_ids["account_digits"]):
+        raise ValueError("classification preview scope requires parser_run_id, file_id, or account")
+
+    limit = max(1, min(CLASSIFICATION_PREVIEW_MAX_TRANSACTIONS, int(max_transactions or 1)))
+    rows = _scoped_preview_transactions(session, scope_ids, max_transactions=limit)
+    if not rows:
+        return {
+            "status": "no_transactions",
+            "source": "local_llm_classification_preview",
+            "read_only": True,
+            "mutations_allowed": False,
+            "provider": "local",
+            "model": _preview_settings(model).llm_model_name,
+            "preview_input": "scope",
+            "scope": scope_ids,
+            "total": 0,
+            "suggestion_count": 0,
+            "review_count": 0,
+            "min_confidence": get_classification_settings().llm_min_confidence,
+            "items": [],
+            "warnings": ["no_transactions_matched_scope"],
+        }
+
+    transactions = [
+        {
+            "transaction_id": row.get("transaction_id") or row.get("id"),
+            "date": row.get("transaction_datetime") or row.get("posted_date") or "",
+            "direction": row.get("direction") or "",
+            "amount": row.get("amount") or 0,
+            "description": row.get("description") or row.get("description_normalized") or "",
+            "description_normalized": row.get("description_normalized") or "",
+            "channel": row.get("channel") or "",
+            "counterparty_account": row.get("counterparty_account") or row.get("counterparty_account_normalized") or "",
+            "counterparty_name": row.get("counterparty_name") or row.get("counterparty_name_normalized") or "",
+            "transaction_type": row.get("transaction_type") or "",
+            "confidence": row.get("confidence", row.get("parse_confidence", 0.0)),
+        }
+        for row in rows
+    ]
+    return build_classification_preview(
+        transactions,
+        model=model,
+        source_scope=scope_ids,
+        preview_input="scope",
+    )
 
 
 def apply_ai_classification_enrichment(df: pd.DataFrame) -> pd.DataFrame:

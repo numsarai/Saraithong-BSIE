@@ -497,8 +497,16 @@ export async function askCopilot(payload: {
 }
 
 export async function previewClassification(payload: {
-  transactions: Record<string, unknown>[]
+  transactions?: Record<string, unknown>[]
+  scope?: {
+    parser_run_id?: string
+    file_id?: string
+    account?: string
+    case_tag_id?: string
+    case_tag?: string
+  }
   model?: string
+  max_transactions?: number
 }) {
   const r = await apiFetch('/api/llm/classification-preview', {
     method: 'POST',

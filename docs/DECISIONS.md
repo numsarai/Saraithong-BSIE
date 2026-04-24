@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-035: Qwen 2.5 baseline models are retired from the local LLM roadmap
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** The operator has ruled out `qwen2.5:14b` and `qwen2.5vl:7b` as realistic candidates for the current BSIE local LLM plan. Installed-model and task-specific benchmark work has already moved the practical mapping path to Gemma/Qwen 3.5 candidates, while keeping Qwen 2.5 install/rerun tasks would waste time and confuse future agents.
+- **Decision:** Remove `qwen2.5:14b` and `qwen2.5vl:7b` from future model-selection and benchmark roadmaps. Historical benchmark rows may stay as history only. Runtime text fallback moves to `qwen3.5:9b`; runtime vision fallback moves to `gemma4:e4b`; current mapping assist remains on `gemma4:26b`.
+- **Alternatives:** (1) Install the Qwen 2.5 models just to complete the old baseline comparison -- no longer useful for the operator's decision. (2) Leave them as unverified baseline candidates -- keeps a stale blocker in Phase 3. (3) Use floating `:latest` tags instead -- not reproducible enough for evidence-sensitive flows.
+- **Consequences:** Phase 3 no longer has a Qwen 2.5 benchmark blocker. The next LLM work should move to Phase 4 copilot scope/citation/audit design or new non-Qwen-2.5 candidates if needed.
+
 ### DEC-034: OCR account presence locations preserve bounding boxes for evidence overlays
 - **Date:** 2026-04-24
 - **Status:** accepted
@@ -147,11 +155,11 @@
 
 ### DEC-018: Benchmark results do not change the configured baseline roles yet
 - **Date:** 2026-04-24
-- **Status:** accepted
+- **Status:** superseded by DEC-035
 - **Context:** The first live benchmark found installed `qwen3.6:27b` and `gemma4:e4b`, while the documented baseline text/vision models from DEC-008 were not installed. `qwen3.6:27b` produced valid JSON but was too slow for interactive mapping UX.
 - **Decision:** Keep the existing role defaults unchanged for now. Record the local benchmark in `docs/LOCAL_LLM_BENCHMARKS.md`, but do not switch text defaults to `qwen3.6:27b` or use `gemma4:e4b` as the primary mapping model based on a single run.
 - **Alternatives:** (1) Change text default to `qwen3.6:27b` because it is installed — works but is too slow. (2) Change text default to `gemma4:e4b` because it is faster — weaker for Thai/JSON/mapping reasoning and showed variable JSON compliance. (3) Block Phase 4 until baseline models are installed — unnecessary because Phase 4 can preserve role-based config.
-- **Consequences:** The next benchmark should install/pull the intended `qwen2.5:14b` and `qwen2.5vl:7b` models, then rerun text/fast/vision measurements before changing defaults.
+- **Consequences:** Superseded by DEC-035; do not install/pull the Qwen 2.5 models just to satisfy this historical benchmark plan.
 
 ### DEC-017: OCR/vision mapping assist reads evidence by file_id and remains suggestion-only
 - **Date:** 2026-04-24
@@ -227,7 +235,7 @@
 
 ### DEC-008: Local LLM baseline on the current Mac should separate text and vision roles
 - **Date:** 2026-04-24
-- **Status:** accepted
+- **Status:** superseded by DEC-035
 - **Context:** BSIE ต้องใช้ Local LLM กับทั้งงานข้อความ/JSON/mapping reasoning และงานเอกสาร/ภาพ การใช้โมเดลเดียวครอบทุกอย่างบน MacBook Pro 16" M2 Max RAM 32GB จะไม่คุ้มที่สุดทั้งด้าน latency และคุณภาพ
 - **Decision:** ใช้ baseline model แยกบทบาท: `qwen2.5:14b` สำหรับ text reasoning / Thai + JSON / mapping assist, `qwen2.5vl:7b` สำหรับ PDF/image/document understanding, และ `gemma4:e4b` เป็น fast fallback; หลีกเลี่ยง `:latest` ใน production-like flows เพื่อคง reproducibility
 - **Alternatives:** (1) ใช้โมเดลเดียวกับทุก use case — ง่ายแต่ไม่ optimize (2) ใช้ reasoning model ใหม่กว่าอย่างเดียว — อาจแรงขึ้นบางงานแต่ context/tooling fit ไม่ดีเท่าในงาน Excel + structured outputs

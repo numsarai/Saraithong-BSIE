@@ -13,7 +13,48 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — OCR Bounding Box Overlay For Image Evidence
+## Done (latest session) — Retired Qwen 2.5 Baseline And Clarified Phase 4
+
+### What I changed
+- Retired `qwen2.5:14b` and `qwen2.5vl:7b` from the future local LLM roadmap.
+- Added DEC-035 and marked the old Qwen 2.5 baseline decisions as superseded so future agents do not install/rerun those models as a Phase 3 blocker.
+- Updated runtime LLM fallbacks away from Qwen 2.5: text now defaults to `qwen3.5:9b`, vision to `gemma4:e4b`, fast remains `gemma4:e4b`, and mapping remains `gemma4:26b`.
+- Clarified Phase 4 Investigation Copilot as a case-scoped, read-only, evidence-cited local LLM assistant rather than a general chatbot.
+- Defined the first copilot direction around deterministic context packs, evidence citations/record ids, and prompt/model/context/operator audit logging.
+
+### Files changed
+- `services/llm_service.py`
+- `tests/test_app_api.py`
+- `tests/test_mapping_assist_service.py`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/LOCAL_LLM_BENCHMARKS.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `372 passed`
+  - `npm test -- --run` in `frontend/` -> `46 passed`
+- Focused after runtime/default updates:
+  - `.venv/bin/python -m py_compile services/llm_service.py tests/test_app_api.py tests/test_mapping_assist_service.py tests/test_llm_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_llm_service.py tests/test_mapping_assist_service.py tests/test_app_api.py::test_mapping_assist_endpoint_returns_suggestion_only_payload tests/test_app_api.py::test_mapping_vision_assist_endpoint_uses_stored_evidence_file tests/test_app_api.py::test_llm_benchmark_endpoint_returns_local_only_payload -q` -> `16 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `13 passed`
+- Full verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `372 passed`
+  - `npm test -- --run` in `frontend/` -> `46 passed`
+
+### Decisions made
+- Added DEC-035: Qwen 2.5 baseline models are retired from the local LLM roadmap.
+
+### Warnings / Next
+- Phase 3 no longer has a Qwen 2.5 benchmark/install blocker.
+- The next useful slice is Phase 4 copilot scope locking: design `copilot_scope`, build deterministic context pack generation, and add read-only assistant endpoints with citations/audit logging.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — OCR Bounding Box Overlay For Image Evidence
 
 ### What I changed
 - `services/account_presence_service.py` now carries OCR token `bbox` lineage into match locations as `ocr_bbox`.
@@ -910,7 +951,7 @@ The first committed-harness run wrote:
 - For installed models right now, use `gemma4:e4b` as fast fallback and provisional vision smoke candidate.
 - Use `qwen3.5:9b` for Qwen-family text experiments; do not default to `qwen3.5:27b` or `qwen3.6:27b` for interactive mapping UX.
 - Do not use installed Qwen tags for vision on this machine until the Ollama runner `500` issue is resolved.
-- Keep `qwen2.5:14b` / `qwen2.5vl:7b` as unverified baseline targets until those tags are installed and benchmarked.
+- Historical note superseded by DEC-035: do not install/rerun `qwen2.5:14b` / `qwen2.5vl:7b` as baseline targets.
 
 ### Warnings
 - OpenAI-compatible `/v1/chat/completions` is not reliable for capped `think=false` smoke tests with the installed Qwen thinking models under the BSIE system prompt; use native `/api/chat` when controlling thinking.
@@ -962,9 +1003,9 @@ The first committed-harness run wrote:
 - Do not promote `gemma4:e4b` to primary mapping model based on a single run because JSON compliance varied.
 
 ### Warnings
-- `qwen2.5:14b` and `qwen2.5vl:7b` are not currently installed in Ollama.
+- Historical note: `qwen2.5:14b` and `qwen2.5vl:7b` were not installed in Ollama and are now retired by DEC-035.
 - Vision mapping assist live use still requires a vision-capable local model.
-- Next benchmark should rerun after pulling the intended baseline models.
+- Superseded by DEC-035: no benchmark rerun should pull the old Qwen 2.5 baseline models.
 
 ### Failed attempts / Notes
 - Default benchmark run was `partial` because baseline text/vision models were missing.
@@ -1098,9 +1139,9 @@ The first committed-harness run wrote:
 
 ### What I changed
 - Added centralized local Ollama model role config in `services/llm_service.py`.
-- Added role defaults:
-  - text: `OLLAMA_TEXT_MODEL` / fallback `qwen2.5:14b`
-  - vision: `OLLAMA_VISION_MODEL` / fallback `qwen2.5vl:7b`
+- Added role defaults. Current fallbacks after DEC-035 are:
+  - text: `OLLAMA_TEXT_MODEL` / fallback `qwen3.5:9b`
+  - vision: `OLLAMA_VISION_MODEL` / fallback `gemma4:e4b`
   - fast: `OLLAMA_FAST_MODEL` / fallback `gemma4:e4b`
   - mapping override: `OLLAMA_MAPPING_MODEL`
 - Added `resolve_model(...)` and `get_llm_model_config()`.
@@ -1573,9 +1614,9 @@ The first committed-harness run wrote:
 - auto-pass เปิดได้เฉพาะ trusted Excel variants
 - `/api/mapping/confirm` เป็น run confirmation by default; shared promotion ต้อง opt-in ด้วย `promote_shared=true`
 - `promote_shared=true` จะบันทึก guarded bank template variant ไม่เขียน legacy mapping profile/bank fingerprint ทันที
-- local model baseline:
-  - text: `qwen2.5:14b`
-  - vision/doc: `qwen2.5vl:7b`
+- local model baseline after DEC-035:
+  - text: `qwen3.5:9b`
+  - vision/doc: `gemma4:e4b`
   - fast fallback: `gemma4:e4b`
 
 ## Warnings

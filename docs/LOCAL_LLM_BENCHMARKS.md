@@ -278,11 +278,12 @@ Installed local models at run time:
 
 - For currently installed models, prefer `gemma4:e4b` as the fast fallback and provisional vision smoke model.
 - Prefer `qwen3.5:9b` over the 27B Qwen tags for interactive text experiments when Qwen-family reasoning is needed.
+- After DEC-035, runtime fallbacks are text=`qwen3.5:9b`, vision=`gemma4:e4b`, fast=`gemma4:e4b`, mapping=`gemma4:26b`.
 - Keep strict schema validation around `gemma4:e4b`; it returned valid JSON but localized the `fields` values in the text smoke response.
 - Do not use the installed Qwen tags for vision on this machine yet; every Qwen vision smoke failed with Ollama runner `500`.
 - Avoid `qwen3.6:27b` as a default interactive mapping model; valid JSON took about 30.7 seconds even with `think=false`.
 - Keep avoiding `:latest` in production-like flows; `gemma4:latest` and `gemma4:e4b` currently share an ID, but the pinned tag is more reproducible.
-- The earlier `qwen2.5:14b` / `qwen2.5vl:7b` baseline remains unverified because those models are not installed.
+- The earlier `qwen2.5:14b` / `qwen2.5vl:7b` baseline is retired by DEC-035; no follow-up install/rerun is planned.
 
 ## 2026-04-24 — Initial Local Ollama Run
 
@@ -370,7 +371,7 @@ Overall status: `ok`.
 
 ### Takeaways
 
-- Do not change defaults based on this run; the intended baseline models from `DEC-008` are not installed yet.
+- This run is retained as benchmark history only; the Qwen 2.5 baseline roles from `DEC-008` are superseded by DEC-035.
 - `qwen3.6:27b` is functional but too slow for interactive mapping assist on this machine.
 - `gemma4:e4b` is available and much faster, but JSON compliance varied across runs.
-- Next live benchmark should install/pull `qwen2.5:14b` and `qwen2.5vl:7b`, then rerun text/fast/vision roles.
+- No future benchmark step should install/pull `qwen2.5:14b` or `qwen2.5vl:7b` just to satisfy the old baseline plan.

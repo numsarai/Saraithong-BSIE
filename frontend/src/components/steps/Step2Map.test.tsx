@@ -10,7 +10,7 @@ vi.mock('@/api', () => ({
     source: 'local_llm_mapping_assist',
     suggestion_only: true,
     auto_pass_eligible: false,
-    model: 'qwen2.5:14b',
+    model: 'gemma4:26b',
     mapping: {
       date: 'วันที่',
       description: 'รายละเอียด',
@@ -28,7 +28,7 @@ vi.mock('@/api', () => ({
     source: 'local_llm_vision_mapping_assist',
     suggestion_only: true,
     auto_pass_eligible: false,
-    model: 'qwen2.5vl:7b',
+    model: 'gemma4:26b',
     mapping: {
       date: 'วันที่',
       description: 'รายละเอียด',

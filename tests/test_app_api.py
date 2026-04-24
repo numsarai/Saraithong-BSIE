@@ -1071,7 +1071,7 @@ def test_mapping_assist_endpoint_returns_suggestion_only_payload():
         "source": "local_llm_mapping_assist",
         "suggestion_only": True,
         "auto_pass_eligible": False,
-        "model": "qwen2.5:14b",
+        "model": "gemma4:26b",
         "mapping": {"date": "วันที่", "description": "รายการ", "amount": "จำนวนเงิน"},
         "confidence": 0.8,
         "reasons": ["headers matched"],
@@ -1159,7 +1159,7 @@ def test_mapping_vision_assist_endpoint_uses_stored_evidence_file(tmp_path):
         "source": "local_llm_vision_mapping_assist",
         "suggestion_only": True,
         "auto_pass_eligible": False,
-        "model": "qwen2.5vl:7b",
+        "model": "gemma4:26b",
         "mapping": {"date": "วันที่", "description": "รายการ", "debit": "ถอน", "credit": "ฝาก"},
         "confidence": 0.78,
         "reasons": ["visual labels matched"],
@@ -1216,11 +1216,11 @@ def test_llm_benchmark_endpoint_returns_local_only_payload():
         "source": "local_llm_benchmark",
         "local_only": True,
         "iterations": 1,
-        "model_roles": {"text": "qwen2.5:14b", "fast": "gemma4:e4b", "vision": "qwen2.5vl:7b"},
+        "model_roles": {"text": "qwen3.5:9b", "fast": "gemma4:e4b", "vision": "gemma4:e4b"},
         "results": [
             {
                 "role": "text",
-                "model": "qwen2.5:14b",
+                "model": "qwen3.5:9b",
                 "status": "ok",
                 "iterations": 1,
                 "ok_count": 1,
@@ -1235,7 +1235,7 @@ def test_llm_benchmark_endpoint_returns_local_only_payload():
             json={
                 "roles": ["text"],
                 "iterations": 1,
-                "model_overrides": {"text": "qwen2.5:14b"},
+                "model_overrides": {"text": "qwen3.5:9b"},
             },
         )
 
@@ -1247,7 +1247,7 @@ def test_llm_benchmark_endpoint_returns_local_only_payload():
     benchmark.assert_awaited_once()
     assert benchmark.call_args.kwargs["roles"] == ["text"]
     assert benchmark.call_args.kwargs["iterations"] == 1
-    assert benchmark.call_args.kwargs["model_overrides"] == {"text": "qwen2.5:14b"}
+    assert benchmark.call_args.kwargs["model_overrides"] == {"text": "qwen3.5:9b"}
 
 
 def test_mapping_confirm_defaults_to_run_confirmation_without_shared_promotion():

@@ -33,10 +33,10 @@ OLLAMA_BASE_URL = (
     or "http://localhost:11434"
 )
 DEFAULT_TEXT_MODEL = (
-    _os.getenv("OLLAMA_TEXT_MODEL", _os.getenv("OLLAMA_DEFAULT_MODEL", "qwen2.5:14b")).strip()
-    or "qwen2.5:14b"
+    _os.getenv("OLLAMA_TEXT_MODEL", _os.getenv("OLLAMA_DEFAULT_MODEL", "qwen3.5:9b")).strip()
+    or "qwen3.5:9b"
 )
-DEFAULT_VISION_MODEL = _os.getenv("OLLAMA_VISION_MODEL", "qwen2.5vl:7b").strip() or "qwen2.5vl:7b"
+DEFAULT_VISION_MODEL = _os.getenv("OLLAMA_VISION_MODEL", "gemma4:e4b").strip() or "gemma4:e4b"
 DEFAULT_FAST_MODEL = _os.getenv("OLLAMA_FAST_MODEL", "gemma4:e4b").strip() or "gemma4:e4b"
 DEFAULT_MODEL = _os.getenv("OLLAMA_DEFAULT_MODEL", DEFAULT_TEXT_MODEL).strip() or DEFAULT_TEXT_MODEL
 REQUEST_TIMEOUT = float(_os.getenv("OLLAMA_TIMEOUT", "120.0"))

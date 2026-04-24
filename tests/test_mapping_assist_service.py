@@ -223,7 +223,7 @@ def test_mapping_assist_includes_selected_account_context(monkeypatch):
 
 def test_mapping_assist_rejects_non_json_llm_response(monkeypatch):
     async def fake_chat(*args, **kwargs):
-        return {"model": "qwen2.5:14b", "response": "not json"}
+        return {"model": "gemma4:26b", "response": "not json"}
 
     monkeypatch.setattr("services.mapping_assist_service.chat", fake_chat)
 
@@ -250,7 +250,7 @@ def test_vision_mapping_assist_uses_preview_and_validation(monkeypatch):
         assert kwargs["max_tokens"] > 0
         assert kwargs["think"] is False
         return {
-            "model": kwargs.get("model") or "qwen2.5vl:7b",
+            "model": kwargs.get("model") or "gemma4:26b",
             "response": """
             {
               "mapping": {

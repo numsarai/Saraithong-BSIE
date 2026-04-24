@@ -9,11 +9,65 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `331 passed`, frontend `34 passed`, frontend build passed
+- **Baseline:** backend `331 passed`, frontend `35 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 2 Gated Variant Suggestions
+## Done (latest session) — Phase 2 Variant Review/Admin UI
+
+### What I changed
+- Pushed the existing two commits on `Smarter-BSIE` to `origin/Smarter-BSIE`.
+- Added frontend API clients for:
+  - `GET /api/mapping/variants`
+  - `POST /api/mapping/variants/{variant_id}/promote`
+- Added a per-bank `Template Variants` panel inside `BankManager`.
+- The panel lets analysts/admins:
+  - list variants for the selected bank
+  - filter by trust state
+  - inspect source type, sheet/header, columns, mapped fields, dry-run valid rows, confirmations, correction rate, reviewer count, and update time
+  - promote `candidate -> verified` and `verified -> trusted`
+  - attach a promotion note
+- Promotion buttons use the current sidebar operator name and are disabled for anonymous/default `analyst`, matching backend named-reviewer guardrails.
+- Added English/Thai i18n keys and a regression test for variant listing + promotion.
+
+### Files changed
+- `frontend/src/api.ts`
+- `frontend/src/components/BankManager.tsx`
+- `frontend/src/components/BankManager.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before changes:
+  - `.venv/bin/python -m pytest tests/ -q` -> `331 passed`
+  - `npm test` in `frontend/` -> `34 passed`
+- Focused after changes:
+  - `npm test -- --run src/components/BankManager.test.tsx` -> `2 passed`
+  - `npm run build` in `frontend/` -> passed, Vite large chunk warning only
+- Final verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `331 passed`
+  - `npm test` in `frontend/` -> `35 passed`
+  - `npm run build` in `frontend/` -> passed, Vite large chunk warning only
+
+### Decisions made
+- Added `DEC-013`: Variant admin UI exposes staged promotion only.
+- Variant promotion UI is staged only: `candidate -> verified -> trusted`. Direct UI promotion from candidate to trusted is intentionally not exposed even though the backend endpoint can accept higher target states.
+- Promotion remains named-reviewer gated in the UI to mirror backend enforcement and preserve review accountability.
+
+### Warnings
+- The UI is per selected bank in Bank Manager; there is not yet a global all-bank variant queue.
+- This UI still does not enable auto-pass. It only manages the trust lifecycle used by the guarded suggestion path.
+
+### Failed attempts / Notes
+- Initial BankManager regression test asserted variant text before the async variants query rendered; the test now waits for the variant row.
+
+### Environment changes
+- No new dependencies installed.
+
+## Done (previous session) — Phase 2 Gated Variant Suggestions
 
 ### What I changed
 - Wired guarded bank template variants into upload and bulk mapping suggestion paths.
@@ -66,7 +120,7 @@
 ### Warnings
 - This does not enable full auto-pass. `auto_pass_eligible` remains false in all returned variant matches.
 - Variants are still Excel-only in the gated reuse path. PDF/image OCR mappings remain deterministic/profile-based until an OCR-specific review design exists.
-- There is still no frontend admin/review UI for listing/promoting variants; use the API endpoints for now.
+- Frontend admin/review UI was added in the next session inside Bank Manager.
 
 ### Failed attempts / Notes
 - Initial focused tests exposed that `repair_suggested_mapping` could re-fill `amount` after a debit/credit variant was merged. The helper now preserves debit/credit mode.

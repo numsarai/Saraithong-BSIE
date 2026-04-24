@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-013: Variant admin UI exposes staged promotion only
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** The backend promotion endpoint can move a template variant to any non-demoted trust state, but the frontend review workflow should make evidence review deliberate and easy to audit.
+- **Decision:** Bank Manager exposes per-bank variant review and promotes only one step at a time: `candidate -> verified` and `verified -> trusted`. Promotion uses the current named operator from the sidebar and disables action for the default anonymous `analyst`.
+- **Alternatives:** (1) Allow direct candidate-to-trusted promotion in the UI — faster but weakens reviewer discipline. (2) Hide promotion until a global review queue exists — blocks current backend lifecycle management.
+- **Consequences:** Analysts can manage variants now while preserving a staged trust lifecycle; a future global queue can reuse the same API without changing the per-bank workflow.
+
 ### DEC-012: Template variant reuse is gated by workflow risk
 - **Date:** 2026-04-24
 - **Status:** accepted

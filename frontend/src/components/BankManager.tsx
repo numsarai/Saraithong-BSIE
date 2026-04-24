@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { getBanks, getBank, createBank, deleteBank, getBankLogoCatalog } from '@/api'
+import { createBank, deleteBank, getBank, getBankLogoCatalog, getBanks, listMappingVariants, promoteMappingVariant } from '@/api'
+import { normalizeOperatorName, useStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
 import { BankLogo } from '@/components/BankLogo'
 import { toast } from 'sonner'
-import { Plus, Trash2, X, ChevronLeft, Building2, Save } from 'lucide-react'
+import { ArrowUpCircle, ChevronLeft, Building2, Plus, RefreshCw, Save, ShieldCheck, Trash2, X } from 'lucide-react'
 
 const LOGICAL_FIELDS = [
   'date','time','description','amount','debit','credit',
@@ -65,6 +66,28 @@ type BankBrand = {
   head_office_address?: string
 }
 
+type TemplateVariant = {
+  variant_id: string
+  bank_key: string
+  source_type: string
+  sheet_name?: string
+  header_row?: number
+  layout_type?: string
+  columns?: string[]
+  confirmed_mapping?: Record<string, string>
+  trust_state: 'candidate' | 'verified' | 'trusted' | string
+  usage_count?: number
+  confirmation_count?: number
+  correction_count?: number
+  correction_rate?: number
+  reviewer_count?: number
+  confirmed_by?: string[]
+  dry_run_summary?: Record<string, any>
+  updated_at?: string | null
+  last_confirmed_at?: string | null
+  promoted_by?: string
+}
+
 const EMPTY_CFG: BankCfg = {
   key: '', bank_name: '', sheet_index: 0, header_row: 0,
   format_type: 'standard', amount_mode: 'signed', column_mapping: {},
@@ -74,6 +97,7 @@ export function BankManager() {
   const { t } = useTranslation()
   const { data: banks = [], refetch } = useQuery({ queryKey: ['banks'], queryFn: getBanks })
   const { data: bankCatalog = [], refetch: refetchCatalog } = useQuery({ queryKey: ['bank-logo-catalog'], queryFn: getBankLogoCatalog })
+  const operatorName = useStore(s => s.operatorName)
   const [selected, setSelected]   = useState<BankCfg | null>(null)
   const [editMode, setEditMode]   = useState(false)
   const [form, setForm]           = useState<BankCfg>(EMPTY_CFG)
@@ -243,12 +267,15 @@ export function BankManager() {
                 onCancel={() => { setEditMode(false); setForm({ ...selected }) }}
                 isNew={false}
               />
-            : <BankDetail
-                bank={selected}
-                isBuiltin={!!selected.is_builtin || selected.template_source === 'builtin'}
-                onEdit={() => { setForm({ ...selected }); setEditMode(true) }}
-                onDelete={() => setDelConfirm(selected.key)}
-              />
+            : <div className="space-y-5">
+                <BankDetail
+                  bank={selected}
+                  isBuiltin={!!selected.is_builtin || selected.template_source === 'builtin'}
+                  onEdit={() => { setForm({ ...selected }); setEditMode(true) }}
+                  onDelete={() => setDelConfirm(selected.key)}
+                />
+                <TemplateVariantsPanel bankKey={selected.key} operatorName={operatorName} />
+              </div>
         )}
 
         {!editMode && !selected && (
@@ -281,6 +308,198 @@ export function BankManager() {
       )}
     </div>
   )
+}
+
+function TemplateVariantsPanel({ bankKey, operatorName }: { bankKey: string; operatorName: string }) {
+  const { t } = useTranslation()
+  const reviewer = normalizeOperatorName(operatorName)
+  const reviewerCanPromote = !['analyst', 'unknown'].includes(reviewer.toLowerCase())
+  const [trustFilter, setTrustFilter] = useState('')
+  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [promotingId, setPromotingId] = useState<string | null>(null)
+  const variantsQuery = useQuery({
+    queryKey: ['mapping-variants', bankKey, trustFilter],
+    queryFn: () => listMappingVariants({ bank: bankKey, trust_state: trustFilter, limit: 100 }),
+    enabled: !!bankKey,
+  })
+  const variants: TemplateVariant[] = variantsQuery.data?.items || []
+
+  const promoteTarget = (variant: TemplateVariant) => {
+    if (variant.trust_state === 'candidate') return 'verified'
+    if (variant.trust_state === 'verified') return 'trusted'
+    return ''
+  }
+
+  const handlePromote = async (variant: TemplateVariant) => {
+    const target = promoteTarget(variant)
+    if (!target) return
+    if (!reviewerCanPromote) {
+      toast.error(t('bankManager.variants.namedReviewerRequired'))
+      return
+    }
+    setPromotingId(variant.variant_id)
+    try {
+      await promoteMappingVariant(variant.variant_id, {
+        trust_state: target,
+        reviewer,
+        note: notes[variant.variant_id] || '',
+      })
+      toast.success(t('bankManager.variants.promoted'))
+      setNotes(current => ({ ...current, [variant.variant_id]: '' }))
+      await variantsQuery.refetch()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setPromotingId(null)
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <CardTitle className="!mb-1">{t('bankManager.variants.title')}</CardTitle>
+          <p className="text-sm text-muted">{t('bankManager.variants.description')}</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <select
+            value={trustFilter}
+            onChange={event => setTrustFilter(event.target.value)}
+            className="bg-surface2 border border-border rounded-lg px-2 py-1.5 text-xs text-text focus:border-accent outline-none cursor-pointer"
+            aria-label={t('bankManager.variants.filter')}
+          >
+            <option value="">{t('bankManager.variants.allStates')}</option>
+            <option value="candidate">{t('bankManager.variants.candidate')}</option>
+            <option value="verified">{t('bankManager.variants.verified')}</option>
+            <option value="trusted">{t('bankManager.variants.trusted')}</option>
+          </select>
+          <Button size="sm" variant="outline" onClick={() => variantsQuery.refetch()} disabled={variantsQuery.isFetching}>
+            <RefreshCw size={12} />{t('bankManager.variants.refresh')}
+          </Button>
+        </div>
+      </div>
+
+      {!reviewerCanPromote && (
+        <div className="mb-3 rounded-lg border border-warning/25 bg-warning/[0.08] px-3 py-2 text-xs text-text2">
+          {t('bankManager.variants.reviewerHint')}
+        </div>
+      )}
+
+      {variantsQuery.isLoading && (
+        <div className="rounded-lg border border-border/70 bg-surface2/40 p-3 text-sm text-muted">
+          {t('common.loading')}
+        </div>
+      )}
+
+      {!variantsQuery.isLoading && variants.length === 0 && (
+        <div className="rounded-lg border border-border/70 bg-surface2/40 p-3 text-sm text-muted">
+          {t('bankManager.variants.empty')}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {variants.map((variant) => {
+          const target = promoteTarget(variant)
+          const mappedFields = Object.keys(variant.confirmed_mapping || {}).filter(key => variant.confirmed_mapping?.[key])
+          const correctionRate = Math.round(Number(variant.correction_rate || 0) * 100)
+          const dryRun = variant.dry_run_summary || {}
+          return (
+            <div key={variant.variant_id} className="rounded-lg border border-border bg-surface2/40 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <ShieldCheck size={14} className="text-accent" />
+                    <span className="font-mono text-xs text-text2">{variant.variant_id}</span>
+                    <TrustBadge state={variant.trust_state} />
+                    <Badge variant="gray">{variant.source_type || 'excel'}</Badge>
+                  </div>
+                  <div className="text-xs text-muted">
+                    {variant.sheet_name || t('bankManager.variants.anySheet')} · {t('bankManager.headerRowLabel')} {Number(variant.header_row || 0) + 1}
+                  </div>
+                </div>
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  <Badge variant="blue">{Number(variant.confirmation_count || 0)} {t('bankManager.variants.confirmations')}</Badge>
+                  <Badge variant={correctionRate > 25 ? 'yellow' : 'gray'}>{correctionRate}% {t('bankManager.variants.corrections')}</Badge>
+                  <Badge variant="gray">{Number(variant.reviewer_count || 0)} {t('bankManager.variants.reviewers')}</Badge>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                <div>
+                  <div className="text-[10px] uppercase text-muted font-semibold mb-1">{t('bankManager.variants.columns')}</div>
+                  <div className="text-text2">{Number(variant.columns?.length || 0)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase text-muted font-semibold mb-1">{t('bankManager.variants.mappedFields')}</div>
+                  <div className="text-text2">{mappedFields.length}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase text-muted font-semibold mb-1">{t('bankManager.variants.validRows')}</div>
+                  <div className="text-text2">{Number(dryRun.valid_transaction_rows || 0)}</div>
+                </div>
+              </div>
+
+              {mappedFields.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {mappedFields.slice(0, 8).map(field => (
+                    <span key={field} className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] text-text2">
+                      {field} → {variant.confirmed_mapping?.[field]}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
+                <div className="text-[11px] text-muted">
+                  {variant.updated_at ? `${t('bankManager.variants.updated')} ${formatDateTime(variant.updated_at)}` : t('bankManager.variants.notUpdated')}
+                </div>
+                {target ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <input
+                      value={notes[variant.variant_id] || ''}
+                      onChange={event => setNotes(current => ({ ...current, [variant.variant_id]: event.target.value }))}
+                      placeholder={t('bankManager.variants.notePlaceholder')}
+                      className="bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text focus:border-accent outline-none w-52"
+                    />
+                    <Button
+                      size="sm"
+                      variant="success"
+                      onClick={() => handlePromote(variant)}
+                      disabled={!reviewerCanPromote || promotingId === variant.variant_id}
+                    >
+                      <ArrowUpCircle size={12} />
+                      {target === 'verified' ? t('bankManager.variants.promoteVerified') : t('bankManager.variants.promoteTrusted')}
+                    </Button>
+                  </div>
+                ) : (
+                  <Badge variant="green">{t('bankManager.variants.noPromotionNeeded')}</Badge>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
+function TrustBadge({ state }: { state: string }) {
+  const { t } = useTranslation()
+  if (state === 'trusted') return <Badge variant="green">{t('bankManager.variants.trusted')}</Badge>
+  if (state === 'verified') return <Badge variant="blue">{t('bankManager.variants.verified')}</Badge>
+  return <Badge variant="yellow">{t('bankManager.variants.candidate')}</Badge>
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('th-TH', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 /* ── Bank Detail view ─────────────────────────────────────────────────── */

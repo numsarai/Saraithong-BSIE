@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { BankManager } from '@/components/BankManager'
+import { useStore } from '@/store'
 
 vi.mock('@/api', () => ({
   getBanks: vi.fn(async () => ([
@@ -43,6 +44,8 @@ vi.mock('@/api', () => ({
   getBank: vi.fn(async () => null),
   createBank: vi.fn(async () => ({ status: 'ok', logo: { key: 'baac', logo_url: '/api/bank-logos/baac.svg' } })),
   deleteBank: vi.fn(async () => ({ status: 'ok' })),
+  listMappingVariants: vi.fn(async () => ({ items: [], count: 0 })),
+  promoteMappingVariant: vi.fn(async () => ({ status: 'ok', variant: { variant_id: 'VARIANT-1', trust_state: 'verified' } })),
 }))
 
 vi.mock('sonner', () => ({
@@ -51,6 +54,8 @@ vi.mock('sonner', () => ({
     error: vi.fn(),
   },
 }))
+
+const { getBank, listMappingVariants, promoteMappingVariant } = await import('@/api')
 
 function renderWithQueryClient() {
   const queryClient = new QueryClient({
@@ -67,6 +72,12 @@ function renderWithQueryClient() {
 }
 
 describe('BankManager prepared bank logos', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useStore.getState().reset()
+    useStore.setState({ operatorName: 'Case Reviewer' })
+  })
+
   it('shows future-ready thai banks and pre-fills a template form when selected', async () => {
     renderWithQueryClient()
 
@@ -81,5 +92,61 @@ describe('BankManager prepared bank logos', () => {
     expect(screen.getByText('Reference Profile')).toBeInTheDocument()
     expect(screen.getByText('ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร')).toBeInTheDocument()
     expect(screen.getByText('2346 ถนนพหลโยธิน แขวงเสนานิคม เขตจตุจักร กรุงเทพฯ 10900')).toBeInTheDocument()
+  })
+
+  it('lists guarded template variants and promotes the next trust state', async () => {
+    vi.mocked(getBank).mockResolvedValueOnce({
+      key: 'scb',
+      bank_name: 'Siam Commercial Bank',
+      sheet_index: 0,
+      header_row: 0,
+      format_type: 'standard',
+      amount_mode: 'signed',
+      column_mapping: { date: ['วันที่'], description: ['รายการ'], amount: ['จำนวนเงิน'] },
+      logo_url: '/api/bank-logos/scb.svg',
+      template_source: 'builtin',
+      is_builtin: true,
+      has_template: true,
+    })
+    vi.mocked(listMappingVariants).mockResolvedValue({
+      count: 1,
+      items: [{
+        variant_id: 'VARIANT-1',
+        bank_key: 'scb',
+        source_type: 'excel',
+        sheet_name: 'Sheet1',
+        header_row: 0,
+        columns: ['วันที่', 'รายการ', 'จำนวนเงิน'],
+        confirmed_mapping: { date: 'วันที่', description: 'รายการ', amount: 'จำนวนเงิน' },
+        trust_state: 'candidate',
+        confirmation_count: 2,
+        correction_count: 0,
+        correction_rate: 0,
+        reviewer_count: 1,
+        dry_run_summary: { valid_transaction_rows: 3 },
+        updated_at: '2026-04-24T02:00:00Z',
+      }],
+    })
+
+    renderWithQueryClient()
+    fireEvent.click(await screen.findByText('Siam Commercial Bank'))
+
+    expect(await screen.findByText('Template Variants')).toBeInTheDocument()
+    expect(await screen.findByText('VARIANT-1')).toBeInTheDocument()
+    expect(screen.getByText('2 confirmations')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('Promotion note'), {
+      target: { value: 'confirmed in two reviewed files' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /promote to verified/i }))
+
+    await waitFor(() => expect(promoteMappingVariant).toHaveBeenCalledWith(
+      'VARIANT-1',
+      {
+        trust_state: 'verified',
+        reviewer: 'Case Reviewer',
+        note: 'confirmed in two reviewed files',
+      },
+    ))
   })
 })

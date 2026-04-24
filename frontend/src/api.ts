@@ -64,6 +64,38 @@ export async function previewMapping(payload: {
   return r.json()
 }
 
+export async function listMappingVariants(params: {
+  bank?: string
+  trust_state?: string
+  limit?: number
+} = {}) {
+  const search = new URLSearchParams()
+  if (params.bank) search.set('bank', params.bank)
+  if (params.trust_state) search.set('trust_state', params.trust_state)
+  if (params.limit) search.set('limit', String(params.limit))
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  const r = await apiFetch(`/api/mapping/variants${suffix}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function promoteMappingVariant(
+  variantId: string,
+  payload: {
+    trust_state: string
+    reviewer: string
+    note?: string
+  },
+) {
+  const r = await apiFetch(`/api/mapping/variants/${encodeURIComponent(variantId)}/promote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function startProcess(payload: {
   temp_file_path?: string
   file_id?: string | null

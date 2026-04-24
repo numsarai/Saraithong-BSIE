@@ -45,6 +45,8 @@ def test_benchmark_llm_roles_runs_text_and_fast_without_database_context(monkeyp
     assert [item["role"] for item in result["results"]] == ["text", "fast"]
     assert all(item["ok_count"] == 1 for item in result["results"])
     assert all(call["auto_context"] is False for call in calls)
+    assert all(call["think"] is False for call in calls)
+    assert all(call["max_tokens"] > 0 for call in calls)
 
 
 def test_benchmark_llm_roles_marks_invalid_json_as_partial(monkeypatch):
@@ -67,6 +69,8 @@ def test_benchmark_llm_roles_can_include_vision(monkeypatch):
     async def fake_chat_with_file(message, file_bytes, file_type, **kwargs):
         assert file_bytes
         assert file_type == "image/png"
+        assert kwargs["think"] is False
+        assert kwargs["max_tokens"] > 0
         return {"model": kwargs["model"], "response": '{"status":"ok"}'}
 
     monkeypatch.setattr("services.llm_service.chat", fake_chat)

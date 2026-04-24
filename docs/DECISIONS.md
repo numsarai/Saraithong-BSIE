@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-019: Benchmark thinking models through Ollama native chat when disabling reasoning
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Installed Qwen/Gemma tags advertise `thinking` capability. Under the BSIE system prompt, the OpenAI-compatible `/v1/chat/completions` path produced empty `message.content` for Qwen models when capped, because output budget was spent on reasoning before the final answer. Ollama's documented `think` control is reliable through native `/api/chat`.
+- **Decision:** When BSIE explicitly sets `think=false` for local benchmarking, route calls through native Ollama `/api/chat` and map native token counters back to the existing service response shape. For currently installed models, use the sweep results as operational guidance: `gemma4:e4b` is the strongest installed fast/vision candidate, `qwen3.5:9b` is the best installed Qwen text candidate, and Qwen 27B tags should not be defaults for interactive mapping due to latency.
+- **Alternatives:** (1) Keep benchmarking through `/v1/chat/completions` — reproducible with existing code but mismeasures thinking models and can report false JSON failures. (2) Raise output limits until reasoning finishes — works but turns a smoke benchmark into a slow reasoning benchmark. (3) Disable thinking only through prompt text — not reliable for the installed Qwen tags.
+- **Consequences:** Benchmark results are more representative for low-latency mapping assist. Production chat behavior remains unchanged unless `think` is passed explicitly. Future model decisions should test native `think=false` and any intended production endpoint path separately.
+
 ### DEC-018: Benchmark results do not change the configured baseline roles yet
 - **Date:** 2026-04-24
 - **Status:** accepted

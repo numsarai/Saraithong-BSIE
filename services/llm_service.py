@@ -11,7 +11,9 @@ import json
 import logging
 import os as _os
 import re
+import struct
 import time
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -46,13 +48,44 @@ _MODEL_ROLE_DEFAULTS = {
     "fast": DEFAULT_FAST_MODEL,
 }
 _BENCHMARK_ROLES = {"text", "fast", "vision"}
+_BENCHMARK_MAX_TOKENS = 512
 _BENCHMARK_PROMPT = (
     "Local BSIE model benchmark. Do not use real case data. "
-    "Return JSON only: {\"status\":\"ok\",\"language\":\"th\",\"fields\":[\"date\",\"amount\",\"description\"]}"
+    "Do not think step by step. "
+    "Return exactly this compact JSON object and stop. "
+    "No markdown, no explanation, no extra keys: "
+    "{\"status\":\"ok\",\"language\":\"th\",\"fields\":[\"date\",\"amount\",\"description\"]}"
 )
-_BENCHMARK_IMAGE_BYTES = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
-)
+
+
+def _png_chunk(kind: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+
+def _tiny_png_bytes() -> bytes:
+    # 1x1 white RGB PNG generated with valid chunk CRCs for vision-model smoke tests.
+    header = b"\x89PNG\r\n\x1a\n"
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    raw_scanline = b"\x00\xff\xff\xff"
+    return header + _png_chunk(b"IHDR", ihdr) + _png_chunk(b"IDAT", zlib.compress(raw_scanline)) + _png_chunk(b"IEND", b"")
+
+
+_BENCHMARK_IMAGE_BYTES = _tiny_png_bytes()
+
+
+def _ollama_root_url() -> str:
+    root = OLLAMA_BASE_URL.rstrip("/")
+    if root.endswith("/v1"):
+        root = root[:-3].rstrip("/")
+    return root or "http://localhost:11434"
+
+
+def _ollama_api_url(path: str) -> str:
+    return f"{_ollama_root_url()}/{path.lstrip('/')}"
+
+
+def _ollama_openai_url(path: str) -> str:
+    return f"{_ollama_root_url()}/v1/{path.lstrip('/')}"
 
 
 def resolve_model(model: str | None = "", role: str = "default") -> str:
@@ -411,7 +444,7 @@ async def check_ollama_status() -> dict[str, Any]:
     config = get_llm_model_config()
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            resp = await client.get(_ollama_api_url("/api/tags"))
             resp.raise_for_status()
             data = resp.json()
             models = [m["name"] for m in data.get("models", [])]
@@ -461,9 +494,17 @@ async def benchmark_llm_roles(
                         _BENCHMARK_IMAGE_BYTES,
                         "image/png",
                         model=selected_model,
+                        max_tokens=_BENCHMARK_MAX_TOKENS,
+                        think=False,
                     )
                 else:
-                    response = await chat(_BENCHMARK_PROMPT, auto_context=False, model=selected_model)
+                    response = await chat(
+                        _BENCHMARK_PROMPT,
+                        auto_context=False,
+                        model=selected_model,
+                        max_tokens=_BENCHMARK_MAX_TOKENS,
+                        think=False,
+                    )
                 elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
                 text = str(response.get("response", "") or "")
                 json_ok = _json_object_ok(text)
@@ -493,6 +534,15 @@ async def benchmark_llm_roles(
                     "duration_ms": elapsed_ms,
                     "json_ok": False,
                     "error": str(exc),
+                })
+            except httpx.TimeoutException as exc:
+                elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+                runs.append({
+                    "iteration": index + 1,
+                    "status": "timeout",
+                    "duration_ms": elapsed_ms,
+                    "json_ok": False,
+                    "error": str(exc) or "Ollama request timed out",
                 })
 
         durations = [float(run["duration_ms"]) for run in runs]
@@ -538,6 +588,8 @@ async def chat(
     transactions: list[dict[str, Any]] | None = None,
     auto_context: bool = True,
     model: str = "",
+    max_tokens: int | None = None,
+    think: bool | None = None,
 ) -> dict[str, Any]:
     """
     Send a chat message to the local LLM with project context.
@@ -589,10 +641,40 @@ async def chat(
         ],
         "stream": False,
     }
+    if max_tokens is not None:
+        payload["max_tokens"] = max(1, int(max_tokens))
+    if think is not None:
+        native_payload: dict[str, Any] = {
+            "model": selected_model,
+            "messages": payload["messages"],
+            "stream": False,
+            "think": bool(think),
+        }
+        if max_tokens is not None:
+            native_payload["options"] = {"num_predict": max(1, int(max_tokens))}
+        try:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+                resp = await client.post(_ollama_api_url("/api/chat"), json=native_payload)
+                resp.raise_for_status()
+                data = resp.json()
+
+            message_data = data.get("message", {})
+            return {
+                "response": message_data.get("content", ""),
+                "model": data.get("model", selected_model),
+                "prompt_tokens": data.get("prompt_eval_count", 0),
+                "completion_tokens": data.get("eval_count", 0),
+            }
+        except httpx.ConnectError:
+            raise ConnectionError(
+                "ไม่สามารถเชื่อมต่อ Ollama ได้ — กรุณาตรวจสอบว่า Ollama กำลังทำงานอยู่ (ollama serve)"
+            )
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(f"Ollama error: {exc.response.status_code} — {exc.response.text}")
 
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-            resp = await client.post(f"{OLLAMA_BASE_URL}/v1/chat/completions", json=payload)
+            resp = await client.post(_ollama_openai_url("/chat/completions"), json=payload)
             resp.raise_for_status()
             data = resp.json()
 
@@ -651,6 +733,8 @@ async def chat_with_file(
     file_type: str,
     *,
     model: str = "",
+    max_tokens: int | None = None,
+    think: bool | None = None,
 ) -> dict[str, Any]:
     """
     Send an image/PDF file to the LLM for multimodal analysis.
@@ -661,6 +745,7 @@ async def chat_with_file(
         file_bytes: Raw file bytes (image or first page rendered as image).
         file_type: MIME type (image/png, image/jpeg, etc.)
         model: Ollama model name.
+        think: Whether to enable model reasoning when supported by Ollama.
     """
     system_prompt = _load_system_prompt()
     b64_data = base64.b64encode(file_bytes).decode("utf-8")
@@ -687,10 +772,46 @@ async def chat_with_file(
         ],
         "stream": False,
     }
+    if max_tokens is not None:
+        payload["max_tokens"] = max(1, int(max_tokens))
+    if think is not None:
+        native_payload: dict[str, Any] = {
+            "model": selected_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": message
+                    or "วิเคราะห์เอกสารนี้ สรุปข้อมูลที่พบ รวมถึงยอดเงิน ชื่อบัญชี และรูปแบบที่น่าสงสัย (ถ้ามี)",
+                    "images": [b64_data],
+                },
+            ],
+            "stream": False,
+            "think": bool(think),
+        }
+        if max_tokens is not None:
+            native_payload["options"] = {"num_predict": max(1, int(max_tokens))}
+        try:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+                resp = await client.post(_ollama_api_url("/api/chat"), json=native_payload)
+                resp.raise_for_status()
+                data = resp.json()
+
+            message_data = data.get("message", {})
+            return {
+                "response": message_data.get("content", ""),
+                "model": data.get("model", selected_model),
+                "prompt_tokens": data.get("prompt_eval_count", 0),
+                "completion_tokens": data.get("eval_count", 0),
+            }
+        except httpx.ConnectError:
+            raise ConnectionError("ไม่สามารถเชื่อมต่อ Ollama ได้ — กรุณารัน ollama serve")
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(f"Ollama error: {exc.response.status_code} — {exc.response.text}")
 
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-            resp = await client.post(f"{OLLAMA_BASE_URL}/v1/chat/completions", json=payload)
+            resp = await client.post(_ollama_openai_url("/chat/completions"), json=payload)
             resp.raise_for_status()
             data = resp.json()
 

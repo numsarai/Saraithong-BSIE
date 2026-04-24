@@ -135,19 +135,31 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ## Local Model Recommendations
 
-สำหรับเครื่องปัจจุบัน แนะนำ baseline ดังนี้:
+สำหรับเครื่องปัจจุบัน หลังรัน installed-model sweep วันที่ 2026-04-24 แนะนำแบบใช้งานจริงตอนนี้:
+
+- fast fallback / lightweight on-device / provisional vision smoke:
+  - `gemma4:e4b`
+- Qwen-family text experiments:
+  - `qwen3.5:9b`
+
+โมเดลที่ควร defer ตอนนี้:
+
+- `qwen3.6:27b`: JSON ผ่าน แต่ latency ประมาณ 30.7s ต่อ smoke prompt จึงไม่เหมาะเป็น interactive default
+- `qwen3.5:27b`: JSON ผ่าน แต่ latency ประมาณ 19.7s ยังสูงสำหรับ mapping UX
+- Qwen vision tags ที่ติดตั้ง: ทุกตัวล้มด้วย Ollama runner `500` ใน vision smoke
+
+baseline เดิมที่ยังควรทดสอบเมื่อพร้อมติดตั้ง:
 
 - text reasoning / Thai + JSON / mapping assist:
   - `qwen2.5:14b`
 - PDF / image / document understanding:
   - `qwen2.5vl:7b`
-- fast fallback / lightweight on-device:
-  - `gemma4:e4b`
 
 หมายเหตุ:
 
 - หลีกเลี่ยง `:latest` ใน production-like flows เพื่อให้ reproducible
 - ควรแยก env ระหว่าง text model และ vision model
+- สำหรับโมเดล `thinking` ให้ benchmark ผ่าน Ollama native `/api/chat` เมื่อใช้ `think=false`; OpenAI-compatible path อาจใช้ output budget กับ reasoning ก่อน final answer
 
 ตัวแปรแวดล้อมที่รองรับแล้ว:
 
@@ -238,6 +250,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] เพิ่ม benchmark harness สำหรับ text / fast / optional vision roles
 - [x] เพิ่ม OCR/vision mapping assist แยกจาก Excel text context
 - [x] รันและบันทึก benchmark บนเครื่องจริงรอบแรกใน `docs/LOCAL_LLM_BENCHMARKS.md`
+- [x] รัน installed-model sweep ครบทุก tag ที่มีใน Ollama (`qwen3.5:9b`, `qwen3.6:27b`, `qwen3.5:27b`, `gemma4:latest`, `gemma4:e4b`)
 - [ ] ติดตั้ง/รัน benchmark ซ้ำสำหรับ baseline `qwen2.5:14b` และ `qwen2.5vl:7b`
 
 หมายเหตุ:
@@ -248,7 +261,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - LLM endpoints ใช้ config กลางจาก `services/llm_service.py`; text chat/mapping ใช้ text role และ image/PDF analysis ใช้ vision role
 - `/api/llm/benchmark` ใช้ synthetic prompt เท่านั้น, ปิด DB auto-context, ไม่ persist ผล และคืน `offline` / `partial` เมื่อ Ollama หรือ JSON output ยังไม่พร้อม
 - `/api/mapping/assist/vision` รับ `file_id` เท่านั้น, resolve จาก evidence storage, กัน path นอก `EVIDENCE_DIR`, ใช้ภาพ/หน้าแรก PDF เป็น visual context และยังเป็น suggestion-only
-- Benchmark จริงรอบแรกพบว่า `qwen2.5:14b` และ `qwen2.5vl:7b` ยังไม่ได้ติดตั้ง; `qwen3.6:27b` ใช้ได้แต่ช้าเกิน UX mapping; `gemma4:e4b` เร็วกว่าแต่ JSON compliance ยังแปรผัน
+- Benchmark จริงรอบแรกพบว่า `qwen2.5:14b` และ `qwen2.5vl:7b` ยังไม่ได้ติดตั้ง; installed-model sweep รอบถัดมาพบว่า `gemma4:e4b` เร็วและผ่าน text/vision smoke ดีที่สุดในเครื่องนี้, `qwen3.5:9b` เป็น Qwen text candidate ที่เร็วสุด, และ Qwen vision smoke ทั้งหมดล้มด้วย runner `500`
 
 ไฟล์หลัก:
 

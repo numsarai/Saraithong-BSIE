@@ -13,7 +13,82 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 3 Local LLM Benchmark Run
+## Done (latest session) — Installed Local LLM Model Sweep
+
+### What I changed
+- Hardened `services/llm_service.py` benchmark calls:
+  - generated a valid synthetic 1x1 PNG for vision smoke tests
+  - capped benchmark output tokens
+  - recorded Ollama timeouts as benchmark run status instead of crashing the harness
+  - routed explicit `think=false` calls through native Ollama `/api/chat`, because the OpenAI-compatible path can spend the token budget on reasoning before returning final content
+- Ran a local-only sweep against every installed Ollama tag:
+  - `qwen3.5:9b`
+  - `qwen3.6:27b`
+  - `qwen3.5:27b`
+  - `gemma4:latest`
+  - `gemma4:e4b`
+- Recorded the sweep in `docs/LOCAL_LLM_BENCHMARKS.md`.
+- Added `DEC-019` for native `think=false` benchmarking and installed-model guidance.
+- Updated `docs/LOCAL_LLM_MAPPING_ROADMAP.md` with installed-model recommendations.
+
+### Benchmark results
+- `gemma4:e4b`:
+  - text `ok`, `579.06 ms`
+  - vision `ok`, `993.94 ms`
+  - best installed fast + vision smoke result; prefer pinned tag over `:latest`, but keep schema validation because text smoke localized field values
+- `gemma4:latest`:
+  - text `ok`, `6,050.71 ms`
+  - vision `ok`, `1,316.14 ms`
+  - same local model ID as `gemma4:e4b`, but tag is less reproducible
+- `qwen3.5:9b`:
+  - text `ok`, `2,558.23 ms`
+  - vision `error`, Ollama runner `500`
+  - best installed Qwen text candidate
+- `qwen3.5:27b`:
+  - text `ok`, `19,708.81 ms`
+  - vision `error`, Ollama runner `500`
+- `qwen3.6:27b`:
+  - text `ok`, `30,704.65 ms`
+  - vision `error`, Ollama runner `500`
+
+### Files changed
+- `services/llm_service.py`
+- `tests/test_llm_service.py`
+- `docs/LOCAL_LLM_BENCHMARKS.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before code changes:
+  - `.venv/bin/python -m pytest tests/ -q` -> `344 passed`
+- Focused after benchmark hardening:
+  - `.venv/bin/python -m py_compile services/llm_service.py tests/test_llm_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_llm_service.py -q` -> `6 passed`
+- Final regression:
+  - `.venv/bin/python -m pytest tests/ -q` -> `344 passed`
+  - `npm test` in `frontend/` -> `37 passed`
+  - `npm run build` in `frontend/` -> passed (Vite large chunk warning only)
+
+### Decisions made
+- For installed models right now, use `gemma4:e4b` as fast fallback and provisional vision smoke candidate.
+- Use `qwen3.5:9b` for Qwen-family text experiments; do not default to `qwen3.5:27b` or `qwen3.6:27b` for interactive mapping UX.
+- Do not use installed Qwen tags for vision on this machine until the Ollama runner `500` issue is resolved.
+- Keep `qwen2.5:14b` / `qwen2.5vl:7b` as unverified baseline targets until those tags are installed and benchmarked.
+
+### Warnings
+- OpenAI-compatible `/v1/chat/completions` is not reliable for capped `think=false` smoke tests with the installed Qwen thinking models under the BSIE system prompt; use native `/api/chat` when controlling thinking.
+- Qwen vision tags advertise vision capability in `ollama show`, but the smoke test fails with runner `500` on this machine.
+
+### Failed attempts / Notes
+- Initial all-model sweep through the OpenAI-compatible path returned empty `message.content` for Qwen models after consuming `256`/`512` completion tokens in reasoning.
+- Prompt-only `/no_think` did not fix Qwen under the BSIE system prompt; native `think=false` did.
+
+### Environment changes
+- No dependencies installed.
+- No model pulls were performed by Codex in this session.
+
+## Done (previous session) — Phase 3 Local LLM Benchmark Run
 
 ### What I changed
 - Ran the local-only LLM benchmark harness against the current Ollama install.

@@ -13,7 +13,53 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Scoped Classification Preview
+## Done (latest session) — Scoped Classification Transaction Picker
+
+### What I changed
+- Replaced the primary Evidence UI scoped classification flow with a transparent load -> select -> preview workflow.
+- AI Copilot Evidence mode now loads persisted transactions from the current `parser_run_id`, `file_id`, or `account` scope via the existing `/api/transactions/search` frontend helper.
+- Added a bounded transaction picker showing transaction id, date, direction, amount, current type, and description before any local LLM preview call.
+- `Preview Selected` now sends only the analyst-selected rows to `POST /api/llm/classification-preview` as explicit `transactions`; no evidence is mutated.
+- Added English/Thai labels, regression coverage for selected-row preview payloads, DEC-046, and roadmap status.
+
+### Files changed
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `391 passed`
+  - `npm test -- --run` in `frontend/` -> `50 passed`
+- Focused:
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `7 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `391 passed`
+  - `npm test -- --run` in `frontend/` -> `50 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-046: scoped classification preview requires analyst row selection in the UI.
+- The backend scoped-preview endpoint from DEC-045 remains available for compatibility, but the UI sends explicit selected rows for better evidence transparency.
+
+### Warnings / Next
+- The picker remains preview-only; do not add an apply button without explicit analyst confirmation, audit logging, and review-history design.
+- Case-tag-backed classification preview is still intentionally deferred because tags can link mixed object types and need a transaction selection policy.
+- Next useful slice: design an audited classification apply/review workflow, or add case-tag transaction extraction once the policy is clear.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but generated dist files remain untracked.
+
+## Done (previous session) — Scoped Classification Preview
 
 ### What I changed
 - Extended `POST /api/llm/classification-preview` to accept either explicit `transactions` or a supported evidence scope.

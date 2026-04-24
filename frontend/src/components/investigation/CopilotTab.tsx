@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BrainCircuit, FileText, ListChecks, Loader2, ScrollText, Send, ShieldAlert, ShieldCheck, Sparkles, Target } from 'lucide-react'
-import { askCopilot, getCaseTagDetail, listCaseTags, previewClassification, type CaseTagDetail, type CaseTagItem, type CaseTagLinkedObject } from '@/api'
+import { askCopilot, getCaseTagDetail, listCaseTags, previewClassification, searchTransactionRecords, type CaseTagDetail, type CaseTagItem, type CaseTagLinkedObject } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -24,6 +24,30 @@ interface CopilotTabProps {
   filterRunId?: string
   filterFileId?: string
   crossAccountNumber?: string
+}
+
+type ScopedTransactionRow = {
+  id?: string | null
+  transaction_id?: string | null
+  transaction_datetime?: string | null
+  posted_date?: string | null
+  date?: string | null
+  direction?: string | null
+  amount?: string | number | null
+  description?: string | null
+  description_normalized?: string | null
+  description_raw?: string | null
+  transaction_type?: string | null
+  confidence?: string | number | null
+  heuristic_confidence?: string | number | null
+  parse_confidence?: string | number | null
+  channel?: string | null
+  counterparty_account?: string | null
+  counterparty_account_normalized?: string | null
+  counterparty_name?: string | null
+  counterparty_name_normalized?: string | null
+  reference_no?: string | null
+  [key: string]: unknown
 }
 
 const EMPTY_SCOPE: CopilotScope = { parser_run_id: '', file_id: '', account: '', case_tag_id: '', case_tag: '' }
@@ -62,6 +86,56 @@ function normalizeAccount(value: string) {
   return value.replace(/\D/g, '')
 }
 
+function textValue(value: unknown) {
+  if (value === null || value === undefined) return ''
+  return String(value)
+}
+
+function numberValue(value: unknown, fallback = 0) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function clampLimit(value: string, fallback: number, max: number) {
+  const parsed = Number(value || fallback)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(1, Math.min(max, Math.floor(parsed)))
+}
+
+function scopedTransactionKey(row: ScopedTransactionRow, index: number) {
+  return textValue(row.transaction_id || row.id || row.reference_no || `preview-row-${index + 1}`)
+}
+
+function scopedTransactionDate(row: ScopedTransactionRow) {
+  return textValue(row.transaction_datetime || row.posted_date || row.date)
+}
+
+function scopedTransactionDescription(row: ScopedTransactionRow) {
+  return textValue(row.description || row.description_normalized || row.description_raw)
+}
+
+function formatScopedAmount(value: unknown) {
+  return numberValue(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function toClassificationPreviewTransaction(row: ScopedTransactionRow, index: number) {
+  const description = scopedTransactionDescription(row)
+  return {
+    transaction_id: scopedTransactionKey(row, index),
+    date: scopedTransactionDate(row),
+    direction: textValue(row.direction).toUpperCase(),
+    amount: numberValue(row.amount),
+    description,
+    description_normalized: description,
+    description_raw: description,
+    channel: textValue(row.channel),
+    counterparty_account: textValue(row.counterparty_account || row.counterparty_account_normalized),
+    counterparty_name: textValue(row.counterparty_name || row.counterparty_name_normalized),
+    transaction_type: textValue(row.transaction_type),
+    confidence: numberValue(row.confidence ?? row.heuristic_confidence ?? row.parse_confidence),
+  }
+}
+
 function caseTagCountLabel(tag: CaseTagItem, linkedLabel: string) {
   const counts = Object.entries(tag.linked_object_counts || {})
     .filter(([, count]) => Number(count) > 0)
@@ -98,6 +172,10 @@ export function CopilotTab({
   const [classificationPreview, setClassificationPreview] = useState<any>(null)
   const [classificationPreviewError, setClassificationPreviewError] = useState('')
   const [isPreviewingClassification, setIsPreviewingClassification] = useState(false)
+  const [scopedClassificationRows, setScopedClassificationRows] = useState<ScopedTransactionRow[]>([])
+  const [selectedScopedClassificationKeys, setSelectedScopedClassificationKeys] = useState<string[]>([])
+  const [hasLoadedScopedClassificationRows, setHasLoadedScopedClassificationRows] = useState(false)
+  const [isLoadingScopedClassificationRows, setIsLoadingScopedClassificationRows] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -171,6 +249,8 @@ export function CopilotTab({
     }
     return [selectedCaseTag, ...filteredCaseTags]
   }, [filteredCaseTags, selectedCaseTag])
+  const scopedClassificationLimit = clampLimit(maxTransactions, 10, 25)
+  const allScopedClassificationRowsSelected = scopedClassificationRows.length > 0 && selectedScopedClassificationKeys.length === scopedClassificationRows.length
 
   useEffect(() => {
     if (!selectedCaseTagId) {
@@ -195,6 +275,12 @@ export function CopilotTab({
       cancelled = true
     }
   }, [selectedCaseTagId])
+
+  useEffect(() => {
+    setScopedClassificationRows([])
+    setSelectedScopedClassificationKeys([])
+    setHasLoadedScopedClassificationRows(false)
+  }, [scope.account, scope.file_id, scope.parser_run_id])
 
   const selectCaseTag = (caseTagId: string) => {
     const tag = caseTags.find((item) => item.id === caseTagId)
@@ -224,7 +310,7 @@ export function CopilotTab({
         task_mode: taskMode,
         scope,
         operator: operatorName,
-        max_transactions: Math.max(1, Math.min(50, Number(maxTransactions || 20))),
+        max_transactions: clampLimit(maxTransactions, 20, 50),
       })
       setAnswer(payload)
     } catch (err: any) {
@@ -260,16 +346,56 @@ export function CopilotTab({
     }
   }
 
-  const submitScopedClassificationPreview = async () => {
+  const loadScopedClassificationRows = async () => {
     if (!hasClassificationScope(scope)) return
+    setIsLoadingScopedClassificationRows(true)
+    setClassificationPreviewError('')
+    setHasLoadedScopedClassificationRows(false)
+    try {
+      const payload = await searchTransactionRecords({
+        parser_run_id: scope.parser_run_id.trim(),
+        file_id: scope.file_id.trim(),
+        account: normalizeAccount(scope.account) || scope.account.trim(),
+        limit: scopedClassificationLimit,
+        offset: 0,
+      })
+      const rows = Array.isArray(payload.items) ? payload.items as ScopedTransactionRow[] : []
+      setScopedClassificationRows(rows)
+      setSelectedScopedClassificationKeys([])
+      setHasLoadedScopedClassificationRows(true)
+      setClassificationPreview(null)
+    } catch (err: any) {
+      setClassificationPreviewError(err.message || String(err))
+    } finally {
+      setIsLoadingScopedClassificationRows(false)
+    }
+  }
+
+  const toggleScopedClassificationRow = (row: ScopedTransactionRow, index: number) => {
+    const key = scopedTransactionKey(row, index)
+    setSelectedScopedClassificationKeys((state) => (
+      state.includes(key) ? state.filter((item) => item !== key) : [...state, key]
+    ))
+  }
+
+  const toggleAllScopedClassificationRows = () => {
+    setSelectedScopedClassificationKeys(allScopedClassificationRowsSelected
+      ? []
+      : scopedClassificationRows.map((row, index) => scopedTransactionKey(row, index)))
+  }
+
+  const submitSelectedClassificationPreview = async () => {
+    const selectedRows = scopedClassificationRows
+      .map((row, index) => ({ row, index, key: scopedTransactionKey(row, index) }))
+      .filter((item) => selectedScopedClassificationKeys.includes(item.key))
+    if (!selectedRows.length) return
     setIsPreviewingClassification(true)
     setClassificationPreviewError('')
     try {
       const payload = await previewClassification({
-        scope,
-        max_transactions: Math.max(1, Math.min(25, Number(maxTransactions || 10))),
+        transactions: selectedRows.map((item) => toClassificationPreviewTransaction(item.row, item.index)),
       })
-      setClassificationPreview(payload)
+      setClassificationPreview({ ...payload, preview_input: 'selected' })
     } catch (err: any) {
       setClassificationPreviewError(err.message || String(err))
     } finally {
@@ -545,12 +671,93 @@ export function CopilotTab({
               {isPreviewingClassification ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
               {isPreviewingClassification ? t('investigation.copilot.previewingClassification') : t('investigation.copilot.previewClassificationAction')}
             </Button>
-            <Button variant="outline" onClick={submitScopedClassificationPreview} disabled={isPreviewingClassification || !hasClassificationScope(scope)}>
-              {isPreviewingClassification ? <Loader2 size={16} className="animate-spin" /> : <Target size={16} />}
-              {t('investigation.copilot.previewScopeClassification')}
+            <Button variant="outline" onClick={loadScopedClassificationRows} disabled={isLoadingScopedClassificationRows || !hasClassificationScope(scope)}>
+              {isLoadingScopedClassificationRows ? <Loader2 size={16} className="animate-spin" /> : <Target size={16} />}
+              {isLoadingScopedClassificationRows ? t('investigation.copilot.loadingScopedTransactions') : t('investigation.copilot.loadScopedTransactions')}
             </Button>
           </div>
         </div>
+        {hasLoadedScopedClassificationRows && (
+          <div className="space-y-3 rounded-lg border border-border bg-surface2 p-3">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-text">{t('investigation.copilot.scopedTransactionPicker')}</div>
+                <div className="text-xs text-muted">
+                  {t('investigation.copilot.scopedTransactionsLoaded', {
+                    count: scopedClassificationRows.length,
+                    selected: selectedScopedClassificationKeys.length,
+                  })}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={submitSelectedClassificationPreview}
+                disabled={isPreviewingClassification || selectedScopedClassificationKeys.length === 0}
+              >
+                {isPreviewingClassification ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                {t('investigation.copilot.previewSelectedClassification')}
+              </Button>
+            </div>
+            {scopedClassificationRows.length === 0 ? (
+              <div className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted">
+                {t('investigation.copilot.noScopedTransactions')}
+              </div>
+            ) : (
+              <div className="max-h-72 overflow-auto rounded-md border border-border bg-surface">
+                <table className="min-w-full table-fixed text-left text-xs">
+                  <thead className="sticky top-0 bg-surface2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    <tr>
+                      <th className="w-10 px-3 py-2">
+                        <input
+                          type="checkbox"
+                          aria-label={t('investigation.copilot.selectAllScopedTransactions')}
+                          checked={allScopedClassificationRowsSelected}
+                          onChange={toggleAllScopedClassificationRows}
+                          className="h-4 w-4 rounded border-border bg-surface"
+                        />
+                      </th>
+                      <th className="w-44 px-3 py-2">{t('investigation.copilot.scopedTransactionId')}</th>
+                      <th className="w-32 px-3 py-2">{t('investigation.copilot.scopedTransactionDate')}</th>
+                      <th className="w-24 px-3 py-2">{t('investigation.copilot.scopedTransactionDirection')}</th>
+                      <th className="w-32 px-3 py-2 text-right">{t('investigation.copilot.scopedTransactionAmount')}</th>
+                      <th className="w-40 px-3 py-2">{t('investigation.copilot.scopedTransactionType')}</th>
+                      <th className="min-w-[16rem] px-3 py-2">{t('investigation.copilot.scopedTransactionDescription')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {scopedClassificationRows.map((row, index) => {
+                      const rowKey = scopedTransactionKey(row, index)
+                      const checked = selectedScopedClassificationKeys.includes(rowKey)
+                      return (
+                        <tr key={rowKey} className={checked ? 'bg-accent/10' : undefined}>
+                          <td className="px-3 py-2 align-top">
+                            <input
+                              type="checkbox"
+                              aria-label={t('investigation.copilot.selectScopedTransaction', { id: rowKey })}
+                              checked={checked}
+                              onChange={() => toggleScopedClassificationRow(row, index)}
+                              className="h-4 w-4 rounded border-border bg-surface"
+                            />
+                          </td>
+                          <td className="px-3 py-2 align-top font-mono text-text">{rowKey}</td>
+                          <td className="px-3 py-2 align-top text-muted">{scopedTransactionDate(row).slice(0, 10) || '—'}</td>
+                          <td className="px-3 py-2 align-top font-mono text-text">{textValue(row.direction) || '—'}</td>
+                          <td className="px-3 py-2 align-top text-right font-mono text-text">{formatScopedAmount(row.amount)}</td>
+                          <td className="px-3 py-2 align-top font-mono text-text">{textValue(row.transaction_type) || '—'}</td>
+                          <td className="px-3 py-2 align-top text-text">
+                            <div className="max-w-[28rem] whitespace-normal break-words">
+                              {scopedTransactionDescription(row) || '—'}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
         {classificationPreviewError && (
           <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
             {classificationPreviewError}

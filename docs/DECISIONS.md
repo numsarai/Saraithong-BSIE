@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-046: Scoped classification preview requires analyst row selection
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** DEC-045 allowed the preview endpoint to accept a broad supported scope directly, but a one-click scoped preview can still hide which persisted rows were sent to the local model. For evidence-sensitive review, the UI should show the deterministic transaction set first and make row selection explicit.
+- **Decision:** The AI Copilot Evidence UI now loads persisted transactions from the current `parser_run_id`, `file_id`, or `account` scope through `/api/transactions/search`, displays them in a bounded picker, and sends only analyst-selected rows to `POST /api/llm/classification-preview` as explicit `transactions`. The backend scoped-preview contract remains available for compatibility, but the primary UI path is load -> select -> preview.
+- **Alternatives:** (1) Keep `Preview From Scope` as a direct LLM call -- faster, but less transparent about the exact rows used. (2) Require manual copy/paste forever -- transparent but tedious and error-prone. (3) Add an apply workflow immediately -- premature without explicit audit and review-history semantics.
+- **Consequences:** Analysts can inspect the exact transaction ids, dates, amounts, descriptions, and current types before involving the local model. Preview remains read-only and unaudited because no evidence changes occur; any future apply path must add analyst confirmation, audit logging, and review history.
+
 ### DEC-045: Classification preview can load scoped persisted transactions
 - **Date:** 2026-04-24
 - **Status:** accepted

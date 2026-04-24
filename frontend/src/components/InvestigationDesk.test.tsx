@@ -285,7 +285,7 @@ vi.mock('@/api', () => ({
   searchTransactionRecords: vi.fn(async () => ({ items: [] })),
 }))
 
-const { askCopilot, createExportJob, getAuditLogs, getLearningFeedbackLogs, previewClassification } = await import('@/api')
+const { askCopilot, createExportJob, getAuditLogs, getLearningFeedbackLogs, previewClassification, searchTransactionRecords } = await import('@/api')
 const { useStore } = await import('@/store')
 
 vi.mock('sonner', () => ({
@@ -466,17 +466,59 @@ describe('InvestigationDesk date formatting', () => {
     expect((await screen.findAllByText('ATM Withdrawal')).length).toBeGreaterThanOrEqual(2)
   })
 
-  it('previews classification from the current evidence scope', async () => {
+  it('previews classification from selected scoped transactions', async () => {
+    vi.mocked(searchTransactionRecords).mockResolvedValueOnce({
+      items: [
+        {
+          id: 'TXN-SCOPE-1',
+          parser_run_id: 'RUN-1',
+          transaction_datetime: '2026-01-01T08:00:00Z',
+          amount: -900,
+          direction: 'OUT',
+          description_normalized: 'ATM WDL 1234567890',
+          transaction_type: 'OUT_TRANSFER',
+          confidence: 0.76,
+          channel: 'ATM',
+          counterparty_account_normalized: '1234567890',
+          counterparty_name_normalized: 'ATM',
+        },
+      ],
+    })
     renderWithQueryClient()
 
     fireEvent.click(await screen.findByRole('button', { name: 'AI Copilot' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Evidence' }))
     fireEvent.change(screen.getByLabelText('Parser Run ID'), { target: { value: 'RUN-1' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Preview From Scope' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Load Scoped Transactions' }))
+
+    await waitFor(() => expect(searchTransactionRecords).toHaveBeenCalledWith({
+      parser_run_id: 'RUN-1',
+      file_id: '',
+      account: '',
+      limit: 20,
+      offset: 0,
+    }))
+    expect(await screen.findByText('TXN-SCOPE-1')).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Select transaction TXN-SCOPE-1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Selected' }))
 
     await waitFor(() => expect(previewClassification).toHaveBeenCalledWith({
-      scope: { parser_run_id: 'RUN-1', file_id: '', account: '', case_tag_id: '', case_tag: '' },
-      max_transactions: 20,
+      transactions: [
+        {
+          transaction_id: 'TXN-SCOPE-1',
+          date: '2026-01-01T08:00:00Z',
+          direction: 'OUT',
+          amount: -900,
+          description: 'ATM WDL 1234567890',
+          description_normalized: 'ATM WDL 1234567890',
+          description_raw: 'ATM WDL 1234567890',
+          channel: 'ATM',
+          counterparty_account: '1234567890',
+          counterparty_name: 'ATM',
+          transaction_type: 'OUT_TRANSFER',
+          confidence: 0.76,
+        },
+      ],
     }))
     expect(await screen.findByText('review_divergence')).toBeInTheDocument()
   })

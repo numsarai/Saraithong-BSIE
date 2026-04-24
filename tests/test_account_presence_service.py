@@ -106,6 +106,41 @@ def test_verify_account_presence_scans_image_ocr_table(tmp_path: Path):
     assert result["locations"][0]["column_label"] == "Account"
 
 
+def test_verify_account_presence_scans_image_raw_ocr_tokens_when_table_is_empty(tmp_path: Path):
+    image_path = tmp_path / "statement.png"
+    image_path.write_bytes(b"not-a-real-image")
+
+    with patch("core.image_loader.parse_image_file", return_value={
+        "df": pd.DataFrame(),
+        "source_format": "IMAGE",
+        "page_count": 1,
+        "ocr_used": True,
+        "header_row": 0,
+        "tables_found": 0,
+        "ocr_tokens": [
+            {
+                "text": "Header account 123-456-7890",
+                "confidence": 0.91,
+                "page_number": 1,
+                "x_center": 120.0,
+                "y_center": 40.0,
+            },
+        ],
+    }):
+        result = verify_account_presence(
+            file_path=image_path,
+            subject_account="1234567890",
+        )
+
+    assert result["status"] == "ok"
+    assert result["found"] is True
+    assert result["match_status"] == "exact_found"
+    assert result["locations"][0]["source_region"] == "ocr_token"
+    assert result["locations"][0]["column_label"] == "ocr_token"
+    assert result["locations"][0]["ocr_confidence"] == 0.91
+    assert result["summary"]["ocr_tokens_scanned"] == 1
+
+
 def test_verify_account_presence_returns_warning_when_image_ocr_unavailable(tmp_path: Path):
     image_path = tmp_path / "statement.png"
     image_path.write_bytes(b"not-a-real-image")

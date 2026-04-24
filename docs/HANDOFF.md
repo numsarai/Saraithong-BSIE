@@ -9,11 +9,56 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `368 passed`, frontend `45 passed`, frontend build passed
+- **Baseline:** backend `370 passed`, frontend `45 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — PDF/Image Account Presence Verification
+## Done (latest session) — Raw OCR Token Account Presence Verification
+
+### What I changed
+- `core.image_loader.parse_image_file` now preserves accepted OCR text boxes as `ocr_tokens` alongside the reconstructed table DataFrame.
+- OCR tokens include text, confidence, page number, bbox, and x/y centers so downstream checks can retain lineage.
+- `services/account_presence_service.py` now scans OCR table cells and raw OCR tokens for image/scanned-PDF evidence.
+- OCR token matches report `source_region=ocr_token`, `column_label=ocr_token`, OCR confidence, page number, and position metadata.
+- Account-presence summaries now include `ocr_tokens_scanned`.
+- Added regressions for OCR token lineage extraction and account verification when OCR tokens contain the account but table reconstruction is empty.
+
+### Files changed
+- `core/image_loader.py`
+- `services/account_presence_service.py`
+- `tests/test_image_loader.py`
+- `tests/test_account_presence_service.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `368 passed`
+  - `npm test -- --run` in `frontend/` -> `45 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile core/image_loader.py services/account_presence_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_image_loader.py tests/test_account_presence_service.py -q` -> `14 passed`
+- Full verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `370 passed`
+  - `npm test -- --run` in `frontend/` -> `45 passed`
+  - `npm run build` in `frontend/` -> passed; Vite chunk-size warning only
+  - `.venv/bin/python -m py_compile core/image_loader.py services/account_presence_service.py` -> passed
+  - `git diff --check` -> passed
+
+### Decisions made
+- Added DEC-031: OCR account presence scans raw accepted text tokens.
+
+### Warnings / Next
+- Raw OCR token scanning still depends on EasyOCR availability and the existing confidence threshold.
+- Token matches may duplicate table-cell matches because both are valid deterministic search units; use `source_region` and location metadata to distinguish them.
+- Vite still reports the existing large main chunk warning; correctness tests/build pass.
+- Next useful slice: frontend code-splitting for the Vite chunk warning, or richer OCR review UI that displays token/page locations.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — PDF/Image Account Presence Verification
 
 ### What I changed
 - Extended `services/account_presence_service.py` beyond Excel workbook scanning.
@@ -53,7 +98,7 @@
 
 ### Warnings / Next
 - Image/scanned-PDF account presence depends on the existing OCR table reconstruction. If OCR is unavailable or produces no searchable cells, BSIE returns warning-only status rather than `not_found`.
-- The image path scans OCR table cells, not every raw OCR token. If account numbers appear only outside the reconstructed table, they may still need a future raw-OCR-token scan.
+- Raw OCR token scanning was added in the next session; see latest section.
 - Vite still reports the existing large main chunk warning; correctness tests/build pass.
 - Next useful slice: add raw OCR token scanning for account presence, or tackle frontend code-splitting to reduce the Vite chunk warning.
 

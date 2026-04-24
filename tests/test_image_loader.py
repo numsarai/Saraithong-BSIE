@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 import pandas as pd
 import pytest
 
-from core.image_loader import _build_table_from_ocr, EASYOCR_AVAILABLE
+from core.image_loader import _build_table_from_ocr, _ocr_tokens_from_results, EASYOCR_AVAILABLE
 
 
 class TestBuildTableFromOcr:
@@ -64,6 +64,20 @@ class TestBuildTableFromOcr:
         df, header = _build_table_from_ocr(results)
         assert len(df) == 1
         assert len(df.columns) == 3
+
+    def test_ocr_tokens_preserve_page_and_box_lineage(self):
+        results = [
+            ([[0, 0], [100, 0], [100, 20], [0, 20]], "Account 1234567890", 0.95),
+            ([[0, 30], [80, 30], [80, 50], [0, 50]], "too faint", 0.1),
+        ]
+
+        tokens = _ocr_tokens_from_results(results, page_number=2)
+
+        assert len(tokens) == 1
+        assert tokens[0]["text"] == "Account 1234567890"
+        assert tokens[0]["page_number"] == 2
+        assert tokens[0]["x_center"] == 50
+        assert tokens[0]["bbox"][0] == [0.0, 0.0]
 
 
 class TestEasyOCRAvailability:

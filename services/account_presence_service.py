@@ -187,6 +187,7 @@ def _verify_pdf_account_presence(
     text_lines_scanned = 0
     tables_found = 0
     ocr_used = False
+    ocr_tokens_scanned = 0
     warnings: list[str] = []
 
     try:
@@ -262,6 +263,7 @@ def _verify_pdf_account_presence(
             ocr_result = parse_image_file(path)
             ocr_used = True
             ocr_df = ocr_result.get("df")
+            ocr_tokens = _coerce_ocr_tokens(ocr_result.get("ocr_tokens"))
             if isinstance(ocr_df, pd.DataFrame) and not ocr_df.empty:
                 scanned_sources.append("PDF OCR")
                 ocr_counts = _scan_dataframe_cells(
@@ -278,8 +280,22 @@ def _verify_pdf_account_presence(
                 cells_scanned += ocr_counts["cells_scanned"]
                 exact_match_count += ocr_counts["exact_match_count"]
                 possible_match_count += ocr_counts["possible_match_count"]
-            else:
-                warnings.append("OCR completed but produced no searchable table cells for account presence.")
+            if ocr_tokens:
+                scanned_sources.append("PDF OCR tokens")
+                token_counts = _scan_ocr_tokens(
+                    tokens=ocr_tokens,
+                    normalized_account=normalized_account,
+                    sheet_label="PDF OCR tokens",
+                    max_items=max_items,
+                    exact_locations=exact_locations,
+                    possible_locations=possible_locations,
+                )
+                cells_scanned += token_counts["cells_scanned"]
+                ocr_tokens_scanned += token_counts["cells_scanned"]
+                exact_match_count += token_counts["exact_match_count"]
+                possible_match_count += token_counts["possible_match_count"]
+            if (not isinstance(ocr_df, pd.DataFrame) or ocr_df.empty) and not ocr_tokens:
+                warnings.append("OCR completed but produced no searchable text tokens or table cells for account presence.")
         except Exception as exc:
             warnings.append(f"OCR scan unavailable for account presence: {exc}")
 
@@ -298,6 +314,7 @@ def _verify_pdf_account_presence(
                 "text_lines_scanned": text_lines_scanned,
                 "tables_found": tables_found,
                 "ocr_used": ocr_used,
+                "ocr_tokens_scanned": ocr_tokens_scanned,
                 "search_units_scanned": cells_scanned,
             },
         )
@@ -322,6 +339,7 @@ def _verify_pdf_account_presence(
             "text_lines_scanned": text_lines_scanned,
             "tables_found": tables_found,
             "ocr_used": ocr_used,
+            "ocr_tokens_scanned": ocr_tokens_scanned,
             "search_units_scanned": cells_scanned,
         },
     )
@@ -341,6 +359,7 @@ def _verify_image_account_presence(
 
         ocr_result = parse_image_file(path)
         ocr_df = ocr_result.get("df")
+        ocr_tokens = _coerce_ocr_tokens(ocr_result.get("ocr_tokens"))
     except Exception as exc:
         return _empty_result(
             path=path,
@@ -354,7 +373,7 @@ def _verify_image_account_presence(
             summary_extra={"ocr_used": False, "search_units_scanned": 0},
         )
 
-    if not isinstance(ocr_df, pd.DataFrame) or ocr_df.empty:
+    if (not isinstance(ocr_df, pd.DataFrame) or ocr_df.empty) and not ocr_tokens:
         return _empty_result(
             path=path,
             subject_account=subject_account,
@@ -363,27 +382,46 @@ def _verify_image_account_presence(
             header_row=header_row,
             status="no_searchable_text",
             match_status="no_searchable_text",
-            warnings=["OCR completed but produced no searchable table cells for account presence."],
+            warnings=["OCR completed but produced no searchable text tokens or table cells for account presence."],
             summary_extra={
                 "page_count": int(ocr_result.get("page_count") or 1),
                 "ocr_used": True,
+                "ocr_tokens_scanned": 0,
                 "search_units_scanned": 0,
             },
         )
 
     exact_locations: list[dict[str, Any]] = []
     possible_locations: list[dict[str, Any]] = []
-    counts = _scan_dataframe_cells(
-        df=ocr_df,
-        normalized_account=normalized_account,
-        sheet_label="IMAGE OCR",
-        header_row=int(ocr_result.get("header_row") or 0),
-        row_zone="body",
-        source_region="ocr_table",
-        max_items=max_items,
-        exact_locations=exact_locations,
-        possible_locations=possible_locations,
-    )
+    scanned_sources: list[str] = []
+    total_counts = {"cells_scanned": 0, "exact_match_count": 0, "possible_match_count": 0}
+    if isinstance(ocr_df, pd.DataFrame) and not ocr_df.empty:
+        scanned_sources.append("IMAGE OCR")
+        table_counts = _scan_dataframe_cells(
+            df=ocr_df,
+            normalized_account=normalized_account,
+            sheet_label="IMAGE OCR",
+            header_row=int(ocr_result.get("header_row") or 0),
+            row_zone="body",
+            source_region="ocr_table",
+            max_items=max_items,
+            exact_locations=exact_locations,
+            possible_locations=possible_locations,
+        )
+        total_counts = _merge_counts(total_counts, table_counts)
+    ocr_tokens_scanned = 0
+    if ocr_tokens:
+        scanned_sources.append("IMAGE OCR tokens")
+        token_counts = _scan_ocr_tokens(
+            tokens=ocr_tokens,
+            normalized_account=normalized_account,
+            sheet_label="IMAGE OCR tokens",
+            max_items=max_items,
+            exact_locations=exact_locations,
+            possible_locations=possible_locations,
+        )
+        ocr_tokens_scanned = token_counts["cells_scanned"]
+        total_counts = _merge_counts(total_counts, token_counts)
 
     return _presence_result(
         path=path,
@@ -392,17 +430,18 @@ def _verify_image_account_presence(
         sheet_name=sheet_name,
         header_row=header_row,
         file_type="image_ocr",
-        scanned_sheets=["IMAGE OCR"],
+        scanned_sheets=scanned_sources,
         exact_locations=exact_locations,
         possible_locations=possible_locations,
-        exact_match_count=counts["exact_match_count"],
-        possible_match_count=counts["possible_match_count"],
-        cells_scanned=counts["cells_scanned"],
-        not_found_warning="Selected account was not found in OCR table cells.",
+        exact_match_count=total_counts["exact_match_count"],
+        possible_match_count=total_counts["possible_match_count"],
+        cells_scanned=total_counts["cells_scanned"],
+        not_found_warning="Selected account was not found in OCR text tokens or table cells.",
         summary_extra={
             "page_count": int(ocr_result.get("page_count") or 1),
             "ocr_used": True,
-            "search_units_scanned": counts["cells_scanned"],
+            "ocr_tokens_scanned": ocr_tokens_scanned,
+            "search_units_scanned": total_counts["cells_scanned"],
         },
     )
 
@@ -562,6 +601,74 @@ def _scan_dataframe_cells(
         "cells_scanned": cells_scanned,
         "exact_match_count": exact_match_count,
         "possible_match_count": possible_match_count,
+    }
+
+
+def _scan_ocr_tokens(
+    *,
+    tokens: list[dict[str, Any]],
+    normalized_account: str,
+    sheet_label: str,
+    max_items: int,
+    exact_locations: list[dict[str, Any]],
+    possible_locations: list[dict[str, Any]],
+) -> dict[str, int]:
+    cells_scanned = 0
+    exact_match_count = 0
+    possible_match_count = 0
+    for token_index, token in enumerate(tokens):
+        raw_value = token.get("text")
+        if not raw_value:
+            continue
+        cells_scanned += 1
+        page_number = int(token.get("page_number") or 1)
+        matched = _record_match(
+            raw_value=raw_value,
+            normalized_account=normalized_account,
+            location={
+                "sheet_name": sheet_label,
+                "row_index": int(token_index),
+                "row_number": int(token_index) + 1,
+                "column_index": 0,
+                "column_number": 1,
+                "column_label": "ocr_token",
+                "row_zone": "ocr_token",
+                "source_region": "ocr_token",
+                "page_number": page_number,
+                "ocr_confidence": float(token.get("confidence") or 0),
+                "x_center": token.get("x_center"),
+                "y_center": token.get("y_center"),
+            },
+            max_items=max_items,
+            exact_locations=exact_locations,
+            possible_locations=possible_locations,
+        )
+        if matched == "possible_leading_zero_loss":
+            possible_match_count += 1
+        elif matched:
+            exact_match_count += 1
+    return {
+        "cells_scanned": cells_scanned,
+        "exact_match_count": exact_match_count,
+        "possible_match_count": possible_match_count,
+    }
+
+
+def _coerce_ocr_tokens(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    tokens: list[dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, dict) and str(item.get("text") or "").strip():
+            tokens.append(item)
+    return tokens
+
+
+def _merge_counts(left: dict[str, int], right: dict[str, int]) -> dict[str, int]:
+    return {
+        "cells_scanned": int(left.get("cells_scanned") or 0) + int(right.get("cells_scanned") or 0),
+        "exact_match_count": int(left.get("exact_match_count") or 0) + int(right.get("exact_match_count") or 0),
+        "possible_match_count": int(left.get("possible_match_count") or 0) + int(right.get("possible_match_count") or 0),
     }
 
 

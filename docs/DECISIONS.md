@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-031: OCR account presence scans raw accepted text tokens
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** OCR table reconstruction can drop header/free-text account numbers that do not cluster into a transaction table. That made image/scanned-PDF account presence weaker than text PDF page scanning even when EasyOCR had detected the account text.
+- **Decision:** Preserve accepted OCR text boxes as `ocr_tokens` from `core.image_loader.parse_image_file`, including page number, confidence, bounding box, and text. Account-presence verification now scans both OCR table cells and raw OCR tokens, reporting `source_region=ocr_token` and `ocr_tokens_scanned` in the summary. Low-confidence OCR boxes remain filtered by the existing EasyOCR threshold.
+- **Alternatives:** (1) Only scan reconstructed OCR tables — misses header/free-text account numbers. (2) Lower OCR confidence thresholds for account verification — increases false-positive risk. (3) Ask a vision model to locate account text — non-deterministic and unnecessary when EasyOCR already returns tokens.
+- **Consequences:** Account numbers in OCR header/free text can be found without LLM inference. OCR token scanning still depends on EasyOCR availability and confidence; unavailable OCR remains warning-only rather than `not_found`.
+
 ### DEC-030: Account presence verification extends to text PDF and OCR tables fail-closed
 - **Date:** 2026-04-24
 - **Status:** accepted

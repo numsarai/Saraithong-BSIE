@@ -60,6 +60,7 @@ def parse_image_file(path: Path | str) -> dict:
         ocr_used : bool      – always ``True``
         header_row : int
         tables_found : int   – 0 or 1
+        ocr_tokens : list     – accepted OCR text boxes for lineage/search
     """
     path = Path(path)
     logger.info("Image loader: processing %s", path.name)
@@ -74,6 +75,7 @@ def _parse_single_image(path: Path) -> dict:
     reader = _get_reader()
     results = reader.readtext(str(path), detail=1)
     df, header_row = _build_table_from_ocr(results)
+    ocr_tokens = _ocr_tokens_from_results(results, page_number=1)
 
     return {
         "df": df,
@@ -82,6 +84,7 @@ def _parse_single_image(path: Path) -> dict:
         "ocr_used": True,
         "header_row": header_row,
         "tables_found": 1 if not df.empty else 0,
+        "ocr_tokens": ocr_tokens,
     }
 
 
@@ -90,16 +93,18 @@ def _parse_scanned_pdf(path: Path) -> dict:
     import pdfplumber
 
     all_results: list[list] = []
+    all_tokens: list[dict[str, Any]] = []
     page_count = 0
 
     with pdfplumber.open(path) as pdf:
         page_count = len(pdf.pages)
-        for page in pdf.pages:
+        for page_index, page in enumerate(pdf.pages):
             img = page.to_image(resolution=300)
             pil_image = img.original
             reader = _get_reader()
             page_results = reader.readtext(pil_image, detail=1)
             all_results.extend(page_results)
+            all_tokens.extend(_ocr_tokens_from_results(page_results, page_number=page_index + 1))
 
     df, header_row = _build_table_from_ocr(all_results)
 
@@ -110,6 +115,7 @@ def _parse_scanned_pdf(path: Path) -> dict:
         "ocr_used": True,
         "header_row": header_row,
         "tables_found": 1 if not df.empty else 0,
+        "ocr_tokens": all_tokens,
     }
 
 
@@ -117,6 +123,26 @@ def _parse_scanned_pdf(path: Path) -> dict:
 
 _MIN_CONFIDENCE = 0.3
 _ROW_Y_TOLERANCE = 15  # pixels — boxes within this Y range are same row
+
+
+def _ocr_tokens_from_results(ocr_results: list, *, page_number: int) -> list[dict[str, Any]]:
+    """Return normalized OCR tokens while preserving page and box lineage."""
+    tokens: list[dict[str, Any]] = []
+    for bbox, text, conf in ocr_results:
+        token_text = str(text or "").strip()
+        if conf < _MIN_CONFIDENCE or not token_text:
+            continue
+        x_center = (float(bbox[0][0]) + float(bbox[1][0])) / 2
+        y_center = (float(bbox[0][1]) + float(bbox[2][1])) / 2
+        tokens.append({
+            "text": token_text,
+            "confidence": float(conf),
+            "page_number": int(page_number),
+            "x_center": x_center,
+            "y_center": y_center,
+            "bbox": [[float(point[0]), float(point[1])] for point in bbox],
+        })
+    return tokens
 
 
 def _build_table_from_ocr(

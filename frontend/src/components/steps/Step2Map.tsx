@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { normalizeOperatorName, useStore } from '@/store'
-import { confirmMapping, getBanks, learnBank, previewMapping } from '@/api'
+import { assistMapping, confirmMapping, getBanks, learnBank, previewMapping } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
 import { BankLogo } from '@/components/BankLogo'
 import { evaluateReviewGate } from '@/lib/reviewGate'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Wand2, X, BookPlus, ArrowRight, ArrowLeftRight, Building2, Wallet, CircleDashed, FileSearch, BrainCircuit, DatabaseZap, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wand2, X, BookPlus, ArrowRight, ArrowLeftRight, Building2, Wallet, CircleDashed, FileSearch, BrainCircuit, DatabaseZap, ShieldAlert, ShieldCheck, Sparkles, Loader2 } from 'lucide-react'
 
 export function Step2Map() {
   const { t } = useTranslation()
@@ -40,6 +40,8 @@ export function Step2Map() {
   })
   const [learning, setLearning]     = useState(false)
   const [serverPreview, setServerPreview] = useState<any | null>(null)
+  const [assistLoading, setAssistLoading] = useState(false)
+  const [mappingAssist, setMappingAssist] = useState<any | null>(null)
 
   useEffect(() => {
     getBanks().then(setBanks).catch((e) => toast.error(`Could not load banks: ${e.message}`))
@@ -52,6 +54,7 @@ export function Step2Map() {
       setMappingReviewed(false)
     }
     setServerPreview(null)
+    setMappingAssist(null)
     setConfirmedMapping(nextMapping)
   }
 
@@ -60,6 +63,7 @@ export function Step2Map() {
       setMappingReviewed(false)
     }
     setServerPreview(null)
+    setMappingAssist(null)
     setConfirmedMapping({ ...suggestedMapping })
   }
   const clearAll = () => {
@@ -69,7 +73,43 @@ export function Step2Map() {
       setMappingReviewed(false)
     }
     setServerPreview(null)
+    setMappingAssist(null)
     setConfirmedMapping(cleared)
+  }
+
+  const handleMappingAssist = async () => {
+    if (!allColumns.length) {
+      toast.error(t('step2.assist.noColumns'))
+      return
+    }
+    setAssistLoading(true)
+    try {
+      const result = await assistMapping({
+        bank: bankKey,
+        detected_bank: detectedBank,
+        columns: allColumns,
+        sample_rows: sampleRows,
+        current_mapping: confirmedMapping,
+        sheet_name: sheetName,
+        header_row: headerRow,
+      })
+      setMappingAssist(result)
+      toast.success(t('step2.assist.ready'))
+    } catch (e: any) {
+      toast.error(`${t('step2.assist.failed')}: ${e.message}`)
+    } finally {
+      setAssistLoading(false)
+    }
+  }
+
+  const applyMappingAssist = () => {
+    if (!mappingAssist?.mapping) return
+    if (mappingReviewed) {
+      setMappingReviewed(false)
+    }
+    setServerPreview(null)
+    setConfirmedMapping(mappingAssist.mapping)
+    toast.success(t('step2.assist.applied'))
   }
 
   const handleConfirm = async () => {
@@ -619,6 +659,82 @@ export function Step2Map() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <CardTitle className="!mb-1">{t('step2.assist.title')}</CardTitle>
+            <p className="text-sm text-muted">{t('step2.assist.description')}</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={handleMappingAssist} disabled={assistLoading || allColumns.length === 0}>
+            {assistLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+            {assistLoading ? t('step2.assist.running') : t('step2.assist.run')}
+          </Button>
+        </div>
+
+        {!mappingAssist && (
+          <div className="rounded-lg border border-border/70 bg-surface2/40 px-3 py-2 text-xs text-muted">
+            {t('step2.assist.empty')}
+          </div>
+        )}
+
+        {mappingAssist && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={mappingAssist.validation?.ok ? 'green' : 'yellow'}>
+                {mappingAssist.validation?.ok ? t('step2.assist.valid') : t('step2.assist.needsReview')}
+              </Badge>
+              <Badge variant="gray">{mappingAssist.model || 'local-llm'}</Badge>
+              <Badge variant="blue">{Math.round(Number(mappingAssist.confidence || 0) * 100)}%</Badge>
+              <Badge variant="gray">{t('step2.assist.suggestionOnly')}</Badge>
+            </div>
+
+            {Array.isArray(mappingAssist.reasons) && mappingAssist.reasons.length > 0 && (
+              <div className="rounded-lg border border-border/70 bg-surface2/40 p-3">
+                <div className="mb-2 text-[11px] uppercase text-muted font-semibold">{t('step2.assist.reasons')}</div>
+                <div className="space-y-1">
+                  {mappingAssist.reasons.map((reason: string) => (
+                    <div key={reason} className="text-xs text-text2">{reason}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {[
+              ...(Array.isArray(mappingAssist.warnings) ? mappingAssist.warnings : []),
+              ...(Array.isArray(mappingAssist.validation?.errors) ? mappingAssist.validation.errors.map((item: any) => item.message) : []),
+              ...(Array.isArray(mappingAssist.validation?.warnings) ? mappingAssist.validation.warnings.map((item: any) => item.message) : []),
+            ].length > 0 && (
+              <div className="rounded-lg border border-warning/25 bg-warning/[0.08] p-3">
+                <div className="mb-2 text-[11px] uppercase text-muted font-semibold">{t('step2.assist.warnings')}</div>
+                <div className="space-y-1">
+                  {[
+                    ...(Array.isArray(mappingAssist.warnings) ? mappingAssist.warnings : []),
+                    ...(Array.isArray(mappingAssist.validation?.errors) ? mappingAssist.validation.errors.map((item: any) => item.message) : []),
+                    ...(Array.isArray(mappingAssist.validation?.warnings) ? mappingAssist.validation.warnings.map((item: any) => item.message) : []),
+                  ].map((warning: string) => (
+                    <div key={warning} className="text-xs text-text2">{warning}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(mappingAssist.mapping || {})
+                .filter(([, column]) => !!column)
+                .map(([field, column]) => (
+                  <span key={field} className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] text-text2">
+                    {field} → {String(column)}
+                  </span>
+                ))}
+            </div>
+
+            <Button size="sm" variant="primary" onClick={applyMappingAssist}>
+              <Sparkles size={13} />{t('step2.assist.apply')}
+            </Button>
           </div>
         )}
       </Card>

@@ -5,6 +5,24 @@ import { useStore } from '@/store'
 import { toast } from 'sonner'
 
 vi.mock('@/api', () => ({
+  assistMapping: vi.fn(async () => ({
+    status: 'ok',
+    source: 'local_llm_mapping_assist',
+    suggestion_only: true,
+    auto_pass_eligible: false,
+    model: 'qwen2.5:14b',
+    mapping: {
+      date: 'วันที่',
+      description: 'รายละเอียด',
+      debit: 'ถอนเงิน',
+      credit: 'ฝากเงิน',
+      balance: null,
+    },
+    confidence: 0.84,
+    reasons: ['Debit and credit headers are explicit'],
+    warnings: [],
+    validation: { ok: true, errors: [], warnings: [], amount_mode: 'debit_credit', mapped_fields: ['date', 'description', 'debit', 'credit'] },
+  })),
   confirmMapping: vi.fn(async () => ({ status: 'ok' })),
   previewMapping: vi.fn(async () => ({
     status: 'ok',
@@ -31,7 +49,7 @@ vi.mock('sonner', () => ({
   },
 }))
 
-const { confirmMapping, previewMapping } = await import('@/api')
+const { assistMapping, confirmMapping, previewMapping } = await import('@/api')
 
 function seedUpload(data: Record<string, unknown> = {}) {
   useStore.getState().setUploadResult({
@@ -151,6 +169,45 @@ describe('Step2Map analyst gate', () => {
 
     expect(await screen.findByText(/template variant matched/i)).toBeInTheDocument()
     expect(screen.getByText(/scb trusted via ordered signature/i)).toBeInTheDocument()
+  })
+
+  it('applies local LLM mapping assist only after analyst action', async () => {
+    seedUpload({
+      suggested_mapping: {
+        date: 'วันที่',
+        description: 'รายละเอียด',
+        amount: null,
+        debit: null,
+        credit: null,
+      },
+    })
+
+    render(<Step2Map />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /ask assist/i }))
+
+    expect(await screen.findByText(/debit and credit headers are explicit/i)).toBeInTheDocument()
+    expect(assistMapping).toHaveBeenCalledWith({
+      bank: 'scb',
+      detected_bank: expect.objectContaining({ key: 'scb' }),
+      columns: ['วันที่', 'รายละเอียด', 'จำนวนเงิน', 'ถอนเงิน', 'ฝากเงิน'],
+      sample_rows: [{ วันที่: '2026-01-01', รายละเอียด: 'โอนเงิน', จำนวนเงิน: '100.00' }],
+      current_mapping: {
+        date: 'วันที่',
+        description: 'รายละเอียด',
+        amount: null,
+        debit: null,
+        credit: null,
+      },
+      sheet_name: 'Sheet1',
+      header_row: 1,
+    })
+    expect(useStore.getState().confirmedMapping.credit).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /apply suggestion/i }))
+
+    await waitFor(() => expect(useStore.getState().confirmedMapping.credit).toBe('ฝากเงิน'))
+    expect(useStore.getState().confirmedMapping.debit).toBe('ถอนเงิน')
   })
 
   it('clears bank review when the selected bank changes', async () => {

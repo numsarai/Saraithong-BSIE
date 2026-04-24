@@ -63,6 +63,23 @@
     "columnMappingMemoryMatched": "Column mapping memory matched",
     "noMemoryHit": "No prior memory hit. Detection is based on workbook structure and bank signatures only.",
     "topCandidates": "Top Candidates",
+    "assist": {
+      "title": "Local LLM Mapping Assist",
+      "description": "Request a local-only mapping suggestion for analyst review.",
+      "run": "Ask Assist",
+      "running": "Asking…",
+      "empty": "No AI suggestion requested for this mapping.",
+      "ready": "Mapping assist suggestion ready",
+      "failed": "Mapping assist failed",
+      "applied": "AI suggestion applied as draft",
+      "apply": "Apply suggestion",
+      "valid": "Valid",
+      "needsReview": "Needs review",
+      "suggestionOnly": "suggestion only",
+      "reasons": "Reasons",
+      "warnings": "Warnings",
+      "noColumns": "No uploaded columns available"
+    },
     "fields": {
       "date": "Date",
       "time": "Time",

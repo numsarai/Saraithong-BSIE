@@ -217,25 +217,35 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 3 — LLM-Assisted Detect / Mapping
 
+สถานะ: first guarded mapping-assist slice implemented เมื่อ 2026-04-24
+
 เป้าหมาย:
 
 - ลดงาน manual เฉพาะเคส ambiguous
 
 งานหลัก:
 
-- เพิ่ม endpoint / service สำหรับ mapping-assist
-- prompt ให้ส่งเฉพาะ safe structured context:
+- [x] เพิ่ม endpoint / service สำหรับ mapping-assist
+- [x] prompt ให้ส่งเฉพาะ safe structured context:
   - header candidates
   - sample rows
   - bank candidates
   - layout clues
-- บังคับ structured JSON output
-- แสดงเหตุผลใน UI
+- [x] บังคับ structured JSON output และ fail closed เมื่อ LLM ตอบไม่เป็น JSON
+- [x] แสดงเหตุผล/คำเตือนใน UI และให้ analyst กด apply เอง
+- [ ] เพิ่ม benchmark บนเครื่องจริงสำหรับ `qwen2.5:14b` / fallback model
+- [ ] เพิ่ม OCR/vision mapping assist แยกจาก Excel text context
+
+หมายเหตุ:
+
+- `/api/mapping/assist` เป็น suggestion-only และคืน `auto_pass_eligible=false`
+- service drop column ที่ LLM แต่งขึ้นเอง, repair amount/debit-credit conflict, และ validate mapping ก่อนคืนผล
+- Step 2 ไม่ auto-apply ผลจาก LLM; analyst ต้องกด `Apply suggestion`
 
 ไฟล์หลัก:
 
-- `services/llm_service.py`
-- `routers/llm.py` หรือ router ใหม่สำหรับ mapping-assist
+- `services/mapping_assist_service.py`
+- `routers/ingestion.py`
 - `frontend/src/components/steps/Step2Map.tsx`
 
 ### Phase 4 — Investigation Copilot

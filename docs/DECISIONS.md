@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-014: Local LLM mapping assist is suggestion-only and validation-gated
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Phase 3 introduces Local LLM help for ambiguous or incomplete mapping. Because mapping directly affects evidentiary normalization, AI output must not silently change confirmed mappings or bypass analyst gates.
+- **Decision:** `/api/mapping/assist` sends only structured mapping context (bank/detection metadata, columns, sample rows, current mapping, sheet/header) to the local Ollama model and requires JSON output. The service drops invented columns, repairs debit/credit vs signed amount conflicts, validates the merged mapping, and returns `suggestion_only=true` / `auto_pass_eligible=false`. The frontend shows the suggestion and applies it only after an explicit analyst click.
+- **Alternatives:** (1) Auto-apply LLM suggestions when confidence is high — faster but unsafe for evidence handling. (2) Keep LLM only in the chat tab — safer but disconnected from the mapping workflow where ambiguity appears.
+- **Consequences:** LLM mapping help can reduce manual work while preserving deterministic confirmation, dry-run validation, and analyst accountability. Offline Ollama or invalid JSON fails closed and does not alter current mappings.
+
 ### DEC-013: Variant admin UI exposes staged promotion only
 - **Date:** 2026-04-24
 - **Status:** accepted

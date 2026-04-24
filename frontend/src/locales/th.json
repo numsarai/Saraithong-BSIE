@@ -63,6 +63,23 @@
     "columnMappingMemoryMatched": "ตรงกับความจำการแมปคอลัมน์",
     "noMemoryHit": "ไม่มีความจำก่อนหน้า การตรวจจับอาศัยโครงสร้างเวิร์กบุ๊กและลายเซ็นธนาคารเท่านั้น",
     "topCandidates": "ตัวเลือกอันดับต้น",
+    "assist": {
+      "title": "Local LLM Mapping Assist",
+      "description": "ขอคำแนะนำ mapping จาก Local LLM เพื่อให้ผู้วิเคราะห์ตรวจทาน",
+      "run": "ขอคำแนะนำ",
+      "running": "กำลังถาม…",
+      "empty": "ยังไม่ได้ขอคำแนะนำ AI สำหรับ mapping นี้",
+      "ready": "ได้คำแนะนำ mapping assist แล้ว",
+      "failed": "Mapping assist ล้มเหลว",
+      "applied": "นำคำแนะนำ AI มาเป็น draft แล้ว",
+      "apply": "ใช้คำแนะนำ",
+      "valid": "ผ่าน validation",
+      "needsReview": "ต้องตรวจทาน",
+      "suggestionOnly": "คำแนะนำเท่านั้น",
+      "reasons": "เหตุผล",
+      "warnings": "คำเตือน",
+      "noColumns": "ไม่มีคอลัมน์จากไฟล์อัปโหลด"
+    },
     "fields": {
       "date": "วันที่",
       "time": "เวลา",

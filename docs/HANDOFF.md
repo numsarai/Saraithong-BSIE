@@ -9,11 +9,74 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `331 passed`, frontend `35 passed`, frontend build passed
+- **Baseline:** backend `334 passed`, frontend `36 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 2 Variant Review/Admin UI
+## Done (latest session) — Phase 3 Local LLM Mapping Assist
+
+### What I changed
+- Added guarded local LLM mapping assist for Step 2.
+- Added `services/mapping_assist_service.py`:
+  - sends only safe structured mapping context to local Ollama
+  - requires JSON output
+  - drops invented/nonexistent columns
+  - repairs debit/credit vs signed amount conflicts
+  - validates the merged mapping before returning it
+  - always returns `suggestion_only=true` and `auto_pass_eligible=false`
+- Added `POST /api/mapping/assist` in `routers/ingestion.py`.
+- Added frontend `assistMapping(...)` API client.
+- Added Step 2 UI panel for Local LLM Mapping Assist:
+  - request suggestion
+  - show confidence/model/reasons/warnings/validation status
+  - apply suggestion only after explicit analyst click
+  - does not bypass bank/mapping review gates
+- Added English/Thai i18n strings and regression coverage.
+
+### Files changed
+- `services/mapping_assist_service.py`
+- `persistence/schemas.py`
+- `routers/ingestion.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `frontend/src/App.workflow.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `tests/test_mapping_assist_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before changes:
+  - `.venv/bin/python -m pytest tests/ -q` -> `331 passed`
+  - `npm test` in `frontend/` -> `35 passed`
+- Focused after changes:
+  - `.venv/bin/python -m pytest tests/test_mapping_assist_service.py tests/test_app_api.py -q` -> `47 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx src/App.workflow.test.tsx` -> `9 passed`
+- Final verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `334 passed`
+  - `npm test` in `frontend/` -> `36 passed`
+  - `npm run build` in `frontend/` -> passed, Vite large chunk warning only
+
+### Decisions made
+- Added `DEC-014`: Local LLM mapping assist is suggestion-only and validation-gated.
+- LLM output is never auto-applied; Step 2 requires an analyst action to apply the suggestion as a draft mapping.
+
+### Warnings
+- Requires local Ollama to be running for live use. Offline Ollama returns an error and leaves the mapping unchanged.
+- This first slice is text/Excel-context oriented. OCR/vision mapping assist remains future work.
+- No auto-pass behavior was added.
+
+### Failed attempts / Notes
+- None yet in this slice.
+
+### Environment changes
+- No new dependencies installed.
+
+## Done (previous session) — Phase 2 Variant Review/Admin UI
 
 ### What I changed
 - Pushed the existing two commits on `Smarter-BSIE` to `origin/Smarter-BSIE`.

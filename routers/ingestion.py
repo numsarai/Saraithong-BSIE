@@ -28,9 +28,10 @@ from core.pdf_loader import parse_pdf_file
 from core.subject_inference import infer_subject_identity_from_frames
 from database import db_create_job
 from persistence.base import get_db_session
-from persistence.schemas import MappingConfirmRequest, MappingPreviewRequest, ProcessRequest, TemplateVariantPromotionRequest
+from persistence.schemas import MappingAssistRequest, MappingConfirmRequest, MappingPreviewRequest, ProcessRequest, TemplateVariantPromotionRequest
 from services.audit_service import record_learning_feedback
 from services.file_ingestion_service import get_file_record, persist_upload
+from services.mapping_assist_service import suggest_mapping_with_llm
 from services.mapping_validation_service import validate_and_preview_mapping, validate_mapping
 from services.persistence_pipeline_service import create_parser_run
 from services.template_variant_service import (
@@ -497,6 +498,29 @@ async def api_preview_mapping(request: Request):
         "status": "ok" if validation["ok"] else "invalid",
         **validation,
     })
+
+
+@router.post("/mapping/assist")
+async def api_assist_mapping(request: Request):
+    """Return a local-LLM mapping suggestion for analyst review only."""
+    payload = await request.json()
+    body = MappingAssistRequest.model_validate(payload)
+    try:
+        result = await suggest_mapping_with_llm(
+            bank=body.bank,
+            detected_bank=body.detected_bank,
+            columns=body.columns,
+            sample_rows=body.sample_rows,
+            current_mapping=body.current_mapping,
+            sheet_name=body.sheet_name,
+            header_row=body.header_row,
+            model=body.model,
+        )
+        return JSONResponse(result)
+    except ConnectionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/mapping/confirm")

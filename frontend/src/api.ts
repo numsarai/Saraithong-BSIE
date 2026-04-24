@@ -64,6 +64,25 @@ export async function previewMapping(payload: {
   return r.json()
 }
 
+export async function assistMapping(payload: {
+  bank: string
+  detected_bank?: unknown
+  columns: string[]
+  sample_rows?: Record<string, unknown>[]
+  current_mapping: Record<string, string | null>
+  sheet_name?: string
+  header_row?: number
+  model?: string
+}) {
+  const r = await apiFetch('/api/mapping/assist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function listMappingVariants(params: {
   bank?: string
   trust_state?: string

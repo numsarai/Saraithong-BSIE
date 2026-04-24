@@ -27,6 +27,17 @@ class MappingPreviewRequest(BaseModel):
     sample_rows: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class MappingAssistRequest(BaseModel):
+    bank: str = "UNKNOWN"
+    detected_bank: Any | None = None
+    columns: list[str] = Field(default_factory=list)
+    sample_rows: list[dict[str, Any]] = Field(default_factory=list)
+    current_mapping: dict[str, str | None] = Field(default_factory=dict)
+    sheet_name: str = ""
+    header_row: int = 0
+    model: str = ""
+
+
 class TemplateVariantPromotionRequest(BaseModel):
     trust_state: str
     reviewer: str = "analyst"

@@ -2,7 +2,7 @@
 from contextlib import contextmanager
 from io import BytesIO
 import json
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 import pandas as pd
 from fastapi.testclient import TestClient
@@ -927,6 +927,42 @@ def test_mapping_preview_reports_duplicate_assignments():
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] == "duplicate_column_assignment"
     assert payload["dry_run_preview"]["summary"]["preview_row_count"] == 1
+
+
+def test_mapping_assist_endpoint_returns_suggestion_only_payload():
+    assist_result = {
+        "status": "ok",
+        "source": "local_llm_mapping_assist",
+        "suggestion_only": True,
+        "auto_pass_eligible": False,
+        "model": "qwen2.5:14b",
+        "mapping": {"date": "วันที่", "description": "รายการ", "amount": "จำนวนเงิน"},
+        "confidence": 0.8,
+        "reasons": ["headers matched"],
+        "warnings": [],
+        "validation": {"ok": True, "errors": [], "warnings": [], "amount_mode": "signed", "mapped_fields": ["amount", "date", "description"]},
+    }
+    with patch("routers.ingestion.suggest_mapping_with_llm", new=AsyncMock(return_value=assist_result)) as assist:
+        response = client.post(
+            "/api/mapping/assist",
+            json={
+                "bank": "scb",
+                "detected_bank": {"key": "scb", "confidence": 0.91},
+                "columns": ["วันที่", "รายการ", "จำนวนเงิน"],
+                "sample_rows": [{"วันที่": "2026-01-01", "รายการ": "ฝากเงิน", "จำนวนเงิน": "100.00"}],
+                "current_mapping": {"date": "วันที่", "description": "รายการ"},
+                "sheet_name": "Sheet1",
+                "header_row": 0,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["suggestion_only"] is True
+    assert response.json()["auto_pass_eligible"] is False
+    assert response.json()["mapping"]["amount"] == "จำนวนเงิน"
+    assist.assert_awaited_once()
+    assert assist.call_args.kwargs["bank"] == "scb"
+    assert assist.call_args.kwargs["columns"] == ["วันที่", "รายการ", "จำนวนเงิน"]
 
 
 def test_mapping_confirm_defaults_to_run_confirmation_without_shared_promotion():

@@ -120,6 +120,8 @@ def repair_suggested_mapping(
         repaired["balance"] = auto_suggested.get("balance")
 
     for field, value in auto_suggested.items():
+        if field == "amount" and repaired.get("debit") and repaired.get("credit"):
+            continue
         if field not in repaired or repaired.get(field) is None:
             repaired[field] = value if value in available_columns else None
 

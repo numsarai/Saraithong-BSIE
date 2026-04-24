@@ -1,11 +1,12 @@
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
 import pandas as pd
 
-from core.bulk_processor import process_folder
+from core.bulk_processor import _select_bulk_confirmed_mapping, process_folder
 
 
 def _write_sample_statement(path: Path) -> None:
@@ -16,6 +17,11 @@ def _write_sample_statement(path: Path) -> None:
         ["2026-03-01", "ฝากเงิน", "100.00", "100.00"],
     ])
     df.to_excel(path, index=False, header=False, engine="openpyxl")
+
+
+@contextmanager
+def _fake_db_session():
+    yield object()
 
 
 def test_process_folder_writes_case_summary(tmp_path):
@@ -45,6 +51,11 @@ def test_process_folder_writes_case_summary(tmp_path):
              "confidence": 0.95,
              "ambiguous": False,
          }), \
+         patch("core.bulk_processor.find_matching_profile", return_value=None), \
+         patch("core.bulk_processor.find_matching_template_variant", return_value=None), \
+         patch("core.bulk_processor.get_db_session", side_effect=_fake_db_session), \
+         patch("core.bulk_processor.persist_upload", return_value={"file_id": "FILE-1", "duplicate_file_status": "unique"}), \
+         patch("core.bulk_processor.create_parser_run", return_value={"parser_run_id": "RUN-1"}), \
          patch("core.bulk_processor.process_account", return_value=fake_output):
         summary = process_folder(folder)
 
@@ -77,6 +88,8 @@ def test_process_folder_writes_case_summary(tmp_path):
     assert manifest["overview"]["processed_files"] == 1
     assert manifest["generated_outputs"]["case_analytics_json"] == "case_analytics.json"
     assert manifest["accounts"][0]["account"] == "1234567890"
+    assert manifest["accounts"][0]["mapping_suggestion_source"] == "auto"
+    assert manifest["accounts"][0]["template_variant_match"] is None
     assert manifest["accounts"][0]["needs_review"] is False
 
     with ZipFile(run_dir / "case_bundle.zip") as bundle:
@@ -87,3 +100,59 @@ def test_process_folder_writes_case_summary(tmp_path):
     assert "case_manifest.json" in names
     assert "case_analytics.json" in names
     assert "case_analytics.xlsx" in names
+
+
+def test_bulk_mapping_uses_only_trusted_template_variants():
+    df = pd.DataFrame(
+        [["2026-03-01", "รับโอน", "", "100", "100"]],
+        columns=["วันที่", "รายการ", "ถอนเงิน", "เงินฝาก", "ยอดคงเหลือ"],
+    )
+    detection = {"config_key": "scb", "key": "scb", "bank": "SCB", "confidence": 0.95, "ambiguous": False}
+    column_detection = {
+        "suggested_mapping": {
+            "date": "วันที่",
+            "description": "รายการ",
+            "amount": "ยอดคงเหลือ",
+        }
+    }
+    trusted_variant = {
+        "variant_id": "VARIANT-TRUSTED",
+        "bank_key": "scb",
+        "trust_state": "trusted",
+        "match_type": "ordered_signature",
+        "match_score": 1.0,
+        "confirmation_count": 3,
+        "correction_count": 0,
+        "reviewer_count": 2,
+        "confirmed_mapping": {
+            "date": "วันที่",
+            "description": "รายการ",
+            "debit": "ถอนเงิน",
+            "credit": "เงินฝาก",
+            "balance": "ยอดคงเหลือ",
+        },
+    }
+
+    with (
+        patch("core.bulk_processor.find_matching_profile", return_value=None),
+        patch("core.bulk_processor.find_matching_template_variant", return_value=trusted_variant) as find_variant,
+        patch("core.bulk_processor.get_db_session", side_effect=_fake_db_session),
+    ):
+        mapping_context = _select_bulk_confirmed_mapping(
+            df,
+            detection,
+            column_detection,
+            source_type="excel",
+            sheet_name="Sheet1",
+            header_row=0,
+        )
+
+    assert mapping_context["suggestion_source"] == "template_variant"
+    assert mapping_context["template_variant_match"]["variant_id"] == "VARIANT-TRUSTED"
+    assert mapping_context["template_variant_match"]["auto_pass_eligible"] is False
+    assert mapping_context["confirmed_mapping"]["amount"] is None
+    assert mapping_context["confirmed_mapping"]["debit"] == "ถอนเงิน"
+    assert mapping_context["confirmed_mapping"]["credit"] == "เงินฝาก"
+    find_variant.assert_called_once()
+    assert find_variant.call_args.kwargs["include_candidate"] is False
+    assert find_variant.call_args.kwargs["allowed_trust_states"] == {"trusted"}

@@ -130,6 +130,29 @@ describe('Step2Map analyst gate', () => {
     await waitFor(() => expect(continueButton).toBeEnabled())
   })
 
+  it('shows guarded template variant suggestions as analyst-visible memory', async () => {
+    seedUpload({
+      suggestion_source: 'template_variant',
+      template_variant_match: {
+        variant_id: 'VARIANT-TRUSTED',
+        bank_key: 'scb',
+        trust_state: 'trusted',
+        match_type: 'ordered_signature',
+        match_score: 1,
+        confirmation_count: 3,
+        correction_count: 0,
+        reviewer_count: 2,
+        suggestion_only: true,
+        auto_pass_eligible: false,
+      },
+    })
+
+    render(<Step2Map />)
+
+    expect(await screen.findByText(/template variant matched/i)).toBeInTheDocument()
+    expect(screen.getByText(/scb trusted via ordered signature/i)).toBeInTheDocument()
+  })
+
   it('clears bank review when the selected bank changes', async () => {
     seedUpload({
       detected_bank: {

@@ -28,7 +28,7 @@ export function Step2Map() {
   const {
     detectedBank, allColumns, suggestedMapping, confirmedMapping,
     setConfirmedMapping, sampleRows, bankKey, setBankKey, setStep, confidenceScores,
-    headerRow, sheetName, memoryMatch, bankMemoryMatch,
+    headerRow, sheetName, memoryMatch, bankMemoryMatch, templateVariantMatch, suggestionSource,
     bankReviewed, mappingReviewed, setBankReviewed, setMappingReviewed,
     isBlockedCase, canProceedToConfig, operatorName,
   } = useStore()
@@ -193,6 +193,9 @@ export function Step2Map() {
   }))
   const positiveEvidence = Array.isArray(detectedBank?.evidence?.positive) ? detectedBank.evidence.positive.slice(0, 6) : []
   const negativeEvidence = Array.isArray(detectedBank?.evidence?.negative) ? detectedBank.evidence.negative.slice(0, 4) : []
+  const suggestionSourceLabel = formatEvidenceItem(suggestionSource || 'auto')
+  const templateVariantScore = Math.round(Number(templateVariantMatch?.match_score || 0) * 100)
+  const templateVariantTrust = formatEvidenceItem(templateVariantMatch?.trust_state || '')
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -259,6 +262,9 @@ export function Step2Map() {
           <div className="flex flex-wrap gap-1.5 justify-end">
             <Badge variant="gray">{t('step2.sheet')}: {sheetName || t('step2.unknown')}</Badge>
             <Badge variant="gray">{t('step2.headerRow')}: {headerRow + 1}</Badge>
+            <Badge variant={suggestionSource === 'template_variant' ? 'green' : suggestionSource === 'mapping_profile' ? 'blue' : 'gray'}>
+              Suggestion: {suggestionSourceLabel}
+            </Badge>
             <Badge variant={detectedBank?.ambiguous ? 'red' : confidence >= 75 ? 'green' : 'blue'}>
               {detectedBank?.ambiguous ? t('step2.analystReviewNeeded') : t('step2.detectionStable')}
             </Badge>
@@ -311,7 +317,21 @@ export function Step2Map() {
                   </div>
                 </div>
               )}
-              {!bankMemoryMatch && !memoryMatch && (
+              {templateVariantMatch && (
+                <div className="rounded-lg border border-success/25 bg-success/[0.06] p-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-text2">
+                    <ShieldCheck size={13} className="text-success" />
+                    <span>Template variant matched</span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    {templateVariantMatch.bank_key} {templateVariantTrust} via {formatEvidenceItem(templateVariantMatch.match_type || 'memory')} ({templateVariantScore}%)
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted">
+                    {Number(templateVariantMatch.confirmation_count || 0)} confirmations from {Number(templateVariantMatch.reviewer_count || 0)} reviewer(s); analyst confirmation still applies.
+                  </div>
+                </div>
+              )}
+              {!bankMemoryMatch && !memoryMatch && !templateVariantMatch && (
                 <div className="rounded-lg border border-border/70 bg-surface p-3 text-xs text-muted">
                   {t('step2.noMemoryHit')}
                 </div>

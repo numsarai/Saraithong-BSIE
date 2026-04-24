@@ -95,6 +95,8 @@ export interface AppState {
   identityGuess: any | null
   memoryMatch: any | null
   bankMemoryMatch: any | null
+  templateVariantMatch: any | null
+  suggestionSource: string
   bankReviewed: boolean
   mappingReviewed: boolean
   isBlockedCase: boolean
@@ -150,6 +152,8 @@ const workflowInitialState = {
   identityGuess: null as any | null,
   memoryMatch: null as any | null,
   bankMemoryMatch: null as any | null,
+  templateVariantMatch: null as any | null,
+  suggestionSource: 'auto',
   bankReviewed: false,
   mappingReviewed: false,
   isBlockedCase: false,
@@ -222,6 +226,8 @@ export const useStore = create<AppState>((set) => ({
       identityGuess: data.identity_guess || null,
       memoryMatch: data.memory_match || null,
       bankMemoryMatch: data.bank_memory_match || null,
+      templateVariantMatch: data.template_variant_match || null,
+      suggestionSource: data.suggestion_source || 'auto',
       bankReviewed,
       mappingReviewed,
       isBlockedCase: gate.isBlockedCase,

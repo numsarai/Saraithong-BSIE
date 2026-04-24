@@ -595,6 +595,77 @@ def test_upload_repairs_stale_profile_mapping_for_debit_credit_layout(tmp_path):
     assert payload["suggested_mapping"]["balance"] == "จำนวนเงินคงเหลือ"
 
 
+def test_upload_excel_applies_valid_template_variant_as_suggestion_only(tmp_path):
+    workbook = tmp_path / "sample_variant.xlsx"
+    import pandas as pd
+
+    pd.DataFrame(
+        [
+            ["วันที่", "รายการ", "ถอนเงิน", "เงินฝาก", "ยอดคงเหลือ"],
+            ["2026-03-01", "รับโอน", "", "100", "100"],
+        ]
+    ).to_excel(workbook, header=False, index=False)
+
+    fake_sheet_pick = {"header_row": 0, "sheet_name": "Sheet1"}
+    fake_bank = {"bank": "SCB", "config_key": "scb", "key": "scb", "confidence": 0.95, "ambiguous": False}
+    fake_columns = {
+        "suggested_mapping": {
+            "date": "วันที่",
+            "description": "รายการ",
+            "amount": "ยอดคงเหลือ",
+            "balance": None,
+        },
+        "confidence_scores": {"date": 1.0},
+        "all_columns": ["วันที่", "รายการ", "ถอนเงิน", "เงินฝาก", "ยอดคงเหลือ"],
+        "unmatched_columns": [],
+        "required_found": True,
+    }
+    trusted_variant = {
+        "variant_id": "VARIANT-TRUSTED",
+        "bank_key": "scb",
+        "trust_state": "trusted",
+        "match_type": "ordered_signature",
+        "match_score": 1.0,
+        "confirmation_count": 3,
+        "correction_count": 0,
+        "reviewer_count": 2,
+        "confirmed_mapping": {
+            "date": "วันที่",
+            "description": "รายการ",
+            "debit": "ถอนเงิน",
+            "credit": "เงินฝาก",
+            "balance": "ยอดคงเหลือ",
+        },
+    }
+
+    with (
+        patch("routers.ingestion.find_best_sheet_and_header", return_value=fake_sheet_pick),
+        patch("routers.ingestion.detect_bank", return_value=fake_bank),
+        patch("routers.ingestion.detect_columns", return_value=fake_columns),
+        patch("routers.ingestion.find_matching_profile", return_value=None),
+        patch("routers.ingestion.find_matching_bank_fingerprint", return_value=None),
+        patch("routers.ingestion.find_matching_template_variant", return_value=trusted_variant) as find_variant,
+        patch("routers.ingestion.get_db_session", side_effect=_fake_db_session),
+    ):
+        with workbook.open("rb") as fh:
+            response = client.post(
+                "/api/upload",
+                files={"file": ("sample_variant.xlsx", fh, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["suggestion_source"] == "template_variant"
+    assert payload["template_variant_match"]["variant_id"] == "VARIANT-TRUSTED"
+    assert payload["template_variant_match"]["suggestion_only"] is True
+    assert payload["template_variant_match"]["auto_pass_eligible"] is False
+    assert payload["suggested_mapping"]["amount"] is None
+    assert payload["suggested_mapping"]["debit"] == "ถอนเงิน"
+    assert payload["suggested_mapping"]["credit"] == "เงินฝาก"
+    find_variant.assert_called_once()
+    assert find_variant.call_args.kwargs["include_candidate"] is True
+
+
 def test_upload_excel_returns_identity_guess_from_repeated_transaction_pattern(tmp_path):
     workbook = tmp_path / "sample_identity.xlsx"
     import pandas as pd

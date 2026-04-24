@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-012: Template variant reuse is gated by workflow risk
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Bank template variants can reduce repeated mapping work, but upload review and bulk folder processing have different risk profiles. Upload keeps an analyst in the loop before processing; bulk can process many files without per-file confirmation.
+- **Decision:** Upload/redetect may use matching `candidate`, `verified`, or `trusted` Excel variants as suggestion-only mappings when bank detection is stable and the merged mapping validates. Bulk intake may apply only `trusted` Excel variants and still marks matches as `auto_pass_eligible=false`.
+- **Alternatives:** (1) Allow candidate variants in bulk too — faster learning feedback but too risky for automatic multi-file processing. (2) Do not reuse variants until a full admin UI exists — safer but blocks the deterministic guarded-learning benefit already available from backend trust states.
+- **Consequences:** Analyst upload can benefit from newly confirmed variants without bypassing review gates; bulk remains conservative. OCR/PDF/image mappings stay outside variant reuse until an OCR-specific evidence review policy is designed.
+
 ### DEC-011: Bank template variants are persisted separately from legacy mapping profiles
 - **Date:** 2026-04-24
 - **Status:** accepted

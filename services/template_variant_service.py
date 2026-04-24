@@ -186,6 +186,81 @@ def list_template_variants(
     return [variant_to_dict(row) for row in session.scalars(statement).all()]
 
 
+def find_matching_template_variant(
+    session: Session,
+    *,
+    columns: list[Any],
+    bank_key: str,
+    source_type: str = "excel",
+    sheet_name: str = "",
+    header_row: int | None = None,
+    include_candidate: bool = True,
+    allowed_trust_states: set[str] | list[str] | tuple[str, ...] | None = None,
+) -> dict | None:
+    clean_bank = str(bank_key or "").strip().lower()
+    if not clean_bank or clean_bank in {"unknown", "generic"}:
+        return None
+
+    clean_source = normalize_source_type(source_type)
+    ordered_sig = ordered_signature(columns)
+    set_sig = set_signature(columns)
+    if allowed_trust_states is None:
+        allowed_states = {"verified", "trusted"}
+        if include_candidate:
+            allowed_states.add("candidate")
+    else:
+        allowed_states = {str(state or "").strip().lower() for state in allowed_trust_states}
+        allowed_states = {state for state in allowed_states if state in TRUST_STATES}
+        if not allowed_states:
+            return None
+
+    rows = session.scalars(
+        select(BankTemplateVariant).where(
+            BankTemplateVariant.bank_key == clean_bank,
+            BankTemplateVariant.source_type == clean_source,
+            BankTemplateVariant.trust_state.in_(sorted(allowed_states)),
+            BankTemplateVariant.set_signature == set_sig,
+        )
+    ).all()
+    if not rows:
+        return None
+
+    clean_sheet = str(sheet_name or "").strip()
+    clean_header = int(header_row or 0) if header_row is not None else None
+    ranked: list[tuple[tuple, BankTemplateVariant, str, float]] = []
+    for row in rows:
+        ordered_match = row.ordered_signature == ordered_sig
+        if not ordered_match and row.trust_state == "candidate":
+            continue
+        match_type = "ordered_signature" if ordered_match else "set_signature"
+        match_score = 1.0 if ordered_match else 0.92
+        same_sheet = bool(clean_sheet and row.sheet_name == clean_sheet)
+        same_header = clean_header is not None and int(row.header_row or 0) == clean_header
+        rank = (
+            1 if ordered_match else 0,
+            TRUST_ORDER.get(row.trust_state, 0),
+            1 if same_sheet else 0,
+            1 if same_header else 0,
+            int(row.confirmation_count or 0),
+            int(row.usage_count or 0),
+            str(row.updated_at or ""),
+            str(row.id or ""),
+        )
+        ranked.append((rank, row, match_type, match_score))
+
+    if not ranked:
+        return None
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    _, row, match_type, match_score = ranked[0]
+    return {
+        **variant_to_dict(row),
+        "match_type": match_type,
+        "match_score": match_score,
+        "auto_pass_eligible": False,
+        "suggestion_only": True,
+    }
+
+
 def promote_template_variant(
     session: Session,
     *,

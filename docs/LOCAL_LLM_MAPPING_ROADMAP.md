@@ -185,7 +185,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 2 — Introduce Template Variants
 
-สถานะ: backend persistence + lifecycle skeleton implemented เมื่อ 2026-04-24
+สถานะ: backend persistence + gated upload/bulk suggestion wiring implemented เมื่อ 2026-04-24
 
 เป้าหมาย:
 
@@ -198,8 +198,14 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] เพิ่ม trust state: `candidate`, `verified`, `trusted`
 - [x] รองรับ correction count / promotion rule แบบ backend service
 - [x] เพิ่ม API สำหรับ list/promote variants
-- [ ] เชื่อม variants เข้ากับ upload/bulk suggestion path แบบ gated
+- [x] เชื่อม variants เข้ากับ upload/bulk suggestion path แบบ gated
 - [ ] เพิ่ม frontend admin/review UI สำหรับ variant promotion
+
+หมายเหตุ:
+
+- Upload/redetect ใช้ variant ได้เป็น suggestion-only เมื่อ bank detection stable และ mapping validate ผ่าน
+- Bulk intake ใช้เฉพาะ trusted Excel variants เพราะเป็น flow ที่ไม่มี per-file analyst confirmation
+- ทุก variant match ยังส่ง `auto_pass_eligible=false`; ยังไม่ได้เปิด auto-pass จริง
 
 ไฟล์หลัก:
 

@@ -9,11 +9,75 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `327 passed`, frontend `33 passed`, frontend build passed
+- **Baseline:** backend `331 passed`, frontend `34 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 2 Template Variant Persistence
+## Done (latest session) — Phase 2 Gated Variant Suggestions
+
+### What I changed
+- Wired guarded bank template variants into upload and bulk mapping suggestion paths.
+- Added `find_matching_template_variant(...)` lookup support with explicit trust-state filtering.
+- Upload/redetect flow now:
+  - checks variants only for stable Excel bank detection (`confidence >= 0.75`, non-ambiguous, non-generic)
+  - allows `candidate` / `verified` / `trusted` variants as suggestion-only matches
+  - validates the merged mapping before exposing it
+  - returns `template_variant_match` and `suggestion_source`
+- Bulk folder intake now:
+  - uses the same deterministic repair/validation path
+  - applies template variants only when they are `trusted`
+  - keeps `auto_pass_eligible=false`; this is still suggestion/mapping selection, not evidence auto-pass
+  - records `suggestion_source` and `template_variant_match` in per-file summary rows and case manifest accounts
+- Frontend Step 2 now stores and displays template variant memory matches so analysts can see when a suggestion came from guarded shared learning.
+- Fixed `repair_suggested_mapping` so debit/credit mappings are not later overwritten by an auto-filled signed amount column.
+
+### Files changed
+- `services/template_variant_service.py`
+- `routers/ingestion.py`
+- `core/bulk_processor.py`
+- `utils/app_helpers.py`
+- `frontend/src/store.ts`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `tests/test_template_variant_service.py`
+- `tests/test_app_api.py`
+- `tests/test_bulk_processor.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before changes:
+  - `.venv/bin/python -m pytest tests/ -q` -> `327 passed`
+  - `npm test` in `frontend/` -> `33 passed`
+- Focused after changes:
+  - `.venv/bin/python -m pytest tests/test_template_variant_service.py tests/test_bulk_processor.py tests/test_app_api.py -q` -> `51 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` -> `6 passed`
+- Final verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `331 passed`
+  - `npm test` in `frontend/` -> `34 passed`
+  - `npm run build` in `frontend/` -> passed, Vite large chunk warning only
+
+### Decisions made
+- Added `DEC-012`: variant suggestion reuse is gated differently for analyst upload vs bulk auto-processing.
+- Upload may surface candidate variants as visible suggestions because analyst review remains in the loop.
+- Bulk may apply only `trusted` variants because it processes files without per-file analyst confirmation.
+
+### Warnings
+- This does not enable full auto-pass. `auto_pass_eligible` remains false in all returned variant matches.
+- Variants are still Excel-only in the gated reuse path. PDF/image OCR mappings remain deterministic/profile-based until an OCR-specific review design exists.
+- There is still no frontend admin/review UI for listing/promoting variants; use the API endpoints for now.
+
+### Failed attempts / Notes
+- Initial focused tests exposed that `repair_suggested_mapping` could re-fill `amount` after a debit/credit variant was merged. The helper now preserves debit/credit mode.
+- A targeted Vitest command initially used a repo-root path from inside `frontend/`; rerun with `src/components/steps/Step2Map.test.tsx` succeeded.
+- Isolated `tests/test_bulk_processor.py` initially depended on DB tables being created by other tests; the test now patches persistence calls and runs standalone.
+
+### Environment changes
+- No new dependencies installed.
+- No runtime DB migrations were applied during this session.
+
+## Done (previous session) — Phase 2 Template Variant Persistence
 
 ### What I changed
 - Implemented backend persistence for guarded bank template variants.

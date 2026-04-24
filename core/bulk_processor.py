@@ -21,12 +21,18 @@ from core.column_detector import detect_columns
 from core.loader import find_best_sheet_and_header
 from core.mapping_memory import find_matching_profile
 from core.subject_inference import infer_subject_identity
+from persistence.base import get_db_session
 from pipeline.process_account import process_account
 from paths import OUTPUT_DIR
 from services.file_ingestion_service import persist_upload
+from services.mapping_validation_service import validate_mapping
 from services.persistence_pipeline_service import create_parser_run
+from services.template_variant_service import find_matching_template_variant
+from utils.app_helpers import repair_suggested_mapping
 
 logger = logging.getLogger(__name__)
+
+VARIANT_BANK_CONFIDENCE_THRESHOLD = 0.75
 
 
 def process_folder(folder_path: str | Path, recursive: bool = False, operator: str = "bulk-intake") -> dict[str, Any]:
@@ -95,6 +101,8 @@ def _process_single_file(file_path: Path, operator: str = "bulk-intake") -> dict
         "bank_name": "",
         "output_dir": "",
         "job_error": "",
+        "suggestion_source": "",
+        "template_variant_match": None,
     }
 
     try:
@@ -115,6 +123,7 @@ def _process_single_file(file_path: Path, operator: str = "bulk-intake") -> dict
                 "ambiguous": False,
             }
             confirmed_mapping = {}
+            record["suggestion_source"] = "ofx"
         elif file_path.suffix.lower() == ".pdf":
             from core.pdf_loader import parse_pdf_file
             from core.image_loader import parse_image_file
@@ -138,9 +147,6 @@ def _process_single_file(file_path: Path, operator: str = "bulk-intake") -> dict
                 record["job_error"] = "Could not infer subject account from PDF content."
                 return record
             detection = detect_bank(data_df, extra_text=file_path.stem, sheet_name=record["sheet_name"])
-            column_detection = detect_columns(data_df)
-            mapping_profile = find_matching_profile(list(data_df.columns), bank=detection.get("config_key", ""))
-            confirmed_mapping = mapping_profile["mapping"] if mapping_profile else column_detection["suggested_mapping"]
         elif file_path.suffix.lower() in (".png", ".jpg", ".jpeg", ".bmp"):
             from core.image_loader import parse_image_file
 
@@ -161,9 +167,6 @@ def _process_single_file(file_path: Path, operator: str = "bulk-intake") -> dict
                 record["job_error"] = "Could not infer subject account from image."
                 return record
             detection = detect_bank(data_df, extra_text=file_path.stem, sheet_name="IMAGE")
-            column_detection = detect_columns(data_df)
-            mapping_profile = find_matching_profile(list(data_df.columns), bank=detection.get("config_key", ""))
-            confirmed_mapping = mapping_profile["mapping"] if mapping_profile else column_detection["suggested_mapping"]
         else:
             sheet_pick = find_best_sheet_and_header(file_path)
             preview_df = sheet_pick["preview_df"]
@@ -199,8 +202,17 @@ def _process_single_file(file_path: Path, operator: str = "bulk-intake") -> dict
 
         if file_path.suffix.lower() != ".ofx":
             column_detection = detect_columns(data_df)
-            mapping_profile = find_matching_profile(list(data_df.columns), bank=record["bank_key"])
-            confirmed_mapping = mapping_profile["mapping"] if mapping_profile else column_detection["suggested_mapping"]
+            mapping_context = _select_bulk_confirmed_mapping(
+                data_df,
+                detection,
+                column_detection,
+                source_type=_source_type_from_suffix(file_path.suffix),
+                sheet_name=str(record.get("sheet_name") or ""),
+                header_row=int(record.get("header_row") or 0),
+            )
+            confirmed_mapping = mapping_context["confirmed_mapping"]
+            record["suggestion_source"] = mapping_context["suggestion_source"]
+            record["template_variant_match"] = mapping_context["template_variant_match"]
 
         upload_meta = persist_upload(
             content=file_path.read_bytes(),
@@ -254,6 +266,103 @@ def _process_single_file(file_path: Path, operator: str = "bulk-intake") -> dict
         record["status"] = "error"
         record["job_error"] = str(exc)
         return record
+
+
+def _source_type_from_suffix(suffix: str) -> str:
+    suffix = str(suffix or "").lower()
+    if suffix in {".xlsx", ".xls"}:
+        return "excel"
+    if suffix == ".pdf":
+        return "pdf_ocr"
+    if suffix in {".png", ".jpg", ".jpeg", ".bmp"}:
+        return "image_ocr"
+    return suffix.lstrip(".") or "unknown"
+
+
+def _is_stable_variant_bank(detection: dict[str, Any], source_type: str) -> bool:
+    if source_type != "excel":
+        return False
+    bank_key = str(detection.get("config_key") or detection.get("key") or "").strip().lower()
+    if not bank_key or bank_key in {"unknown", "generic"}:
+        return False
+    if bool(detection.get("ambiguous")):
+        return False
+    try:
+        confidence = float(detection.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    return confidence >= VARIANT_BANK_CONFIDENCE_THRESHOLD
+
+
+def _template_variant_summary(variant: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "variant_id": variant["variant_id"],
+        "bank_key": variant["bank_key"],
+        "trust_state": variant["trust_state"],
+        "match_type": variant["match_type"],
+        "match_score": variant["match_score"],
+        "confirmation_count": variant["confirmation_count"],
+        "correction_count": variant["correction_count"],
+        "reviewer_count": variant["reviewer_count"],
+        "suggestion_only": True,
+        "auto_pass_eligible": False,
+    }
+
+
+def _select_bulk_confirmed_mapping(
+    data_df: pd.DataFrame,
+    detection: dict[str, Any],
+    column_detection: dict[str, Any],
+    *,
+    source_type: str,
+    sheet_name: str,
+    header_row: int,
+) -> dict[str, Any]:
+    columns = list(data_df.columns)
+    bank_key = str(detection.get("config_key") or detection.get("key") or "").strip().lower()
+    auto_suggested = dict(column_detection["suggested_mapping"])
+    profile = find_matching_profile(columns, bank=bank_key)
+    suggestion_source = "auto"
+    template_variant_match = None
+
+    if profile:
+        confirmed_mapping = repair_suggested_mapping(
+            {**auto_suggested, **profile["mapping"]},
+            auto_suggested,
+            columns,
+        )
+        suggestion_source = "mapping_profile"
+    else:
+        confirmed_mapping = repair_suggested_mapping(auto_suggested, auto_suggested, columns)
+
+    if _is_stable_variant_bank(detection, source_type):
+        with get_db_session() as session:
+            variant = find_matching_template_variant(
+                session,
+                columns=columns,
+                bank_key=bank_key,
+                source_type=source_type,
+                sheet_name=sheet_name,
+                header_row=header_row,
+                include_candidate=False,
+                allowed_trust_states={"trusted"},
+            )
+        if variant:
+            variant_mapping = repair_suggested_mapping(
+                {**confirmed_mapping, **variant["confirmed_mapping"]},
+                auto_suggested,
+                columns,
+            )
+            if validate_mapping(variant_mapping, columns, bank=bank_key)["ok"]:
+                confirmed_mapping = variant_mapping
+                suggestion_source = "template_variant"
+                template_variant_match = _template_variant_summary(variant)
+
+    return {
+        "confirmed_mapping": confirmed_mapping,
+        "suggestion_source": suggestion_source,
+        "template_variant_match": template_variant_match,
+    }
 
 
 def _build_summary(folder: Path, run_id: str, results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -382,6 +491,8 @@ def _build_case_manifest(summary: dict[str, Any]) -> dict[str, Any]:
                 "rounding_drift_rows": int(row.get("rounding_drift_rows") or 0),
                 "material_mismatched_rows": int(row.get("material_mismatched_rows") or 0),
                 "recommended_check_mode": row.get("recommended_check_mode", "file_order"),
+                "mapping_suggestion_source": row.get("suggestion_source", ""),
+                "template_variant_match": row.get("template_variant_match") or None,
                 "needs_review": _needs_analyst_review(row),
                 "output_dir": row.get("output_dir", ""),
             }

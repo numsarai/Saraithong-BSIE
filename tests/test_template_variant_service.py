@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from persistence.base import Base
 from persistence.models import BankTemplateVariant
 from services.template_variant_service import (
+    find_matching_template_variant,
     list_template_variants,
     promote_template_variant,
     upsert_template_variant,
@@ -80,6 +81,78 @@ def test_template_variant_can_become_trusted_after_multiple_reviewers(tmp_path):
     assert variant["confirmation_count"] == 3
     assert variant["reviewer_count"] == 2
     assert variant["trust_state"] == "trusted"
+
+
+def test_find_matching_template_variant_keeps_candidate_exact_order_only(tmp_path):
+    factory = _session_factory(tmp_path)
+    with factory() as session:
+        variant = upsert_template_variant(
+            session,
+            bank_key="scb",
+            source_type="excel",
+            sheet_name="Sheet1",
+            header_row=0,
+            columns=["date", "description", "amount"],
+            mapping={"date": "date", "description": "description", "amount": "amount"},
+            reviewer="reviewer.one",
+            dry_run_summary={"valid_transaction_rows": 1},
+        )
+        exact = find_matching_template_variant(
+            session,
+            columns=["date", "description", "amount"],
+            bank_key="scb",
+            source_type="excel",
+            sheet_name="Sheet1",
+            header_row=0,
+            include_candidate=True,
+        )
+        reordered = find_matching_template_variant(
+            session,
+            columns=["amount", "date", "description"],
+            bank_key="scb",
+            source_type="excel",
+            sheet_name="Sheet1",
+            header_row=0,
+            include_candidate=True,
+        )
+
+    assert variant["trust_state"] == "candidate"
+    assert exact is not None
+    assert exact["variant_id"] == variant["variant_id"]
+    assert exact["match_type"] == "ordered_signature"
+    assert reordered is None
+
+
+def test_find_matching_template_variant_allows_trusted_set_signature(tmp_path):
+    factory = _session_factory(tmp_path)
+    with factory() as session:
+        for reviewer in ("reviewer.one", "reviewer.two", "reviewer.two"):
+            variant = upsert_template_variant(
+                session,
+                bank_key="kbank",
+                source_type="excel",
+                sheet_name="Sheet1",
+                header_row=0,
+                columns=["date", "description", "amount"],
+                mapping={"date": "date", "description": "description", "amount": "amount"},
+                reviewer=reviewer,
+                dry_run_summary={"valid_transaction_rows": 2},
+            )
+        matched = find_matching_template_variant(
+            session,
+            columns=["amount", "date", "description"],
+            bank_key="kbank",
+            source_type="excel",
+            sheet_name="Sheet1",
+            header_row=0,
+            include_candidate=False,
+            allowed_trust_states={"trusted"},
+        )
+
+    assert variant["trust_state"] == "trusted"
+    assert matched is not None
+    assert matched["variant_id"] == variant["variant_id"]
+    assert matched["match_type"] == "set_signature"
 
 
 def test_manual_promotion_requires_named_reviewer_and_lists_variants(tmp_path):

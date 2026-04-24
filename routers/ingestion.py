@@ -31,9 +31,10 @@ from persistence.base import get_db_session
 from persistence.schemas import MappingConfirmRequest, MappingPreviewRequest, ProcessRequest, TemplateVariantPromotionRequest
 from services.audit_service import record_learning_feedback
 from services.file_ingestion_service import get_file_record, persist_upload
-from services.mapping_validation_service import validate_and_preview_mapping
+from services.mapping_validation_service import validate_and_preview_mapping, validate_mapping
 from services.persistence_pipeline_service import create_parser_run
 from services.template_variant_service import (
+    find_matching_template_variant,
     list_template_variants,
     promote_template_variant,
     upsert_template_variant,
@@ -53,10 +54,114 @@ logger = logging.getLogger("bsie.api")
 
 router = APIRouter(prefix="/api", tags=["ingestion"], dependencies=[Depends(require_auth)])
 
+VARIANT_BANK_CONFIDENCE_THRESHOLD = 0.75
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Step 1 -- Upload + Detect
 # ═══════════════════════════════════════════════════════════════════════════
+
+def _source_type_from_suffix(suffix: str) -> str:
+    suffix = str(suffix or "").lower()
+    if suffix in {".xlsx", ".xls"}:
+        return "excel"
+    if suffix == ".pdf":
+        return "pdf_ocr"
+    if suffix in {".png", ".jpg", ".jpeg", ".bmp"}:
+        return "image_ocr"
+    return suffix.lstrip(".") or "unknown"
+
+
+def _is_stable_variant_bank(bank_result: dict, source_type: str) -> bool:
+    if source_type != "excel":
+        return False
+    bank_key = str(bank_result.get("config_key") or bank_result.get("key") or "").strip().lower()
+    if not bank_key or bank_key in {"unknown", "generic"}:
+        return False
+    if bool(bank_result.get("ambiguous")):
+        return False
+    try:
+        confidence = float(bank_result.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    return confidence >= VARIANT_BANK_CONFIDENCE_THRESHOLD
+
+
+def _suggest_mapping_with_memory(
+    data_df: pd.DataFrame,
+    bank_result: dict,
+    col_result: dict,
+    *,
+    source_type: str,
+    sheet_name: str,
+    header_row: int,
+) -> dict:
+    columns = list(data_df.columns)
+    bank_key = bank_result.get("config_key", "") or bank_result.get("key", "") or ""
+    profile = find_matching_profile(columns, bank=bank_key)
+    bank_memory = find_matching_bank_fingerprint(columns, sheet_name=sheet_name)
+    auto_suggested = dict(col_result["suggested_mapping"])
+    suggested = dict(auto_suggested)
+    suggestion_source = "auto"
+    template_variant_match = None
+
+    if profile:
+        suggested = repair_suggested_mapping(
+            {**auto_suggested, **profile["mapping"]},
+            auto_suggested,
+            columns,
+        )
+        memory_match = {
+            "profile_id": profile["profile_id"],
+            "bank": profile["bank"],
+            "usage_count": profile["usage_count"],
+        }
+        suggestion_source = "mapping_profile"
+    else:
+        suggested = repair_suggested_mapping(suggested, auto_suggested, columns)
+        memory_match = None
+
+    if _is_stable_variant_bank(bank_result, source_type):
+        with get_db_session() as session:
+            variant = find_matching_template_variant(
+                session,
+                columns=columns,
+                bank_key=bank_key,
+                source_type=source_type,
+                sheet_name=sheet_name,
+                header_row=header_row,
+                include_candidate=True,
+            )
+        if variant:
+            variant_suggested = repair_suggested_mapping(
+                {**suggested, **variant["confirmed_mapping"]},
+                auto_suggested,
+                columns,
+            )
+            if validate_mapping(variant_suggested, columns, bank=bank_key)["ok"]:
+                suggested = variant_suggested
+                suggestion_source = "template_variant"
+                template_variant_match = {
+                    "variant_id": variant["variant_id"],
+                    "bank_key": variant["bank_key"],
+                    "trust_state": variant["trust_state"],
+                    "match_type": variant["match_type"],
+                    "match_score": variant["match_score"],
+                    "confirmation_count": variant["confirmation_count"],
+                    "correction_count": variant["correction_count"],
+                    "reviewer_count": variant["reviewer_count"],
+                    "suggestion_only": True,
+                    "auto_pass_eligible": False,
+                }
+
+    return {
+        "suggested_mapping": suggested,
+        "memory_match": memory_match,
+        "bank_memory_match": bank_memory,
+        "template_variant_match": template_variant_match,
+        "suggestion_source": suggestion_source,
+    }
+
 
 @router.post("/upload")
 @_limiter.limit("10/minute")
@@ -181,6 +286,8 @@ async def api_upload(request: Request, file: UploadFile = File(...), uploaded_by
                 "required_found": True,
                 "memory_match": None,
                 "bank_memory_match": None,
+                "template_variant_match": None,
+                "suggestion_source": "ofx",
                 "sample_rows": sample_rows,
                 "banks": get_banks(),
                 "header_row": 0,
@@ -208,33 +315,28 @@ async def api_upload(request: Request, file: UploadFile = File(...), uploaded_by
             )
             bank_result  = detect_bank(data_df, extra_text=f"{file.filename}", sheet_name=sheet_name)
             col_result   = detect_columns(data_df)
-            profile      = find_matching_profile(list(data_df.columns), bank=bank_result.get("config_key", "") or "")
-            bank_memory  = find_matching_bank_fingerprint(list(data_df.columns), sheet_name=sheet_name)
             sample_rows  = data_df.head(5).fillna("").to_dict(orient="records")
-            auto_suggested = dict(col_result["suggested_mapping"])
-            suggested = dict(auto_suggested)
-            if profile:
-                suggested = repair_suggested_mapping(
-                    {**auto_suggested, **profile["mapping"]},
-                    auto_suggested,
-                    list(data_df.columns),
-                )
-                memory_match = {"profile_id": profile["profile_id"], "bank": profile["bank"],
-                                "usage_count": profile["usage_count"]}
-            else:
-                suggested = repair_suggested_mapping(suggested, auto_suggested, list(data_df.columns))
-                memory_match = None
+            suggestion_context = _suggest_mapping_with_memory(
+                data_df,
+                bank_result,
+                col_result,
+                source_type=_source_type_from_suffix(save_path.suffix),
+                sheet_name=sheet_name,
+                header_row=header_row,
+            )
             return JSONResponse({
                 "job_id": job_id, "file_id": persisted["file_id"],
                 "temp_file_path": str(save_path), "file_name": file.filename,
                 "duplicate_file_status": persisted["duplicate_file_status"],
                 "prior_ingestions": persisted["prior_ingestions"],
-                "detected_bank": bank_result, "suggested_mapping": suggested,
+                "detected_bank": bank_result, "suggested_mapping": suggestion_context["suggested_mapping"],
                 "confidence_scores": col_result["confidence_scores"],
                 "all_columns": col_result["all_columns"],
                 "unmatched_columns": col_result["unmatched_columns"],
                 "required_found": col_result["required_found"],
-                "memory_match": memory_match, "bank_memory_match": bank_memory,
+                "memory_match": suggestion_context["memory_match"], "bank_memory_match": suggestion_context["bank_memory_match"],
+                "template_variant_match": suggestion_context["template_variant_match"],
+                "suggestion_source": suggestion_context["suggestion_source"],
                 "sample_rows": sample_rows, "banks": get_banks(),
                 "header_row": header_row, "sheet_name": sheet_name,
                 "account_guess": identity.get("account", ""),
@@ -257,33 +359,28 @@ async def api_upload(request: Request, file: UploadFile = File(...), uploaded_by
             )
             bank_result  = detect_bank(data_df, extra_text=f"{file.filename}", sheet_name=sheet_name)
             col_result   = detect_columns(data_df)
-            profile      = find_matching_profile(list(data_df.columns), bank=bank_result.get("config_key", "") or "")
-            bank_memory  = find_matching_bank_fingerprint(list(data_df.columns), sheet_name=sheet_name)
             sample_rows  = data_df.head(5).fillna("").to_dict(orient="records")
-            auto_suggested = dict(col_result["suggested_mapping"])
-            suggested = dict(auto_suggested)
-            if profile:
-                suggested = repair_suggested_mapping(
-                    {**auto_suggested, **profile["mapping"]},
-                    auto_suggested,
-                    list(data_df.columns),
-                )
-                memory_match = {"profile_id": profile["profile_id"], "bank": profile["bank"],
-                                "usage_count": profile["usage_count"]}
-            else:
-                suggested = repair_suggested_mapping(suggested, auto_suggested, list(data_df.columns))
-                memory_match = None
+            suggestion_context = _suggest_mapping_with_memory(
+                data_df,
+                bank_result,
+                col_result,
+                source_type=_source_type_from_suffix(save_path.suffix),
+                sheet_name=sheet_name,
+                header_row=header_row,
+            )
             return JSONResponse({
                 "job_id": job_id, "file_id": persisted["file_id"],
                 "temp_file_path": str(save_path), "file_name": file.filename,
                 "duplicate_file_status": persisted["duplicate_file_status"],
                 "prior_ingestions": persisted["prior_ingestions"],
-                "detected_bank": bank_result, "suggested_mapping": suggested,
+                "detected_bank": bank_result, "suggested_mapping": suggestion_context["suggested_mapping"],
                 "confidence_scores": col_result["confidence_scores"],
                 "all_columns": col_result["all_columns"],
                 "unmatched_columns": col_result["unmatched_columns"],
                 "required_found": col_result["required_found"],
-                "memory_match": memory_match, "bank_memory_match": bank_memory,
+                "memory_match": suggestion_context["memory_match"], "bank_memory_match": suggestion_context["bank_memory_match"],
+                "template_variant_match": suggestion_context["template_variant_match"],
+                "suggestion_source": suggestion_context["suggestion_source"],
                 "sample_rows": sample_rows, "banks": get_banks(),
                 "header_row": header_row, "sheet_name": sheet_name,
                 "account_guess": identity.get("account", ""),
@@ -315,23 +412,15 @@ async def api_upload(request: Request, file: UploadFile = File(...), uploaded_by
 
         bank_result  = detect_bank(data_df, extra_text=f"{file.filename} {sheet_name}", sheet_name=sheet_name)
         col_result   = detect_columns(data_df)
-        profile      = find_matching_profile(list(data_df.columns), bank=bank_result.get("config_key", "") or "")
-        bank_memory  = find_matching_bank_fingerprint(list(data_df.columns), sheet_name=sheet_name)
         sample_rows = data_df.head(5).fillna("").to_dict(orient="records")
-
-        auto_suggested = dict(col_result["suggested_mapping"])
-        suggested = dict(auto_suggested)
-        if profile:
-            suggested = repair_suggested_mapping(
-                {**auto_suggested, **profile["mapping"]},
-                auto_suggested,
-                list(data_df.columns),
-            )
-            memory_match = {"profile_id": profile["profile_id"], "bank": profile["bank"],
-                            "usage_count": profile["usage_count"]}
-        else:
-            suggested = repair_suggested_mapping(suggested, auto_suggested, list(data_df.columns))
-            memory_match = None
+        suggestion_context = _suggest_mapping_with_memory(
+            data_df,
+            bank_result,
+            col_result,
+            source_type=_source_type_from_suffix(save_path.suffix),
+            sheet_name=sheet_name,
+            header_row=header_row,
+        )
 
         return JSONResponse({
             "job_id":           job_id,
@@ -341,13 +430,15 @@ async def api_upload(request: Request, file: UploadFile = File(...), uploaded_by
             "duplicate_file_status": persisted["duplicate_file_status"],
             "prior_ingestions": persisted["prior_ingestions"],
             "detected_bank":    bank_result,
-            "suggested_mapping": suggested,
+            "suggested_mapping": suggestion_context["suggested_mapping"],
             "confidence_scores": col_result["confidence_scores"],
             "all_columns":      col_result["all_columns"],
             "unmatched_columns": col_result["unmatched_columns"],
             "required_found":   col_result["required_found"],
-            "memory_match":     memory_match,
-            "bank_memory_match": bank_memory,
+            "memory_match":     suggestion_context["memory_match"],
+            "bank_memory_match": suggestion_context["bank_memory_match"],
+            "template_variant_match": suggestion_context["template_variant_match"],
+            "suggestion_source": suggestion_context["suggestion_source"],
             "sample_rows":      sample_rows,
             "banks":            get_banks(),
             "header_row":       header_row,
@@ -638,27 +729,27 @@ async def api_redetect(body: _RedetectRequest):
         identity = infer_subject_identity_from_frames(save_path, preview_df=data_df.head(15), transaction_df=data_df)
         bank_result = detect_bank(data_df, extra_text=f"{filename} {sheet_name}", sheet_name=sheet_name)
         col_result = detect_columns(data_df)
-        profile = find_matching_profile(list(data_df.columns), bank=bank_result.get("config_key", "") or "")
-        bank_memory = find_matching_bank_fingerprint(list(data_df.columns), sheet_name=sheet_name)
         sample_rows = data_df.head(5).fillna("").to_dict(orient="records")
-        auto_suggested = dict(col_result["suggested_mapping"])
-        suggested = dict(auto_suggested)
-        memory_match = None
-        if profile:
-            suggested = repair_suggested_mapping({**auto_suggested, **profile["mapping"]}, auto_suggested, list(data_df.columns))
-            memory_match = {"profile_id": profile["profile_id"], "bank": profile["bank"], "usage_count": profile["usage_count"]}
-        else:
-            suggested = repair_suggested_mapping(suggested, auto_suggested, list(data_df.columns))
+        suggestion_context = _suggest_mapping_with_memory(
+            data_df,
+            bank_result,
+            col_result,
+            source_type=_source_type_from_suffix(save_path.suffix),
+            sheet_name=sheet_name,
+            header_row=header_row,
+        )
 
         return JSONResponse({
             "job_id": job_id, "file_id": body.file_id,
             "temp_file_path": str(save_path), "file_name": filename,
             "duplicate_file_status": "redetect", "prior_ingestions": [],
-            "detected_bank": bank_result, "suggested_mapping": suggested,
+            "detected_bank": bank_result, "suggested_mapping": suggestion_context["suggested_mapping"],
             "confidence_scores": col_result["confidence_scores"],
             "all_columns": col_result["all_columns"], "unmatched_columns": col_result["unmatched_columns"],
             "required_found": col_result["required_found"],
-            "memory_match": memory_match, "bank_memory_match": bank_memory,
+            "memory_match": suggestion_context["memory_match"], "bank_memory_match": suggestion_context["bank_memory_match"],
+            "template_variant_match": suggestion_context["template_variant_match"],
+            "suggestion_source": suggestion_context["suggestion_source"],
             "sample_rows": sample_rows, "banks": get_banks(),
             "header_row": header_row, "sheet_name": sheet_name,
             "account_guess": identity.get("account", ""), "name_guess": identity.get("name", ""),

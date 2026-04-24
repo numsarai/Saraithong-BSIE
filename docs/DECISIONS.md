@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-051: Variant gate summaries aggregate Phase 5 readiness by bank and state
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** DEC-050 exposed observe-only gate telemetry per template variant, but reviewers still had to inspect each row to understand whether a bank's variant set was ready, blocked, or risky. Phase 5 needs aggregate metrics before rollback workflows or any real auto-pass enablement.
+- **Decision:** `GET /api/mapping/variants` now returns an `auto_pass_summary` alongside the existing items. The summary aggregates gate status, trust states, bank counts, would-auto-pass count, top blocker reasons, and top rollback reasons while preserving `auto_pass_eligible=false`. Bank Manager displays the summary for the current bank/filter above the variant list.
+- **Alternatives:** (1) Add a separate metrics endpoint immediately -- cleaner separation, but more API surface before the summary shape has stabilized. (2) Keep metrics only in each row -- no contract change, but poor reviewer visibility. (3) Store summary rows in the database -- unnecessary because summaries are deterministic from current variant records.
+- **Consequences:** Reviewers can scan Phase 5 readiness by bank/state without opening every variant. The summary remains derived, read-only, and observe-only; future rollback/demotion review can use the same blocker and rollback counts.
+
 ### DEC-050: Auto-pass rollout starts with observe-only gates
 - **Date:** 2026-04-24
 - **Status:** accepted

@@ -445,7 +445,13 @@
       "rollbackReview": "ควรทบทวน rollback",
       "gateReadyDescription": "variant นี้ผ่าน gate ปัจจุบัน แต่ automation ยังไม่ถูกเปิดใช้",
       "gateBlockedDescription": "variant นี้ยัง auto-pass ไม่ได้จนกว่าจะเคลียร์ blocker",
-      "rollbackReasons": "เหตุผล rollback"
+      "rollbackReasons": "เหตุผล rollback",
+      "gateSummary": "สรุป Gate",
+      "summaryTotal": "ทั้งหมด {{count}}",
+      "summaryReady": "พร้อม {{count}}",
+      "summaryBlocked": "ถูกกั้น {{count}}",
+      "summaryRollback": "ทบทวน rollback {{count}}",
+      "topBlocker": "blocker หลัก: {{reason}} ({{count}})"
     },
     "toast": {
       "keyRequired": "กรุณาระบุคีย์ธนาคาร",

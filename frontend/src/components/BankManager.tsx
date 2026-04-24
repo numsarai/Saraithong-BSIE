@@ -98,6 +98,16 @@ type TemplateVariant = {
   promoted_by?: string
 }
 
+type AutoPassSummary = {
+  total?: number
+  ready_observe_only?: number
+  blocked?: number
+  rollback_review?: number
+  would_auto_pass?: number
+  top_blocked_reasons?: Array<{ reason: string; count: number }>
+  top_rollback_reasons?: Array<{ reason: string; count: number }>
+}
+
 const EMPTY_CFG: BankCfg = {
   key: '', bank_name: '', sheet_index: 0, header_row: 0,
   format_type: 'standard', amount_mode: 'signed', column_mapping: {},
@@ -337,6 +347,7 @@ function TemplateVariantsPanel({ bankKey, operatorName }: { bankKey: string; ope
     enabled: !!bankKey,
   })
   const variants: TemplateVariant[] = variantsQuery.data?.items || []
+  const autoPassSummary: AutoPassSummary | null = variantsQuery.data?.auto_pass_summary || null
 
   const promoteTarget = (variant: TemplateVariant) => {
     if (variant.trust_state === 'candidate') return 'verified'
@@ -396,6 +407,38 @@ function TemplateVariantsPanel({ bankKey, operatorName }: { bankKey: string; ope
       {!reviewerCanPromote && (
         <div className="mb-3 rounded-lg border border-warning/25 bg-warning/[0.08] px-3 py-2 text-xs text-text2">
           {t('bankManager.variants.reviewerHint')}
+        </div>
+      )}
+
+      {autoPassSummary && Number(autoPassSummary.total || 0) > 0 && (
+        <div className="mb-3 rounded-lg border border-border bg-surface2/40 p-3">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+            <ShieldCheck size={13} className="text-accent" />
+            <span className="font-semibold text-text2">{t('bankManager.variants.gateSummary')}</span>
+            <Badge variant="blue">{t('bankManager.variants.observeOnly')}</Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
+            <div className="rounded-md border border-border bg-surface px-2 py-1.5 text-text2">
+              {t('bankManager.variants.summaryTotal', { count: Number(autoPassSummary.total || 0) })}
+            </div>
+            <div className="rounded-md border border-border bg-surface px-2 py-1.5 text-text2">
+              {t('bankManager.variants.summaryReady', { count: Number(autoPassSummary.ready_observe_only || 0) })}
+            </div>
+            <div className="rounded-md border border-border bg-surface px-2 py-1.5 text-text2">
+              {t('bankManager.variants.summaryBlocked', { count: Number(autoPassSummary.blocked || 0) })}
+            </div>
+            <div className="rounded-md border border-border bg-surface px-2 py-1.5 text-text2">
+              {t('bankManager.variants.summaryRollback', { count: Number(autoPassSummary.rollback_review || 0) })}
+            </div>
+          </div>
+          {Array.isArray(autoPassSummary.top_blocked_reasons) && autoPassSummary.top_blocked_reasons.length > 0 && (
+            <div className="mt-2 text-[11px] text-muted">
+              {t('bankManager.variants.topBlocker', {
+                reason: formatGateReason(autoPassSummary.top_blocked_reasons[0].reason),
+                count: Number(autoPassSummary.top_blocked_reasons[0].count || 0),
+              })}
+            </div>
+          )}
         </div>
       )}
 

@@ -9,6 +9,7 @@ from services.template_variant_service import (
     find_matching_template_variant,
     list_template_variants,
     promote_template_variant,
+    summarize_auto_pass_gates,
     upsert_template_variant,
 )
 
@@ -105,6 +106,52 @@ def test_auto_pass_gate_reports_blockers_and_rollback_conditions():
     assert gate["rollback_recommended"] is True
     assert "insufficient_confirmations" in gate["blocked_reasons"]
     assert "trusted_correction_rate_high" in gate["rollback_reasons"]
+
+
+def test_summarize_auto_pass_gates_groups_by_bank_state_and_reason():
+    ready = {
+        "bank_key": "scb",
+        "source_type": "excel",
+        "trust_state": "trusted",
+        "confirmation_count": 3,
+        "reviewer_count": 2,
+        "correction_count": 0,
+        "correction_rate": 0,
+        "dry_run_summary": {"valid_transaction_rows": 2},
+    }
+    rollback = {
+        "bank_key": "scb",
+        "source_type": "excel",
+        "trust_state": "trusted",
+        "confirmation_count": 1,
+        "reviewer_count": 1,
+        "correction_count": 1,
+        "correction_rate": 1.0,
+        "dry_run_summary": {"valid_transaction_rows": 0},
+    }
+    candidate = {
+        "bank_key": "kbank",
+        "source_type": "excel",
+        "trust_state": "candidate",
+        "confirmation_count": 1,
+        "reviewer_count": 1,
+        "correction_count": 0,
+        "correction_rate": 0,
+        "dry_run_summary": {"valid_transaction_rows": 1},
+    }
+
+    summary = summarize_auto_pass_gates([ready, rollback, candidate])
+
+    assert summary["total"] == 3
+    assert summary["ready_observe_only"] == 1
+    assert summary["rollback_review"] == 1
+    assert summary["blocked"] == 1
+    assert summary["auto_pass_eligible"] == 0
+    assert summary["by_trust_state"]["trusted"] == 2
+    assert summary["by_bank"]["scb"]["total"] == 2
+    assert summary["by_bank"]["kbank"]["by_trust_state"]["candidate"] == 1
+    assert any(item["reason"] == "not_trusted" for item in summary["top_blocked_reasons"])
+    assert any(item["reason"] == "trusted_correction_rate_high" for item in summary["top_rollback_reasons"])
 
 
 def test_find_matching_template_variant_keeps_candidate_exact_order_only(tmp_path):

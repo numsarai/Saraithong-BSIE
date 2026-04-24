@@ -1476,6 +1476,8 @@ def test_mapping_variants_endpoints_list_and_promote():
 
     assert response.status_code == 200
     assert response.json()["count"] == 1
+    assert response.json()["auto_pass_summary"]["total"] == 1
+    assert response.json()["auto_pass_summary"]["auto_pass_eligible"] == 0
     list_template_variants.assert_called_once()
 
     with (

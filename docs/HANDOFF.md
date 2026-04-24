@@ -9,11 +9,64 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `392 passed`, frontend `52 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `393 passed`, frontend `52 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 5 Observe-only Auto-pass Gates
+## Done (latest session) — Phase 5 Aggregate Gate Metrics
+
+### What I changed
+- Added aggregate auto-pass gate summaries for template variants without enabling auto-pass.
+- `GET /api/mapping/variants` now returns `auto_pass_summary` alongside the existing `items` and `count`.
+- The summary includes total variants, `ready_observe_only`, blocked, rollback-review counts, `would_auto_pass`, `auto_pass_eligible`, trust-state totals, per-bank totals, top blocker reasons, and top rollback reasons.
+- Bank Manager now shows a Gate Summary panel above the variant list for the current bank/filter, including observe-only mode, total/ready/blocked/rollback counts, and the top blocker.
+- Added DEC-051, roadmap status, English/Thai labels, backend service/API tests, and frontend coverage.
+
+### Files changed
+- `services/template_variant_service.py`
+- `routers/ingestion.py`
+- `frontend/src/components/BankManager.tsx`
+- `frontend/src/components/BankManager.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `tests/test_template_variant_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `392 passed`
+  - `npm test -- --run` in `frontend/` -> `52 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/template_variant_service.py routers/ingestion.py tests/test_template_variant_service.py tests/test_app_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_template_variant_service.py tests/test_app_api.py::test_mapping_variants_endpoints_list_and_promote -q` -> `8 passed`
+  - `npm test -- --run src/components/BankManager.test.tsx` in `frontend/` -> `2 passed`
+  - `npm run build` in `frontend/` -> passed
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `393 passed`
+  - `npm test -- --run` in `frontend/` -> `52 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-051: variant gate summaries aggregate Phase 5 readiness by bank and state.
+- Summary remains derived/read-only/observe-only and does not change `auto_pass_eligible=false`.
+
+### Warnings / Next
+- The summary is computed from the returned variant page/filter, not yet a whole-database analytics endpoint independent of pagination.
+- No rollback/demotion action exists yet; rollback review is still a signal.
+- Next useful slice: add a reviewer workflow to mark trusted variants for rollback/demotion review, or split a dedicated `/api/mapping/variants/metrics` endpoint if whole-bank analytics needs to ignore list limits.
+
+### Failed attempts
+- Frontend focused test initially queried `Observe only` as a unique string after adding the summary panel; fixed the test to expect both summary and row badges.
+
+### Environment changes
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but generated dist files remain untracked.
+
+## Done (previous session) — Phase 5 Observe-only Auto-pass Gates
 
 ### What I changed
 - Started Phase 5 with observe-only auto-pass gate telemetry for bank template variants.

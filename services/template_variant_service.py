@@ -210,6 +210,83 @@ def build_auto_pass_gate(
     }
 
 
+def summarize_auto_pass_gates(variants: list[dict[str, Any]]) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "mode": AUTO_PASS_MODE,
+        "total": 0,
+        "would_auto_pass": 0,
+        "auto_pass_eligible": 0,
+        "ready_observe_only": 0,
+        "blocked": 0,
+        "rollback_review": 0,
+        "by_trust_state": {state: 0 for state in sorted(TRUST_STATES, key=lambda item: TRUST_ORDER[item])},
+        "by_gate_status": {
+            "ready_observe_only": 0,
+            "blocked": 0,
+            "rollback_review": 0,
+        },
+        "by_bank": {},
+        "top_blocked_reasons": [],
+        "top_rollback_reasons": [],
+    }
+    blocked_reason_counts: dict[str, int] = {}
+    rollback_reason_counts: dict[str, int] = {}
+
+    for variant in variants or []:
+        gate = variant.get("auto_pass_gate") if isinstance(variant.get("auto_pass_gate"), dict) else build_auto_pass_gate(variant)
+        status = str(gate.get("status") or "blocked")
+        if status not in summary["by_gate_status"]:
+            status = "blocked"
+        bank_key = str(variant.get("bank_key") or "unknown").strip().lower() or "unknown"
+        trust_state = str(variant.get("trust_state") or "unknown").strip().lower() or "unknown"
+
+        summary["total"] += 1
+        summary[status] += 1
+        summary["by_gate_status"][status] += 1
+        summary["by_trust_state"][trust_state] = int(summary["by_trust_state"].get(trust_state, 0)) + 1
+        if bool(gate.get("would_auto_pass")):
+            summary["would_auto_pass"] += 1
+        if bool(gate.get("auto_pass_eligible")):
+            summary["auto_pass_eligible"] += 1
+
+        bank_summary = summary["by_bank"].setdefault(bank_key, {
+            "total": 0,
+            "ready_observe_only": 0,
+            "blocked": 0,
+            "rollback_review": 0,
+            "would_auto_pass": 0,
+            "auto_pass_eligible": 0,
+            "by_trust_state": {},
+        })
+        bank_summary["total"] += 1
+        bank_summary[status] += 1
+        if bool(gate.get("would_auto_pass")):
+            bank_summary["would_auto_pass"] += 1
+        if bool(gate.get("auto_pass_eligible")):
+            bank_summary["auto_pass_eligible"] += 1
+        bank_summary["by_trust_state"][trust_state] = int(bank_summary["by_trust_state"].get(trust_state, 0)) + 1
+
+        for reason in gate.get("blocked_reasons") or []:
+            reason_text = str(reason or "").strip()
+            if reason_text:
+                blocked_reason_counts[reason_text] = blocked_reason_counts.get(reason_text, 0) + 1
+        for reason in gate.get("rollback_reasons") or []:
+            reason_text = str(reason or "").strip()
+            if reason_text:
+                rollback_reason_counts[reason_text] = rollback_reason_counts.get(reason_text, 0) + 1
+
+    summary["top_blocked_reasons"] = _ranked_reason_counts(blocked_reason_counts)
+    summary["top_rollback_reasons"] = _ranked_reason_counts(rollback_reason_counts)
+    return summary
+
+
+def _ranked_reason_counts(counts: dict[str, int]) -> list[dict[str, Any]]:
+    return [
+        {"reason": reason, "count": count}
+        for reason, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
 def upsert_template_variant(
     session: Session,
     *,

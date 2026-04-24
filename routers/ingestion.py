@@ -41,6 +41,7 @@ from services.template_variant_service import (
     find_matching_template_variant,
     list_template_variants,
     promote_template_variant,
+    summarize_auto_pass_gates,
     upsert_template_variant,
 )
 from utils.app_helpers import (
@@ -771,7 +772,7 @@ async def api_confirm_mapping(request: Request):
 async def api_list_mapping_variants(bank: str = "", trust_state: str = "", limit: int = 100):
     with get_db_session() as session:
         items = list_template_variants(session, bank_key=bank, trust_state=trust_state, limit=limit)
-    return JSONResponse({"items": items, "count": len(items)})
+    return JSONResponse({"items": items, "count": len(items), "auto_pass_summary": summarize_auto_pass_gates(items)})
 
 
 @router.post("/mapping/variants/{variant_id}/promote")

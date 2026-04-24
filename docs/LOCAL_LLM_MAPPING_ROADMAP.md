@@ -339,7 +339,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 5 — Auto-pass Rollout
 
-สถานะ: started เมื่อ 2026-04-24; observe-only auto-pass gate telemetry implemented ตาม DEC-050
+สถานะ: started เมื่อ 2026-04-24; observe-only auto-pass gate telemetry implemented ตาม DEC-050 และ aggregate gate summary by bank/state implemented ตาม DEC-051
 
 เป้าหมาย:
 
@@ -349,6 +349,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 - [x] เพิ่ม observe-only auto-pass gate สำหรับ template variants โดยยังคง `auto_pass_eligible=false`
 - [x] แสดง metrics/blockers/rollback review ใน Bank Manager เพื่อให้ reviewer เห็นความพร้อมก่อนเปิด automation
+- [x] เพิ่ม aggregate gate summary ใน `/api/mapping/variants` และ Bank Manager เพื่อดู readiness/blockers ตาม bank/state/filter
 - [ ] เปิดเฉพาะ Excel trusted variants เมื่อ policy พร้อมและมี reviewer sign-off
 - [ ] เพิ่ม metrics aggregation และ rollback conditions สำหรับรอบที่ auto-pass ถูกเปิดจริง
 - [ ] monitor correction rate หลัง rollout

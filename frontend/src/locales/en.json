@@ -445,7 +445,13 @@
       "rollbackReview": "Rollback review",
       "gateReadyDescription": "This variant meets the current gate, but automation is still disabled.",
       "gateBlockedDescription": "This variant cannot auto-pass until the gate blockers are cleared.",
-      "rollbackReasons": "Rollback reasons"
+      "rollbackReasons": "Rollback reasons",
+      "gateSummary": "Gate Summary",
+      "summaryTotal": "{{count}} total",
+      "summaryReady": "{{count}} ready",
+      "summaryBlocked": "{{count}} blocked",
+      "summaryRollback": "{{count}} rollback review",
+      "topBlocker": "Top blocker: {{reason}} ({{count}})"
     },
     "toast": {
       "keyRequired": "Key is required",

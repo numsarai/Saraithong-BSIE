@@ -110,6 +110,17 @@ describe('BankManager prepared bank logos', () => {
     })
     vi.mocked(listMappingVariants).mockResolvedValue({
       count: 1,
+      auto_pass_summary: {
+        mode: 'observe_only',
+        total: 1,
+        ready_observe_only: 0,
+        blocked: 1,
+        rollback_review: 0,
+        would_auto_pass: 0,
+        auto_pass_eligible: 0,
+        top_blocked_reasons: [{ reason: 'not_trusted', count: 1 }],
+        top_rollback_reasons: [],
+      },
       items: [{
         variant_id: 'VARIANT-1',
         bank_key: 'scb',
@@ -143,8 +154,12 @@ describe('BankManager prepared bank logos', () => {
     expect(await screen.findByText('Template Variants')).toBeInTheDocument()
     expect(await screen.findByText('VARIANT-1')).toBeInTheDocument()
     expect(screen.getByText('2 confirmations')).toBeInTheDocument()
+    expect(screen.getByText('Gate Summary')).toBeInTheDocument()
+    expect(screen.getByText('1 total')).toBeInTheDocument()
+    expect(screen.getByText('1 blocked')).toBeInTheDocument()
+    expect(screen.getByText('Top blocker: not trusted (1)')).toBeInTheDocument()
     expect(screen.getByText('Auto-pass Gate')).toBeInTheDocument()
-    expect(screen.getByText('Observe only')).toBeInTheDocument()
+    expect(screen.getAllByText('Observe only')).toHaveLength(2)
     expect(screen.getByText('not trusted')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('Promotion note'), {

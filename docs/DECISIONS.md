@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-021: Mapping assist defaults to Gemma 4 26B with bounded no-think structured calls
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Smoke tests showed several Gemma variants can return valid JSON, but task-specific synthetic mapping fixtures showed a larger accuracy gap. `gemma4:26b` scored 100% on text and vision mapping fixtures, while `gemma4:e4b` missed the noisy OCR-like fixture and `gemma4:e2b` was too lossy. The previous mapping-assist production path also did not explicitly disable thinking or cap structured output tokens.
+- **Decision:** Mapping assist now defaults to `gemma4:26b` when `OLLAMA_MAPPING_MODEL` is not set, and both text and vision mapping assist calls pass `think=false` with a bounded token budget. Keep `gemma4:e4b` as the fast fallback role rather than the primary mapping model.
+- **Alternatives:** (1) Keep `qwen2.5:14b` as the implicit mapping default — currently not installed on this machine and would fail by default. (2) Promote `gemma4:e4b` because it is faster — good smoke result but weaker on noisy OCR-like mapping. (3) Use `gemma4:e2b` for speed — too lossy for evidence-sensitive mapping assistance.
+- **Consequences:** Default local mapping assist is usable on the current machine without extra env configuration, but it has higher cold-load cost. Suggestions remain validation-gated, column-constrained, and analyst-applied only.
+
 ### DEC-020: Gemma 4 variants need task-specific accuracy tests before default changes
 - **Date:** 2026-04-24
 - **Status:** accepted

@@ -13,7 +13,69 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Gemma Variant Follow-up Sweep
+## Done (latest session) — Mapping Assist Fixture Benchmark
+
+### What I changed
+- Updated production mapping assist calls in `services/mapping_assist_service.py`:
+  - text mapping assist now passes `think=false` and `max_tokens=1024`
+  - vision mapping assist now passes `think=false` and `max_tokens=1024`
+  - default mapping-assist model is now `gemma4:26b` when `OLLAMA_MAPPING_MODEL` is not set
+  - vision mapping assist uses the mapping model default for mapping-specific vision calls instead of falling back to the generic vision role
+- Updated `tests/test_mapping_assist_service.py` to assert structured mapping calls use the bounded no-think path and the new default model.
+- Ran synthetic task-specific benchmarks against `gemma4:e2b`, `gemma4:e4b`, and `gemma4:26b`.
+- Recorded results in `docs/LOCAL_LLM_BENCHMARKS.md`.
+- Added `DEC-021` and updated `docs/LOCAL_LLM_MAPPING_ROADMAP.md`.
+
+### Benchmark results
+- Fixtures:
+  - `thai_debit_credit`
+  - `english_signed_amount`
+  - `ocr_noisy_signed_amount`
+- `gemma4:e2b`:
+  - text `14/21` = `66.67%`, avg `4,022.08 ms`
+  - vision `3/21` = `14.29%`, avg `4,264.31 ms`
+- `gemma4:e4b`:
+  - text `15/21` = `71.43%`, avg `7,375.73 ms`
+  - vision `15/21` = `71.43%`, avg `7,043.96 ms`
+- `gemma4:26b`:
+  - text `21/21` = `100%`, avg `8,520.42 ms`
+  - vision `21/21` = `100%`, avg `6,688.96 ms`
+
+### Decisions made
+- Use `gemma4:26b` as the default mapping-assist model on this machine.
+- Keep `gemma4:e4b` as fast fallback, not primary mapping assistant.
+- Treat `gemma4:e2b` as triage-only; it is too lossy for evidentiary mapping suggestions.
+- Keep all LLM mapping suggestions suggestion-only, validation-gated, and analyst-applied.
+
+### Files changed
+- `services/mapping_assist_service.py`
+- `tests/test_mapping_assist_service.py`
+- `docs/LOCAL_LLM_BENCHMARKS.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- `.venv/bin/python -m py_compile services/mapping_assist_service.py tests/test_mapping_assist_service.py` -> passed
+- `.venv/bin/python -m pytest tests/test_mapping_assist_service.py tests/test_llm_service.py -q` -> `9 passed`
+- `.venv/bin/python -m pytest tests/ -q` -> `344 passed`
+- Live default-model smoke:
+  - `suggest_mapping_with_llm(...)` without explicit model used `gemma4:26b`, validation `ok`, mapping complete for Thai debit/credit fixture.
+
+### Warnings
+- `gemma4:26b` has higher cold-load cost, but it is materially more accurate on the synthetic mapping fixtures.
+- `gemma4:e2b` and `gemma4:e4b` can return valid JSON while still missing important mapping fields; JSON smoke alone is not enough for model selection.
+- The extra prompt experiment that explicitly banned sample-row values reduced recall for `e2b/e4b`; it was reverted. Safety still comes from column cleaning, validation, and analyst review.
+
+### Failed attempts / Notes
+- Pre-fix production mapping assist could be slow and incomplete because it did not explicitly disable thinking or cap structured output.
+- The stricter prompt experiment made smaller Gemma models overly conservative, so it was not kept.
+
+### Environment changes
+- No dependencies installed by Codex.
+- No model pulls were performed by Codex in this session.
+
+## Done (previous session) — Gemma Variant Follow-up Sweep
 
 ### What I changed
 - Ran local-only benchmark sweeps after the user installed additional Gemma variants.

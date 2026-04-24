@@ -6,8 +6,12 @@ from services.mapping_assist_service import suggest_mapping_with_llm, suggest_ma
 
 def test_mapping_assist_parses_repairs_and_validates_llm_json(monkeypatch):
     async def fake_chat(*args, **kwargs):
+        assert kwargs["auto_context"] is False
+        assert kwargs["model"] == "gemma4:26b"
+        assert kwargs["max_tokens"] > 0
+        assert kwargs["think"] is False
         return {
-            "model": "qwen2.5:14b",
+            "model": kwargs["model"],
             "response": """
             ```json
             {
@@ -46,7 +50,7 @@ def test_mapping_assist_parses_repairs_and_validates_llm_json(monkeypatch):
     assert result["source"] == "local_llm_mapping_assist"
     assert result["suggestion_only"] is True
     assert result["auto_pass_eligible"] is False
-    assert result["model"] == "qwen2.5:14b"
+    assert result["model"] == "gemma4:26b"
     assert result["confidence"] == 0.82
     assert result["mapping"]["amount"] is None
     assert result["mapping"]["debit"] == "ถอนเงิน"
@@ -82,6 +86,9 @@ def test_vision_mapping_assist_uses_preview_and_validation(monkeypatch):
         assert file_bytes == b"preview"
         assert file_type == "image/png"
         assert "original PDF/image preview" in message
+        assert kwargs["model"] == "gemma4:26b"
+        assert kwargs["max_tokens"] > 0
+        assert kwargs["think"] is False
         return {
             "model": kwargs.get("model") or "qwen2.5vl:7b",
             "response": """

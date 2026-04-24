@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from services.llm_service import DEFAULT_TEXT_MODEL, chat, chat_with_file, resolve_model
+from services.llm_service import chat, chat_with_file, resolve_model
 from services.mapping_validation_service import validate_mapping
 from utils.app_helpers import repair_suggested_mapping
 
@@ -22,8 +22,9 @@ ASSIST_FIELDS = (
     "counterparty_account",
     "counterparty_name",
 )
-DEFAULT_MAPPING_MODEL = os.getenv("OLLAMA_MAPPING_MODEL", "").strip() or DEFAULT_TEXT_MODEL
+DEFAULT_MAPPING_MODEL = os.getenv("OLLAMA_MAPPING_MODEL", "gemma4:26b").strip() or "gemma4:26b"
 MAX_VISION_ASSIST_BYTES = 25 * 1024 * 1024
+MAPPING_ASSIST_MAX_TOKENS = 1024
 VISION_IMAGE_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -252,6 +253,8 @@ async def suggest_mapping_with_llm(
         prompt,
         auto_context=False,
         model=selected_model,
+        max_tokens=MAPPING_ASSIST_MAX_TOKENS,
+        think=False,
     )
     raw = _extract_json_object(result.get("response", ""))
     llm_mapping, mapping_warnings = _clean_llm_mapping(raw.get("mapping"), clean_columns)
@@ -314,11 +317,14 @@ async def suggest_mapping_with_vision_llm(
         header_row=int(header_row or 0),
         file_context=file_context,
     )
+    selected_model = resolve_model(str(model or "").strip() or DEFAULT_MAPPING_MODEL, "vision")
     result = await chat_with_file(
         prompt,
         preview_bytes,
         content_type,
-        model=str(model or "").strip(),
+        model=selected_model,
+        max_tokens=MAPPING_ASSIST_MAX_TOKENS,
+        think=False,
     )
     raw = _extract_json_object(result.get("response", ""))
     llm_mapping, mapping_warnings = _clean_llm_mapping(raw.get("mapping"), clean_columns)
@@ -340,7 +346,7 @@ async def suggest_mapping_with_vision_llm(
         "source": "local_llm_vision_mapping_assist",
         "suggestion_only": True,
         "auto_pass_eligible": False,
-        "model": result.get("model") or resolve_model(model, "vision"),
+        "model": result.get("model") or selected_model,
         "mapping": merged_mapping,
         "confidence": confidence_float,
         "reasons": _list_text(raw.get("reasons")),

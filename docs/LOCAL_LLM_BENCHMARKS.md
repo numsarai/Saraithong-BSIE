@@ -2,6 +2,46 @@
 
 > Local-only benchmark log. Prompts are synthetic and do not include case evidence.
 
+## 2026-04-24 — Mapping Assist Fixture Benchmark
+
+### Environment
+
+- Branch: `Smarter-BSIE`
+- Runtime: local Ollama via `OLLAMA_BASE_URL=http://localhost:11434`
+- Benchmark source: `services.mapping_assist_service.suggest_mapping_with_llm(...)` and `suggest_mapping_with_vision_llm(...)`
+- Endpoint path: native Ollama `/api/chat` through `think=false`
+- Evidence data: none; all fixtures are synthetic bank-header / OCR-layout examples
+
+Before this run, production mapping assist was adjusted to use `think=false` and a bounded output budget for structured JSON calls. A quick pre-fix probe showed the old path could be slow and incomplete under Gemma: `gemma4:e2b` took about 14.1s and returned only `date`/`description` for a Thai debit/credit fixture, while `gemma4:e4b` and `gemma4:26b` took about 24.7s and 32.9s for the same shape.
+
+### Fixtures
+
+| Fixture | Shape | Expected fields |
+|---|---|---|
+| `thai_debit_credit` | Thai debit/credit statement columns | date, time, description, debit, credit, balance, channel, counterparty_account |
+| `english_signed_amount` | English signed amount columns | date, time, description, amount, balance, channel, counterparty_account |
+| `ocr_noisy_signed_amount` | Thai OCR-like abbreviated columns with signed amount | date, description, amount, balance, channel, counterparty_account |
+
+### Results
+
+| Model | Text score | Text avg | Vision score | Vision avg | Notes |
+|---|---:|---:|---:|---:|---|
+| `gemma4:e2b` | 14 / 21 = 66.67% | 4,022.08 ms | 3 / 21 = 14.29% | 4,264.31 ms | Fast but unreliable for noisy mapping; vision often selected row values instead of column names, which BSIE safely filtered |
+| `gemma4:e4b` | 15 / 21 = 71.43% | 7,375.73 ms | 15 / 21 = 71.43% | 7,043.96 ms | Strong on clean fixtures, failed noisy OCR-like Thai fixture |
+| `gemma4:26b` | 21 / 21 = 100% | 8,520.42 ms | 21 / 21 = 100% | 6,688.96 ms | Best accuracy; passed clean, English signed amount, and noisy Thai OCR-like fixtures |
+
+### Follow-up Prompt Experiment
+
+An extra prompt constraint was tested to say every mapping value must be copied exactly from the column list and never from sample rows. It made `gemma4:e2b` and `gemma4:e4b` more conservative and reduced recall, so that prompt change was reverted. The service still keeps the safer structural controls: LLM output is cleaned against known columns, validation must pass, and the suggestion remains analyst-applied only.
+
+### Takeaways
+
+- Use `gemma4:26b` as the default mapping-assist model on this machine when `OLLAMA_MAPPING_MODEL` is not set.
+- Keep `gemma4:e4b` as the fast fallback / lightweight model, not the primary mapping assistant.
+- Treat `gemma4:e2b` as a triage candidate only; it is too lossy for evidence-sensitive mapping suggestions.
+- Vision mapping assist is viable with `gemma4:26b`, but should still remain suggestion-only and validation-gated.
+- This benchmark is still synthetic. Before any auto-apply behavior, expand fixtures with more Thai bank layouts, OCR noise, merged cells, balance anomalies, and ambiguous amount modes.
+
 ## 2026-04-24 — Gemma Variant Follow-up Sweep
 
 ### Environment

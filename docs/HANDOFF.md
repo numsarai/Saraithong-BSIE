@@ -9,11 +9,62 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `382 passed`, frontend `48 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `383 passed`, frontend `48 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Evidence Copilot Case Tag Evidence Summary
+## Done (latest session) — Evidence Copilot Case Tag Detail Navigation
+
+### What I changed
+- Added `GET /api/case-tags/{case_tag_id}` for read-only case-tag detail.
+- The detail endpoint returns linked objects with `object_type`, `object_id`, `citation_id`, label, summary, found/missing status, metadata, and safe scope hints.
+- Linked object detail resolves known records for files, parser runs, accounts, transactions, and alerts without mutating evidence.
+- Evidence Copilot now loads selected tag detail and displays linked evidence objects under the tag summary.
+- Added `Focus scope` actions for linked objects with file/run/account scope hints, keeping the selected case tag while narrowing the copilot scope.
+- Added backend regression coverage for detail navigation and extended the Investigation Desk test for linked object display/focus behavior.
+- Updated DEC-042 wording and the roadmap.
+
+### Files changed
+- `routers/case_tags.py`
+- `tests/test_case_tags_api.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `382 passed`
+  - `npm test -- --run` in `frontend/` -> `48 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile routers/case_tags.py tests/test_case_tags_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_case_tags_api.py -q` -> `2 passed`
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `5 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `383 passed`
+  - `npm test -- --run` in `frontend/` -> `48 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- No new DEC number. DEC-042 remains the governing decision; wording now includes linked-object detail/navigation.
+
+### Warnings / Next
+- Case tag detail is read-only navigation. Tags still remain scope filters, not evidence citation ids.
+- Detail is bounded to 200 links per request. A future slice can add search/filtering if tags become large.
+- Next useful slice: add search/filter for case tags or move toward the later local-first classification path.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Evidence Copilot Case Tag Evidence Summary
 
 ### What I changed
 - Enriched `GET /api/case-tags` with deterministic `linked_object_count` and `linked_object_counts` from `case_tag_links`.

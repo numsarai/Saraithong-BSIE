@@ -205,6 +205,26 @@ vi.mock('@/api', () => ({
       },
     ],
   })),
+  getCaseTagDetail: vi.fn(async () => ({
+    id: 'CASE-TAG-1',
+    tag: 'CASE-ALPHA',
+    description: 'Alpha evidence group',
+    created_at: '2026-03-31T02:00:00Z',
+    linked_object_count: 2,
+    linked_object_counts: { transaction: 1, alert: 1 },
+    links: [
+      {
+        link_id: 'LINK-TX-1',
+        object_type: 'transaction',
+        object_id: 'TX-1',
+        citation_id: 'txn:TX-1',
+        found: true,
+        label: 'OUT 1,000.00 THB',
+        summary: 'Transfer to suspect',
+        scope: { parser_run_id: 'RUN-1', file_id: 'FILE-1' },
+      },
+    ],
+  })),
   askCopilot: vi.fn(async () => ({
     status: 'ok',
     source: 'local_llm_investigation_copilot',
@@ -364,13 +384,17 @@ describe('InvestigationDesk date formatting', () => {
     fireEvent.change(screen.getByLabelText('Choose Case Tag'), { target: { value: 'CASE-TAG-1' } })
     expect(await screen.findByText('Alpha evidence group')).toBeInTheDocument()
     expect(await screen.findByText('2 linked · alert 1 · transaction 1')).toBeInTheDocument()
+    expect(await screen.findByText('txn:TX-1')).toBeInTheDocument()
+    expect(await screen.findByText('OUT 1,000.00 THB')).toBeInTheDocument()
+    expect(await screen.findByText('Transfer to suspect')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Focus scope' }))
     fireEvent.change(screen.getByLabelText('Analyst focus'), { target: { value: 'Review tagged evidence' } })
     fireEvent.click(screen.getByRole('button', { name: 'Ask Copilot' }))
 
     await waitFor(() => expect(askCopilot).toHaveBeenCalledWith({
       question: 'Review tagged evidence',
       task_mode: 'account_summary',
-      scope: { parser_run_id: '', file_id: '', account: '', case_tag_id: 'CASE-TAG-1', case_tag: 'CASE-ALPHA' },
+      scope: { parser_run_id: 'RUN-1', file_id: 'FILE-1', account: '', case_tag_id: 'CASE-TAG-1', case_tag: 'CASE-ALPHA' },
       operator: 'Case Reviewer',
       max_transactions: 20,
     }))

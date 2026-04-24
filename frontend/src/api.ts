@@ -359,8 +359,36 @@ export type CaseTagItem = {
   linked_object_counts?: Record<string, number>
 }
 
+export type CaseTagLinkedObject = {
+  link_id: string
+  object_type: string
+  object_id: string
+  citation_id?: string
+  created_at?: string | null
+  found?: boolean
+  label?: string
+  summary?: string
+  scope?: {
+    parser_run_id?: string
+    file_id?: string
+    account?: string
+  }
+  meta?: Record<string, unknown>
+}
+
+export type CaseTagDetail = CaseTagItem & {
+  links: CaseTagLinkedObject[]
+  limit?: number
+}
+
 export async function listCaseTags(): Promise<{ items: CaseTagItem[] }> {
   const r = await apiFetch('/api/case-tags')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function getCaseTagDetail(caseTagId: string): Promise<CaseTagDetail> {
+  const r = await apiFetch(`/api/case-tags/${encodeURIComponent(caseTagId)}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }

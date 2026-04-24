@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BrainCircuit, FileText, ListChecks, Loader2, ScrollText, Send, ShieldAlert, ShieldCheck } from 'lucide-react'
-import { askCopilot, listCaseTags, type CaseTagItem } from '@/api'
+import { BrainCircuit, FileText, ListChecks, Loader2, ScrollText, Send, ShieldAlert, ShieldCheck, Target } from 'lucide-react'
+import { askCopilot, getCaseTagDetail, listCaseTags, type CaseTagDetail, type CaseTagItem, type CaseTagLinkedObject } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -73,6 +73,9 @@ export function CopilotTab({
   const [caseTags, setCaseTags] = useState<CaseTagItem[]>([])
   const [isLoadingCaseTags, setIsLoadingCaseTags] = useState(false)
   const [caseTagError, setCaseTagError] = useState('')
+  const [caseTagDetail, setCaseTagDetail] = useState<CaseTagDetail | null>(null)
+  const [isLoadingCaseTagDetail, setIsLoadingCaseTagDetail] = useState(false)
+  const [caseTagDetailError, setCaseTagDetailError] = useState('')
   const [answer, setAnswer] = useState<any>(null)
   const [error, setError] = useState('')
 
@@ -131,12 +134,45 @@ export function CopilotTab({
   const selectedCaseTagId = caseTags.some((tag) => tag.id === scope.case_tag_id) ? scope.case_tag_id : ''
   const selectedCaseTag = caseTags.find((tag) => tag.id === selectedCaseTagId)
 
+  useEffect(() => {
+    if (!selectedCaseTagId) {
+      setCaseTagDetail(null)
+      setCaseTagDetailError('')
+      return
+    }
+    let cancelled = false
+    setIsLoadingCaseTagDetail(true)
+    setCaseTagDetailError('')
+    getCaseTagDetail(selectedCaseTagId)
+      .then((payload) => {
+        if (!cancelled) setCaseTagDetail(payload)
+      })
+      .catch((err: any) => {
+        if (!cancelled) setCaseTagDetailError(err.message || String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingCaseTagDetail(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedCaseTagId])
+
   const selectCaseTag = (caseTagId: string) => {
     const tag = caseTags.find((item) => item.id === caseTagId)
     setScope((state) => ({
       ...state,
       case_tag_id: tag?.id || '',
       case_tag: tag?.tag || '',
+    }))
+  }
+
+  const focusLinkedScope = (linked: CaseTagLinkedObject) => {
+    setScope((state) => ({
+      ...state,
+      parser_run_id: linked.scope?.parser_run_id ?? state.parser_run_id,
+      file_id: linked.scope?.file_id ?? state.file_id,
+      account: linked.scope?.account ?? state.account,
     }))
   }
 
@@ -253,6 +289,54 @@ export function CopilotTab({
             {selectedCaseTag.description && (
               <div className="mt-1 text-sm text-muted">{selectedCaseTag.description}</div>
             )}
+            <div className="mt-3 border-t border-border pt-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                {t('investigation.copilot.caseTagLinkedObjects')}
+              </div>
+              {isLoadingCaseTagDetail && (
+                <div className="flex items-center gap-2 text-sm text-muted">
+                  <Loader2 size={14} className="animate-spin" />
+                  {t('investigation.copilot.caseTagDetailLoading')}
+                </div>
+              )}
+              {caseTagDetailError && (
+                <div className="text-sm text-danger">
+                  {t('investigation.copilot.caseTagDetailFailed')}
+                </div>
+              )}
+              {!isLoadingCaseTagDetail && !caseTagDetailError && caseTagDetail && (
+                <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-surface">
+                  {caseTagDetail.links.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-muted">{t('investigation.copilot.caseTagNoLinks')}</div>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {caseTagDetail.links.map((linked) => {
+                        const canFocus = Boolean(linked.scope?.parser_run_id || linked.scope?.file_id || linked.scope?.account)
+                        return (
+                          <div key={linked.link_id} className="flex flex-col gap-2 px-3 py-2 md:flex-row md:items-start md:justify-between">
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge>{linked.object_type}</Badge>
+                                <span className="font-mono text-xs text-muted">{linked.citation_id || linked.object_id}</span>
+                                {linked.found === false && <Badge variant="yellow">{t('investigation.copilot.caseTagMissingObject')}</Badge>}
+                              </div>
+                              <div className="text-sm font-semibold text-text">{linked.label || linked.object_id}</div>
+                              {linked.summary && <div className="text-sm text-muted">{linked.summary}</div>}
+                            </div>
+                            {canFocus && (
+                              <Button size="sm" variant="ghost" onClick={() => focusLinkedScope(linked)}>
+                                <Target size={14} />
+                                {t('investigation.copilot.caseTagFocusScope')}
+                              </Button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

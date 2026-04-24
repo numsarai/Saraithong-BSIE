@@ -71,6 +71,7 @@ export function CopilotTab({
   const [maxTransactions, setMaxTransactions] = useState('20')
   const [isAsking, setIsAsking] = useState(false)
   const [caseTags, setCaseTags] = useState<CaseTagItem[]>([])
+  const [caseTagQuery, setCaseTagQuery] = useState('')
   const [isLoadingCaseTags, setIsLoadingCaseTags] = useState(false)
   const [caseTagError, setCaseTagError] = useState('')
   const [caseTagDetail, setCaseTagDetail] = useState<CaseTagDetail | null>(null)
@@ -133,6 +134,24 @@ export function CopilotTab({
 
   const selectedCaseTagId = caseTags.some((tag) => tag.id === scope.case_tag_id) ? scope.case_tag_id : ''
   const selectedCaseTag = caseTags.find((tag) => tag.id === selectedCaseTagId)
+  const filteredCaseTags = useMemo(() => {
+    const query = caseTagQuery.trim().toLowerCase()
+    if (!query) return caseTags
+    return caseTags.filter((tag) => {
+      const searchable = [
+        tag.tag,
+        tag.description || '',
+        ...Object.keys(tag.linked_object_counts || {}),
+      ].join(' ').toLowerCase()
+      return searchable.includes(query)
+    })
+  }, [caseTagQuery, caseTags])
+  const caseTagsForPicker = useMemo(() => {
+    if (!selectedCaseTag || filteredCaseTags.some((tag) => tag.id === selectedCaseTag.id)) {
+      return filteredCaseTags
+    }
+    return [selectedCaseTag, ...filteredCaseTags]
+  }, [filteredCaseTags, selectedCaseTag])
 
   useEffect(() => {
     if (!selectedCaseTagId) {
@@ -236,6 +255,15 @@ export function CopilotTab({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.caseTagFilter')}
+            <input
+              value={caseTagQuery}
+              onChange={(event) => setCaseTagQuery(event.target.value)}
+              placeholder={t('investigation.copilot.caseTagFilterPlaceholder')}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
             {t('investigation.copilot.caseTagPicker')}
             <select
               value={selectedCaseTagId}
@@ -244,9 +272,9 @@ export function CopilotTab({
               className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="">
-                {isLoadingCaseTags ? t('investigation.copilot.caseTagLoading') : t('investigation.copilot.caseTagSelect')}
+                {isLoadingCaseTags ? t('investigation.copilot.caseTagLoading') : t('investigation.copilot.caseTagSelect', { count: filteredCaseTags.length })}
               </option>
-              {caseTags.map((tag) => (
+              {caseTagsForPicker.map((tag) => (
                 <option key={tag.id} value={tag.id}>
                   {tag.tag}
                 </option>

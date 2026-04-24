@@ -13,7 +13,50 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Evidence Copilot Case Tag Detail Navigation
+## Done (latest session) — Evidence Copilot Case Tag Search
+
+### What I changed
+- Added a Case Tag filter input to Evidence Copilot.
+- The filter matches tag name, description, and linked object type names from `linked_object_counts`.
+- The picker count reflects the filtered result set and keeps the selected tag visible even if it no longer matches the current query.
+- Extended Investigation Desk coverage to verify filtering keeps `CASE-ALPHA` and hides `CASE-BETA` before selection.
+- Updated DEC-042 wording and the roadmap to call the picker searchable.
+
+### Files changed
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `383 passed`
+  - `npm test -- --run` in `frontend/` -> `48 passed`
+- Focused:
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `5 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `383 passed`
+  - `npm test -- --run` in `frontend/` -> `48 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- No new DEC number. DEC-042 remains the governing decision; wording now describes the picker as searchable.
+
+### Warnings / Next
+- Filtering is client-side over the fetched tag list. If case-tag volume becomes very large, add backend `q`/pagination support to `/api/case-tags`.
+- Next useful slice: move toward the later local-first classification path, or add backend pagination/search if real tag volume demands it.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Evidence Copilot Case Tag Detail Navigation
 
 ### What I changed
 - Added `GET /api/case-tags/{case_tag_id}` for read-only case-tag detail.

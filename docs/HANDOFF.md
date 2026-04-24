@@ -13,7 +13,41 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Evidence Preview Links From Account Presence
+## Done (latest session) — Inline Evidence Preview Drawer
+
+### What I changed
+- Step 2 account-presence location cards now open an inline evidence preview drawer instead of only linking to a new tab.
+- The drawer embeds the existing `/api/files/{file_id}/evidence-preview` URL and keeps the PDF `#page=N` fragment when page lineage is present.
+- The drawer shows the selected match metadata next to the evidence: source region, match type, OCR confidence, page/token/row/column label, OCR x/y position, and raw preview.
+- The drawer still includes an `Open in new tab` link for analysts who need a larger browser view.
+- Updated the OCR lineage frontend regression to assert the drawer URL and metadata.
+
+### Files changed
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `372 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `13 passed`
+- Focused:
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `13 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+- Full verification:
+  - `npm test -- --run` in `frontend/` -> `46 passed`
+
+### Decisions made
+- No new architecture decision. This is the UI drawer implementation of the preview policy recorded in DEC-033.
+
+### Warnings / Next
+- The drawer embeds the source PDF/image but does not yet draw OCR bounding-box overlays on top of the document.
+- The next useful slice is either OCR box highlight overlay for image previews or Phase 4 investigation copilot scope locking.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Evidence Preview Links From Account Presence
 
 ### What I changed
 - Added `/api/files/{file_id}/evidence-preview` in `routers/results.py`.

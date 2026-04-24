@@ -8,7 +8,7 @@ import { Card, CardTitle } from '@/components/ui/card'
 import { BankLogo } from '@/components/BankLogo'
 import { evaluateReviewGate } from '@/lib/reviewGate'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Wand2, X, BookPlus, ArrowRight, ArrowLeftRight, Building2, Wallet, CircleDashed, FileSearch, BrainCircuit, DatabaseZap, ShieldAlert, ShieldCheck, Sparkles, Loader2, ExternalLink } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Wand2, X, BookPlus, ArrowRight, ArrowLeftRight, Building2, Wallet, CircleDashed, FileSearch, BrainCircuit, DatabaseZap, ShieldAlert, ShieldCheck, Sparkles, Loader2, ExternalLink, Eye } from 'lucide-react'
 
 export function Step2Map() {
   const { t } = useTranslation()
@@ -45,6 +45,7 @@ export function Step2Map() {
   const [assistLoading, setAssistLoading] = useState(false)
   const [mappingAssist, setMappingAssist] = useState<any | null>(null)
   const [presenceLoading, setPresenceLoading] = useState(false)
+  const [evidencePreview, setEvidencePreview] = useState<{ location: any; title: string; tone: 'green' | 'yellow' } | null>(null)
 
   useEffect(() => {
     getBanks().then(setBanks).catch((e) => toast.error(`Could not load banks: ${e.message}`))
@@ -164,6 +165,7 @@ export function Step2Map() {
       return
     }
     setPresenceLoading(true)
+    setEvidencePreview(null)
     try {
       const result = await verifyAccountPresence({
         file_id: fileId,
@@ -454,6 +456,7 @@ export function Step2Map() {
                   setServerPreview(null)
                   setMappingAssist(null)
                   setAccountPresence(null)
+                  setEvidencePreview(null)
                   setAccount(e.target.value.replace(/\D/g, '').slice(0, 12))
                 }}
                 placeholder="10 or 12 digits"
@@ -522,6 +525,7 @@ export function Step2Map() {
                     locations={exactPresenceLocations}
                     tone="green"
                     fileId={previewableEvidenceFileId}
+                    onPreview={(location, title, tone) => setEvidencePreview({ location, title, tone })}
                   />
                 )}
                 {possiblePresenceLocations.length > 0 && (
@@ -530,6 +534,7 @@ export function Step2Map() {
                     locations={possiblePresenceLocations}
                     tone="yellow"
                     fileId={previewableEvidenceFileId}
+                    onPreview={(location, title, tone) => setEvidencePreview({ location, title, tone })}
                   />
                 )}
               </div>
@@ -1110,6 +1115,16 @@ export function Step2Map() {
         </Button>
       </div>
 
+      {evidencePreview && previewableEvidenceFileId && (
+        <EvidencePreviewDrawer
+          fileId={previewableEvidenceFileId}
+          location={evidencePreview.location}
+          title={evidencePreview.title}
+          tone={evidencePreview.tone}
+          onClose={() => setEvidencePreview(null)}
+        />
+      )}
+
       {/* Learn New Bank Modal */}
       {learnOpen && (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4"
@@ -1306,11 +1321,13 @@ function AccountPresenceLocationList({
   locations,
   tone,
   fileId,
+  onPreview,
 }: {
   title: string
   locations: any[]
   tone: 'green' | 'yellow'
   fileId?: string | null
+  onPreview?: (location: any, title: string, tone: 'green' | 'yellow') => void
 }) {
   const toneClasses = tone === 'green'
     ? 'border-success/20 bg-success/[0.06]'
@@ -1341,20 +1358,120 @@ function AccountPresenceLocationList({
             {location.value_preview && (
               <div className="mt-1 truncate text-[11px] text-text2">Preview: {String(location.value_preview)}</div>
             )}
-            {fileId && (
-              <a
-                href={evidencePreviewUrl(fileId, location.page_number)}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-text2 hover:border-accent hover:text-accent"
+            {fileId && onPreview && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-2 min-h-[28px] px-2 py-0.5 text-[11px]"
+                onClick={() => onPreview(location, title, tone)}
               >
-                <ExternalLink size={12} />
-                Open evidence
-              </a>
+                <Eye size={12} />
+                Preview evidence
+              </Button>
             )}
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function EvidencePreviewDrawer({
+  fileId,
+  location,
+  title,
+  tone,
+  onClose,
+}: {
+  fileId: string
+  location: any
+  title: string
+  tone: 'green' | 'yellow'
+  onClose: () => void
+}) {
+  const previewUrl = evidencePreviewUrl(fileId, location.page_number)
+  const confidence = formatOcrConfidence(location.ocr_confidence)
+  const position = formatOcrPosition(location)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Evidence preview"
+        className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-2xl"
+        onClick={event => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="!mb-0">Evidence Preview</CardTitle>
+              <Badge variant={tone}>{title}</Badge>
+            </div>
+            <div className="mt-1 text-xs text-muted">{formatPresenceLocationTitle(location)}</div>
+          </div>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close evidence preview">
+            <X size={14} />
+          </Button>
+        </div>
+
+        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-h-[420px] bg-black/20">
+            <iframe
+              title="Evidence preview frame"
+              src={previewUrl}
+              className="h-full min-h-[420px] w-full border-0 bg-white"
+            />
+          </div>
+          <div className="overflow-y-auto border-t border-border bg-surface2/50 p-4 md:border-l md:border-t-0">
+            <div className="space-y-3">
+              <div>
+                <div className="text-[11px] uppercase text-muted font-semibold">Match</div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  <Badge variant={tone}>{formatEvidenceItem(location.source_region || 'table')}</Badge>
+                  <Badge variant="gray">{formatEvidenceItem(location.match_type || 'match')}</Badge>
+                  {confidence && <Badge variant="blue">OCR confidence {confidence}</Badge>}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-surface p-3 text-xs">
+                <EvidenceDetail label="Location" value={formatPresenceLocationTitle(location)} />
+                <EvidenceDetail label="Column" value={location.column_label ? formatEvidenceItem(location.column_label) : ''} />
+                <EvidenceDetail label="Zone" value={location.row_zone ? formatEvidenceItem(location.row_zone) : ''} />
+                <EvidenceDetail label="Position" value={position} />
+              </div>
+
+              {location.value_preview && (
+                <div className="rounded-lg border border-border bg-surface p-3">
+                  <div className="text-[11px] uppercase text-muted font-semibold">Raw Preview</div>
+                  <div className="mt-1 break-words font-mono text-xs text-text2">{String(location.value_preview)}</div>
+                </div>
+              )}
+
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-[32px] items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-text2 hover:border-accent hover:text-accent"
+              >
+                <ExternalLink size={13} />
+                Open in new tab
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EvidenceDetail({ label, value }: { label: string; value: string }) {
+  if (!value) return null
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-2 last:border-b-0">
+      <span className="text-muted">{label}</span>
+      <span className="text-right text-text2">{value}</span>
     </div>
   )
 }

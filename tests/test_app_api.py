@@ -1506,6 +1506,46 @@ def test_mapping_variants_endpoints_list_and_promote():
     promote_template_variant.assert_called_once()
     assert record_learning_feedback.call_args.kwargs["learning_domain"] == "bank_template_variant"
 
+    with (
+        patch("routers.ingestion.list_template_variants", return_value=[{
+            "variant_id": "VARIANT-TRUSTED",
+            "bank_key": "scb",
+            "trust_state": "trusted",
+            "notes": "",
+            "auto_pass_gate": {"rollback_reasons": ["trusted_correction_rate_high"]},
+        }]),
+        patch(
+            "routers.ingestion.mark_template_variant_rollback_review",
+            return_value={
+                "variant_id": "VARIANT-TRUSTED",
+                "bank_key": "scb",
+                "trust_state": "trusted",
+                "confirmation_count": 3,
+                "correction_count": 2,
+                "reviewer_count": 2,
+                "notes": "[rollback_review] 2026-04-24 by reviewer.two: high correction rate",
+                "rollback_review_marked": True,
+                "auto_pass_gate": {
+                    "rollback_reasons": ["trusted_correction_rate_high"],
+                    "rollback_recommended": True,
+                },
+            },
+        ) as mark_template_variant_rollback_review,
+        patch("routers.ingestion.record_learning_feedback") as record_learning_feedback,
+        patch("routers.ingestion.get_db_session", side_effect=_fake_db_session),
+    ):
+        response = client.post(
+            "/api/mapping/variants/VARIANT-TRUSTED/rollback-review",
+            json={"reviewer": "reviewer.two", "note": "high correction rate"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["variant"]["trust_state"] == "trusted"
+    assert response.json()["variant"]["rollback_review_marked"] is True
+    mark_template_variant_rollback_review.assert_called_once()
+    assert record_learning_feedback.call_args.kwargs["action_type"] == "template_variant_rollback_review"
+    assert record_learning_feedback.call_args.kwargs["extra_context"]["demoted"] is False
+
 
 def test_learning_feedback_endpoint_uses_dedicated_query_helper():
     with patch("routers.exports.list_learning_feedback_logs", return_value=[{"id": "LF-1"}]) as list_learning_feedback_logs:

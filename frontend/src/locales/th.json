@@ -451,7 +451,12 @@
       "summaryReady": "พร้อม {{count}}",
       "summaryBlocked": "ถูกกั้น {{count}}",
       "summaryRollback": "ทบทวน rollback {{count}}",
-      "topBlocker": "blocker หลัก: {{reason}} ({{count}})"
+      "topBlocker": "blocker หลัก: {{reason}} ({{count}})",
+      "markRollbackReview": "บันทึกให้ทบทวน rollback",
+      "markingRollback": "กำลังบันทึก rollback",
+      "rollbackMarked": "บันทึกให้ทบทวน rollback แล้ว",
+      "rollbackNotePlaceholder": "เหตุผลการทบทวน rollback",
+      "rollbackNoteRequired": "กรุณาระบุเหตุผลการทบทวน rollback"
     },
     "toast": {
       "keyRequired": "กรุณาระบุคีย์ธนาคาร",

@@ -173,6 +173,22 @@ export async function promoteMappingVariant(
   return r.json()
 }
 
+export async function markMappingVariantRollbackReview(
+  variantId: string,
+  payload: {
+    reviewer: string
+    note: string
+  },
+) {
+  const r = await apiFetch(`/api/mapping/variants/${encodeURIComponent(variantId)}/rollback-review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function startProcess(payload: {
   temp_file_path?: string
   file_id?: string | null

@@ -64,6 +64,11 @@ class TemplateVariantPromotionRequest(BaseModel):
     note: str = ""
 
 
+class TemplateVariantRollbackReviewRequest(BaseModel):
+    reviewer: str = "analyst"
+    note: str = ""
+
+
 class ProcessRequest(BaseModel):
     temp_file_path: str | None = None
     file_id: str | None = None

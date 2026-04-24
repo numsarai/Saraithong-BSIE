@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { createBank, deleteBank, getBank, getBankLogoCatalog, getBanks, listMappingVariants, promoteMappingVariant } from '@/api'
+import { createBank, deleteBank, getBank, getBankLogoCatalog, getBanks, listMappingVariants, markMappingVariantRollbackReview, promoteMappingVariant } from '@/api'
 import { normalizeOperatorName, useStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -96,6 +96,8 @@ type TemplateVariant = {
   updated_at?: string | null
   last_confirmed_at?: string | null
   promoted_by?: string
+  rollback_review_marked?: boolean
+  rollback_review_note?: string
 }
 
 type AutoPassSummary = {
@@ -341,6 +343,7 @@ function TemplateVariantsPanel({ bankKey, operatorName }: { bankKey: string; ope
   const [trustFilter, setTrustFilter] = useState('')
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [promotingId, setPromotingId] = useState<string | null>(null)
+  const [markingRollbackId, setMarkingRollbackId] = useState<string | null>(null)
   const variantsQuery = useQuery({
     queryKey: ['mapping-variants', bankKey, trustFilter],
     queryFn: () => listMappingVariants({ bank: bankKey, trust_state: trustFilter, limit: 100 }),
@@ -376,6 +379,32 @@ function TemplateVariantsPanel({ bankKey, operatorName }: { bankKey: string; ope
       toast.error(e.message)
     } finally {
       setPromotingId(null)
+    }
+  }
+
+  const handleMarkRollbackReview = async (variant: TemplateVariant) => {
+    const note = (notes[variant.variant_id] || '').trim()
+    if (!note) {
+      toast.error(t('bankManager.variants.rollbackNoteRequired'))
+      return
+    }
+    if (!reviewerCanPromote) {
+      toast.error(t('bankManager.variants.namedReviewerRequired'))
+      return
+    }
+    setMarkingRollbackId(variant.variant_id)
+    try {
+      await markMappingVariantRollbackReview(variant.variant_id, {
+        reviewer,
+        note,
+      })
+      toast.success(t('bankManager.variants.rollbackMarked'))
+      setNotes(current => ({ ...current, [variant.variant_id]: '' }))
+      await variantsQuery.refetch()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setMarkingRollbackId(null)
     }
   }
 
@@ -464,6 +493,7 @@ function TemplateVariantsPanel({ bankKey, operatorName }: { bankKey: string; ope
           const blockedReasons = Array.isArray(autoPassGate?.blocked_reasons) ? autoPassGate.blocked_reasons : []
           const rollbackReasons = Array.isArray(autoPassGate?.rollback_reasons) ? autoPassGate.rollback_reasons : []
           const gateStatusTone = autoPassGate?.rollback_recommended ? 'yellow' : autoPassGate?.would_auto_pass ? 'green' : 'gray'
+          const canMarkRollbackReview = variant.trust_state === 'trusted' && Boolean(autoPassGate?.rollback_recommended)
           return (
             <div key={variant.variant_id} className="rounded-lg border border-border bg-surface2/40 p-3">
               <div className="flex items-start justify-between gap-3">
@@ -571,7 +601,34 @@ function TemplateVariantsPanel({ bankKey, operatorName }: { bankKey: string; ope
                     </Button>
                   </div>
                 ) : (
-                  <Badge variant="green">{t('bankManager.variants.noPromotionNeeded')}</Badge>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {variant.rollback_review_marked && (
+                      <Badge variant="yellow">{t('bankManager.variants.rollbackMarked')}</Badge>
+                    )}
+                    {canMarkRollbackReview && !variant.rollback_review_marked ? (
+                      <>
+                        <input
+                          value={notes[variant.variant_id] || ''}
+                          onChange={event => setNotes(current => ({ ...current, [variant.variant_id]: event.target.value }))}
+                          placeholder={t('bankManager.variants.rollbackNotePlaceholder')}
+                          className="bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text focus:border-accent outline-none w-56"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleMarkRollbackReview(variant)}
+                          disabled={!reviewerCanPromote || markingRollbackId === variant.variant_id}
+                        >
+                          <ShieldAlert size={12} />
+                          {markingRollbackId === variant.variant_id
+                            ? t('bankManager.variants.markingRollback')
+                            : t('bankManager.variants.markRollbackReview')}
+                        </Button>
+                      </>
+                    ) : !variant.rollback_review_marked ? (
+                      <Badge variant="green">{t('bankManager.variants.noPromotionNeeded')}</Badge>
+                    ) : null}
+                  </div>
                 )}
               </div>
             </div>

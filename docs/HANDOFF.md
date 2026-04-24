@@ -9,11 +9,66 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `393 passed`, frontend `52 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `394 passed`, frontend `52 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 5 Aggregate Gate Metrics
+## Done (latest session) — Phase 5 Rollback Review Marking
+
+### What I changed
+- Added an audited rollback-review marking workflow for risky trusted template variants without demoting the variant or enabling auto-pass.
+- `POST /api/mapping/variants/{variant_id}/rollback-review` now requires a named reviewer and note, verifies that the variant is trusted and currently has observe-only rollback risk, appends a structured rollback-review marker to notes, and records learning feedback.
+- Template variant payloads now expose `rollback_review_marked` and `rollback_review_note` derived from existing notes.
+- Bank Manager now shows a rollback-review note/action for trusted variants whose gate recommends rollback review, and shows a marked badge after review is recorded.
+- Added DEC-052, roadmap status, English/Thai labels, backend service/API tests, and frontend coverage.
+
+### Files changed
+- `services/template_variant_service.py`
+- `persistence/schemas.py`
+- `routers/ingestion.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/BankManager.tsx`
+- `frontend/src/components/BankManager.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `tests/test_template_variant_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `393 passed`
+  - `npm test -- --run` in `frontend/` -> `52 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/template_variant_service.py routers/ingestion.py persistence/schemas.py tests/test_template_variant_service.py tests/test_app_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_template_variant_service.py tests/test_app_api.py::test_mapping_variants_endpoints_list_and_promote -q` -> `9 passed`
+  - `npm test -- --run src/components/BankManager.test.tsx` in `frontend/` -> `2 passed`
+  - `npm run build` in `frontend/` -> passed
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `394 passed`
+  - `npm test -- --run` in `frontend/` -> `52 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-052: rollback review marks risky trusted variants without demotion.
+- Rollback review is a durable review signal only; it does not change `trust_state`, does not mutate raw evidence, and does not enable `auto_pass_eligible`.
+
+### Warnings / Next
+- Rollback-review markers are currently persisted in `notes` and derived in the response. A future stronger workflow can add a dedicated review table or demotion endpoint if policy requires it.
+- No actual auto-pass is enabled yet. `auto_pass_eligible` remains `false` everywhere.
+- Next useful slice: define the sign-off/demotion policy for marked trusted variants, or add a whole-database mapping-variant metrics endpoint if reviewers need metrics independent of current list filters.
+
+### Failed attempts
+- Frontend focused test initially treated `Auto-pass Gate` as a unique label after adding a second variant fixture; fixed the assertion to expect both rows.
+
+### Environment changes
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but generated dist files remain untracked.
+
+## Done (previous session) — Phase 5 Aggregate Gate Metrics
 
 ### What I changed
 - Added aggregate auto-pass gate summaries for template variants without enabling auto-pass.

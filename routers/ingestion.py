@@ -28,7 +28,7 @@ from core.pdf_loader import parse_pdf_file
 from core.subject_inference import infer_subject_identity_from_frames
 from database import db_create_job
 from persistence.base import get_db_session
-from persistence.schemas import AccountPresenceRequest, MappingAssistRequest, MappingConfirmRequest, MappingPreviewRequest, MappingVisionAssistRequest, ProcessRequest, TemplateVariantPromotionRequest
+from persistence.schemas import AccountPresenceRequest, MappingAssistRequest, MappingConfirmRequest, MappingPreviewRequest, MappingVisionAssistRequest, ProcessRequest, TemplateVariantPromotionRequest, TemplateVariantRollbackReviewRequest
 from services.audit_service import record_learning_feedback
 from services.account_presence_service import verify_account_presence
 from services.file_ingestion_service import get_file_record, persist_upload
@@ -40,6 +40,7 @@ from services.template_variant_service import (
     build_auto_pass_gate,
     find_matching_template_variant,
     list_template_variants,
+    mark_template_variant_rollback_review,
     promote_template_variant,
     summarize_auto_pass_gates,
     upsert_template_variant,
@@ -803,6 +804,52 @@ async def api_promote_mapping_variant(variant_id: str, body: TemplateVariantProm
                     "confirmation_count": variant["confirmation_count"],
                     "correction_count": variant["correction_count"],
                     "reviewer_count": variant["reviewer_count"],
+                },
+            )
+            session.commit()
+        return JSONResponse({"status": "ok", "variant": variant})
+    except Exception as exc:
+        raise _template_variant_error(exc) from exc
+
+
+@router.post("/mapping/variants/{variant_id}/rollback-review")
+async def api_mark_mapping_variant_rollback_review(variant_id: str, body: TemplateVariantRollbackReviewRequest):
+    try:
+        with get_db_session() as session:
+            before = next((item for item in list_template_variants(session, limit=500) if item["variant_id"] == variant_id), None)
+            variant = mark_template_variant_rollback_review(
+                session,
+                variant_id=variant_id,
+                reviewer=body.reviewer,
+                note=body.note,
+            )
+            record_learning_feedback(
+                session,
+                learning_domain="bank_template_variant",
+                action_type="template_variant_rollback_review",
+                source_object_type="bank_template_variant",
+                source_object_id=variant_id,
+                feedback_status="rollback_review",
+                changed_by=body.reviewer,
+                old_value={
+                    "trust_state": before["trust_state"],
+                    "notes": before.get("notes", ""),
+                    "auto_pass_gate": before.get("auto_pass_gate"),
+                } if before else None,
+                new_value={
+                    "trust_state": variant["trust_state"],
+                    "notes": variant.get("notes", ""),
+                    "rollback_review_marked": variant.get("rollback_review_marked", False),
+                },
+                reason=body.note,
+                extra_context={
+                    "bank": variant["bank_key"],
+                    "confirmation_count": variant["confirmation_count"],
+                    "correction_count": variant["correction_count"],
+                    "reviewer_count": variant["reviewer_count"],
+                    "auto_pass_gate": variant.get("auto_pass_gate"),
+                    "rollback_reasons": (variant.get("auto_pass_gate") or {}).get("rollback_reasons", []),
+                    "demoted": False,
                 },
             )
             session.commit()

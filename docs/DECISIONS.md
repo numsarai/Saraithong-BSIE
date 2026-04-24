@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-052: Rollback review marks risky trusted variants without demotion
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** DEC-050 and DEC-051 expose rollback risk for trusted template variants, but reviewers still had no audited action to mark a risky trusted variant for follow-up before any real auto-pass rollout. Automatically demoting trusted mappings at this point would be too aggressive because older trusted variants may need human interpretation and evidence review.
+- **Decision:** Add an audited rollback-review mark for bank template variants. The backend requires a named reviewer, a non-empty note, `trust_state="trusted"`, and an observe-only gate with `rollback_recommended=true`. The action appends a structured rollback-review marker to the existing variant notes, returns `rollback_review_marked`/`rollback_review_note`, records learning feedback, and intentionally keeps the trust state unchanged.
+- **Alternatives:** (1) Automatically demote risky trusted variants -- safer for future automation, but too destructive before reviewer sign-off policy exists. (2) Add a direct demote endpoint now -- useful later, but it needs stronger review/history rules. (3) Leave rollback risk as telemetry only -- low implementation risk, but gives reviewers no durable workflow signal.
+- **Consequences:** Reviewers can flag risky trusted variants for rollback/demotion review without mutating raw evidence or changing current suggestion behavior. Future demotion or auto-pass enforcement can build on the marker and learning-feedback audit trail.
+
 ### DEC-051: Variant gate summaries aggregate Phase 5 readiness by bank and state
 - **Date:** 2026-04-24
 - **Status:** accepted

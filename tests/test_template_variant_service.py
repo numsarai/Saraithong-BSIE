@@ -8,6 +8,7 @@ from services.template_variant_service import (
     build_auto_pass_gate,
     find_matching_template_variant,
     list_template_variants,
+    mark_template_variant_rollback_review,
     promote_template_variant,
     summarize_auto_pass_gates,
     upsert_template_variant,
@@ -264,3 +265,35 @@ def test_manual_promotion_requires_named_reviewer_and_lists_variants(tmp_path):
     assert promoted["promoted_by"] == "reviewer.two"
     assert len(items) == 1
     assert items[0]["variant_id"] == variant["variant_id"]
+
+
+def test_mark_template_variant_rollback_review_keeps_trust_state_and_marks_notes(tmp_path):
+    factory = _session_factory(tmp_path)
+    with factory() as session:
+        for reviewer in ("reviewer.one", "reviewer.two", "reviewer.two"):
+            variant = upsert_template_variant(
+                session,
+                bank_key="scb",
+                columns=["date", "description", "amount"],
+                mapping={"date": "date", "description": "description", "amount": "amount"},
+                reviewer=reviewer,
+                dry_run_summary={"valid_transaction_rows": 3},
+            )
+        row = session.get(BankTemplateVariant, variant["variant_id"])
+        row.correction_count = 2
+        row.notes = "manual promotion note"
+        session.flush()
+
+        marked = mark_template_variant_rollback_review(
+            session,
+            variant_id=variant["variant_id"],
+            reviewer="reviewer.three",
+            note="Correction rate exceeded observe-only gate.",
+        )
+        session.commit()
+
+    assert marked["trust_state"] == "trusted"
+    assert marked["rollback_review_marked"] is True
+    assert "[rollback_review]" in marked["notes"]
+    assert "Correction rate exceeded observe-only gate." in marked["rollback_review_note"]
+    assert marked["auto_pass_gate"]["rollback_recommended"] is True

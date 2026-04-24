@@ -19,6 +19,7 @@ AUTO_PASS_MIN_VALID_ROWS = 1
 AUTO_PASS_MIN_BANK_CONFIDENCE = 0.90
 AUTO_PASS_MIN_MATCH_SCORE = 0.99
 AUTO_PASS_ALLOWED_MATCH_TYPES = {"ordered_signature"}
+ROLLBACK_REVIEW_MARKER = "[rollback_review]"
 
 
 def normalize_source_type(value: str | None) -> str:
@@ -65,6 +66,26 @@ def _reviewers(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item or "").strip() for item in value if str(item or "").strip()]
+
+
+def _is_named_reviewer(value: str) -> bool:
+    clean = str(value or "").strip()
+    return bool(clean) and clean.lower() not in {"analyst", "unknown"}
+
+
+def _latest_rollback_review_note(notes: str | None) -> str:
+    marker_lines = [
+        line.strip()
+        for line in str(notes or "").splitlines()
+        if ROLLBACK_REVIEW_MARKER in line
+    ]
+    return marker_lines[-1] if marker_lines else ""
+
+
+def _append_rollback_review_note(existing_notes: str | None, *, reviewer: str, note: str) -> str:
+    line = f"{ROLLBACK_REVIEW_MARKER} {utcnow().isoformat()} by {reviewer}: {note}"
+    existing = str(existing_notes or "").strip()
+    return f"{existing}\n{line}" if existing else line
 
 
 def _next_trust_state(
@@ -493,7 +514,7 @@ def promote_template_variant(
     if clean_state not in TRUST_STATES:
         raise ValueError(f"Invalid trust state: {target_state}")
     clean_reviewer = str(reviewer or "").strip()
-    if not clean_reviewer or clean_reviewer.lower() in {"analyst", "unknown"}:
+    if not _is_named_reviewer(clean_reviewer):
         raise PermissionError("Template variant promotion requires a named reviewer")
 
     row = session.get(BankTemplateVariant, variant_id)
@@ -509,6 +530,37 @@ def promote_template_variant(
     row.promoted_by = clean_reviewer
     row.updated_at = row.promoted_at
     row.notes = note or row.notes
+    session.add(row)
+    session.flush()
+    return variant_to_dict(row)
+
+
+def mark_template_variant_rollback_review(
+    session: Session,
+    *,
+    variant_id: str,
+    reviewer: str,
+    note: str,
+) -> dict:
+    clean_reviewer = str(reviewer or "").strip()
+    if not _is_named_reviewer(clean_reviewer):
+        raise PermissionError("Template variant rollback review requires a named reviewer")
+    clean_note = str(note or "").strip()
+    if not clean_note:
+        raise ValueError("Template variant rollback review requires a note")
+
+    row = session.get(BankTemplateVariant, variant_id)
+    if not row:
+        raise LookupError("Template variant not found")
+    variant = variant_to_dict(row)
+    gate = variant.get("auto_pass_gate") or {}
+    if variant.get("trust_state") != "trusted":
+        raise ValueError("Rollback review can only be marked for trusted template variants")
+    if not gate.get("rollback_recommended"):
+        raise ValueError("Rollback review requires an auto-pass gate rollback recommendation")
+
+    row.notes = _append_rollback_review_note(row.notes, reviewer=clean_reviewer, note=clean_note)
+    row.updated_at = utcnow()
     session.add(row)
     session.flush()
     return variant_to_dict(row)
@@ -544,6 +596,8 @@ def variant_to_dict(row: BankTemplateVariant) -> dict:
         "promoted_at": row.promoted_at.isoformat() if row.promoted_at else None,
         "promoted_by": row.promoted_by or "",
         "notes": row.notes or "",
+        "rollback_review_marked": ROLLBACK_REVIEW_MARKER in str(row.notes or ""),
+        "rollback_review_note": _latest_rollback_review_note(row.notes),
     }
     result["auto_pass_gate"] = build_auto_pass_gate(result)
     result["auto_pass_eligible"] = False

@@ -451,7 +451,12 @@
       "summaryReady": "{{count}} ready",
       "summaryBlocked": "{{count}} blocked",
       "summaryRollback": "{{count}} rollback review",
-      "topBlocker": "Top blocker: {{reason}} ({{count}})"
+      "topBlocker": "Top blocker: {{reason}} ({{count}})",
+      "markRollbackReview": "Mark rollback review",
+      "markingRollback": "Marking rollback",
+      "rollbackMarked": "Rollback review marked",
+      "rollbackNotePlaceholder": "Rollback review note",
+      "rollbackNoteRequired": "Rollback review requires a note."
     },
     "toast": {
       "keyRequired": "Key is required",

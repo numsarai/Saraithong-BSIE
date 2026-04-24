@@ -73,6 +73,8 @@ class CopilotScopeRequest(BaseModel):
     parser_run_id: str = Field(default="", max_length=64)
     file_id: str = Field(default="", max_length=64)
     account: str = Field(default="", max_length=64)
+    case_tag_id: str = Field(default="", max_length=64)
+    case_tag: str = Field(default="", max_length=128)
 
 
 class CopilotRequest(BaseModel):

@@ -201,7 +201,7 @@ vi.mock('@/api', () => ({
     model: 'qwen3.5:9b',
     task_mode: 'account_summary',
     answer: 'พบรายการออกสำคัญ [txn:TX-1]',
-    scope: { parser_run_id: 'RUN-1', file_id: '', account: '', account_digits: '' },
+    scope: { parser_run_id: 'RUN-1', file_id: '', account: '', account_digits: '', case_tag_id: '', case_tag: '' },
     context_hash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     prompt_hash: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     citation_policy: { status: 'ok', requires_review: false, warning: '' },
@@ -334,7 +334,7 @@ describe('InvestigationDesk date formatting', () => {
     await waitFor(() => expect(askCopilot).toHaveBeenCalledWith({
       question: 'Summarize this scope',
       task_mode: 'account_summary',
-      scope: { parser_run_id: 'RUN-1', file_id: '', account: '' },
+      scope: { parser_run_id: 'RUN-1', file_id: '', account: '', case_tag_id: '', case_tag: '' },
       operator: 'Case Reviewer',
       max_transactions: 20,
     }))

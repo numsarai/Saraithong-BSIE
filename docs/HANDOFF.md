@@ -9,11 +9,67 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `380 passed`, frontend `47 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `381 passed`, frontend `47 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Evidence Copilot Graph Metrics Context
+## Done (latest session) — Evidence Copilot Case Tag Scope
+
+### What I changed
+- Extended Evidence Copilot scope with `case_tag_id` and `case_tag`.
+- Resolves tags through `case_tags` / `case_tag_links` and applies linked evidence objects as deterministic transaction filters.
+- Supports linked `file`, `file_record`, `parser_run`, `run`, `account`, `transaction`, `txn`, and `alert` objects.
+- Keeps case tags as scope filters, not citation targets; prompts now tell the model to cite linked records instead.
+- Adds `evidence.case_tag` summary to context packs with linked object counts and bounded linked-object metadata.
+- Exposes Case Tag ID / Case Tag fields in the Evidence UI and sends them through the frontend API contract.
+- Added backend and endpoint regression coverage plus frontend typing/test updates.
+- Added DEC-042 and updated the roadmap.
+
+### Files changed
+- `services/copilot_service.py`
+- `routers/llm.py`
+- `tests/test_copilot_service.py`
+- `tests/test_app_api.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `380 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/copilot_service.py routers/llm.py tests/test_copilot_service.py tests/test_app_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_copilot_service.py tests/test_app_api.py::test_llm_copilot_endpoint_returns_scoped_read_only_answer -q` -> `8 passed`
+  - `.venv/bin/python -m pytest tests/test_copilot_service.py -q` -> `7 passed`
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `4 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `381 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-042: Evidence Copilot supports case tag scope through linked evidence objects.
+
+### Warnings / Next
+- Case tags are organizational scope filters only. Copilot answers should cite linked `txn`, `alert`, `run`, `file`, or `account` records rather than the tag itself.
+- Current UI uses manual Case Tag ID / Case Tag inputs. A future slice can add a tag picker from `/api/case-tags`.
+- Next useful slice: add richer case-level navigation around tagged evidence, or move to the later local-first classification path after scope/citation/audit are stable.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Evidence Copilot Graph Metrics Context
 
 ### What I changed
 - Added `evidence.graph_metrics` to the deterministic copilot context pack.

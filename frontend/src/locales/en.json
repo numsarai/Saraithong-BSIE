@@ -477,6 +477,8 @@
       "parserRunId": "Parser Run ID",
       "fileId": "File ID",
       "account": "Account",
+      "caseTagId": "Case Tag ID",
+      "caseTag": "Case Tag",
       "scopeSelectedRun": "Selected run",
       "scopeSelectedFile": "Selected file",
       "scopeSelectedAccount": "Selected account",

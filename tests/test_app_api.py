@@ -1276,7 +1276,7 @@ def test_llm_copilot_endpoint_returns_scoped_read_only_answer():
             "/api/llm/copilot",
             json={
                 "question": "ช่วยสรุปบัญชีนี้",
-                "scope": {"parser_run_id": "RUN-1", "account": "123-456-7890"},
+                "scope": {"parser_run_id": "RUN-1", "account": "123-456-7890", "case_tag_id": "CASE-TAG-1"},
                 "operator": "Case Reviewer",
                 "max_transactions": 12,
                 "task_mode": "alert_explanation",
@@ -1292,7 +1292,13 @@ def test_llm_copilot_endpoint_returns_scoped_read_only_answer():
     assert payload["citation_policy"]["status"] == "ok"
     copilot.assert_awaited_once()
     assert copilot.call_args.args[0].__class__.__name__ == "DummySession"
-    assert copilot.call_args.kwargs["scope"] == {"parser_run_id": "RUN-1", "file_id": "", "account": "123-456-7890"}
+    assert copilot.call_args.kwargs["scope"] == {
+        "parser_run_id": "RUN-1",
+        "file_id": "",
+        "account": "123-456-7890",
+        "case_tag_id": "CASE-TAG-1",
+        "case_tag": "",
+    }
     assert copilot.call_args.kwargs["operator"] == "Case Reviewer"
     assert copilot.call_args.kwargs["max_transactions"] == 12
     assert copilot.call_args.kwargs["task_mode"] == "alert_explanation"

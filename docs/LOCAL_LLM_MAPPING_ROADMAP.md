@@ -294,7 +294,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 4 — AI Copilot / Investigation Copilot
 
-สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036, unified AI Copilot workspace implemented ตาม DEC-038, Evidence task modes implemented ตาม DEC-039, scoped review/audit history implemented ตาม DEC-040, และ scoped graph metrics implemented ตาม DEC-041
+สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036, unified AI Copilot workspace implemented ตาม DEC-038, Evidence task modes implemented ตาม DEC-039, scoped review/audit history implemented ตาม DEC-040, scoped graph metrics implemented ตาม DEC-041, และ case tag scope implemented ตาม DEC-042
 
 เป้าหมาย:
 
@@ -306,7 +306,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 - ไม่ใช่ general chatbot
 - ไม่ใช่ให้ LLM เดาหรือสร้างข้อเท็จจริงใหม่
-- เป็น case-scoped assistant ที่ถูก lock scope ด้วย `parser_run_id`, `file_id`, `account`, หรือ case filters
+- เป็น case-scoped assistant ที่ถูก lock scope ด้วย `parser_run_id`, `file_id`, `account`, `case_tag_id`, `case_tag`, หรือ case filters
 - คำตอบต้องอ้างอิงข้อมูล deterministic จาก DB/exports เช่น transactions, entities, links, alerts, graph metrics, review history, และ audit history
 
 งานหลัก:
@@ -323,7 +323,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] ให้ Evidence UI ส่ง structured task mode พร้อม analyst focus text แทนการพึ่ง frontend quick prompt copy
 - [x] เพิ่ม scoped `review_history` จาก `review_decisions` และ `audit_logs` เข้า deterministic context pack
 - [x] เพิ่ม scoped `graph_metrics` จาก normalized transaction/counterparty links เข้า deterministic context pack
-- [ ] เพิ่ม case filters / case tag scope
+- [x] เพิ่ม case filters / case tag scope ผ่าน `case_tag_id` / `case_tag` และ `case_tag_links`
 - [x] แตก read-only tool modes: account summary, alert explanation, review checklist, และ draft report paragraph
 - [x] ห้าม mutate evidence, override, classify, promote, หรือ auto-generate findings โดยไม่มี analyst action ใน task prompt contract
 - [ ] ภายหลังย้าย classification path ให้ local-first หลัง scope/citation/audit stable

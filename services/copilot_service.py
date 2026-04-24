@@ -10,7 +10,7 @@ from typing import Any, Awaitable, Callable
 from sqlalchemy import and_, case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
-from persistence.models import Account, Alert, AuditLog, FileRecord, ParserRun, ReviewDecision, Transaction
+from persistence.models import Account, Alert, AuditLog, CaseTag, CaseTagLink, FileRecord, ParserRun, ReviewDecision, Transaction
 from services.audit_service import log_audit
 from services.llm_service import chat, resolve_model
 
@@ -120,14 +120,18 @@ def _scope_identity(scope: dict[str, Any]) -> dict[str, str]:
     parser_run_id = str(scope.get("parser_run_id") or "").strip()
     file_id = str(scope.get("file_id") or "").strip()
     account = str(scope.get("account") or "").strip()
+    case_tag_id = str(scope.get("case_tag_id") or "").strip()
+    case_tag = str(scope.get("case_tag") or "").strip()
     account_digits = _digits(account)
-    if not any([parser_run_id, file_id, account_digits]):
-        raise CopilotScopeError("copilot_scope requires parser_run_id, file_id, or account")
+    if not any([parser_run_id, file_id, account_digits, case_tag_id, case_tag]):
+        raise CopilotScopeError("copilot_scope requires parser_run_id, file_id, account, case_tag_id, or case_tag")
     return {
         "parser_run_id": parser_run_id,
         "file_id": file_id,
         "account": account,
         "account_digits": account_digits,
+        "case_tag_id": case_tag_id,
+        "case_tag": case_tag,
     }
 
 
@@ -188,13 +192,16 @@ def _preview_value(value: Any, *, limit: int = 240) -> str:
 
 def _related_citation_id(object_type: str, object_id: str) -> str:
     citation_type_by_object = {
+        "txn": "txn",
         "transaction": "txn",
         "account": "account",
         "file": "file",
+        "file_record": "file",
+        "run": "run",
         "parser_run": "run",
         "alert": "alert",
     }
-    citation_type = citation_type_by_object.get(object_type)
+    citation_type = citation_type_by_object.get(str(object_type or "").strip().lower())
     return f"{citation_type}:{object_id}" if citation_type else ""
 
 
@@ -342,6 +349,103 @@ def _build_graph_metrics(
     }
 
 
+def _resolve_case_tag_scope(session: Session, scope_ids: dict[str, str]) -> tuple[CaseTag | None, list[CaseTagLink], list[str]]:
+    warnings: list[str] = []
+    case_tag_id = scope_ids.get("case_tag_id") or ""
+    case_tag = scope_ids.get("case_tag") or ""
+    if not (case_tag_id or case_tag):
+        return None, [], warnings
+
+    tag_row: CaseTag | None = None
+    if case_tag_id:
+        tag_row = session.get(CaseTag, case_tag_id)
+        if tag_row is None:
+            raise CopilotNotFoundError(f"case_tag_id not found: {case_tag_id}")
+    if case_tag:
+        tag_by_name = session.scalar(select(CaseTag).where(CaseTag.tag == case_tag))
+        if tag_by_name is None:
+            raise CopilotNotFoundError(f"case_tag not found: {case_tag}")
+        if tag_row and tag_by_name.id != tag_row.id:
+            raise CopilotScopeError("case_tag_id does not match case_tag")
+        tag_row = tag_by_name
+
+    links = list(
+        session.scalars(
+            select(CaseTagLink)
+            .where(CaseTagLink.case_tag_id == tag_row.id)
+            .order_by(CaseTagLink.created_at.asc(), CaseTagLink.id.asc())
+        )
+    )
+    if not links:
+        warnings.append("case tag has no linked evidence objects")
+    return tag_row, links, warnings
+
+
+def _case_tag_link_summary(links: list[CaseTagLink]) -> dict[str, Any]:
+    counts: dict[str, int] = {}
+    objects: list[dict[str, str]] = []
+    for link in links:
+        object_type = str(link.object_type or "").strip()
+        object_id = str(link.object_id or "").strip()
+        if not object_type or not object_id:
+            continue
+        counts[object_type] = counts.get(object_type, 0) + 1
+        if len(objects) < 40:
+            objects.append({
+                "object_type": object_type,
+                "object_id": object_id,
+                "citation_id": _related_citation_id(object_type, object_id),
+            })
+    return {
+        "linked_object_count": len(links),
+        "linked_object_counts": counts,
+        "linked_objects": objects,
+    }
+
+
+def _case_tag_transaction_filter(session: Session, links: list[CaseTagLink]) -> Any:
+    file_ids: list[str] = []
+    run_ids: list[str] = []
+    account_ids: list[str] = []
+    transaction_ids: list[str] = []
+
+    for link in links:
+        object_type = str(link.object_type or "").strip().lower()
+        object_id = str(link.object_id or "").strip()
+        if not object_id:
+            continue
+        if object_type in {"file", "file_record"}:
+            file_ids.append(object_id)
+        elif object_type in {"parser_run", "run"}:
+            run_ids.append(object_id)
+        elif object_type == "account":
+            account_ids.append(object_id)
+        elif object_type in {"transaction", "txn"}:
+            transaction_ids.append(object_id)
+        elif object_type == "alert":
+            alert_row = session.get(Alert, object_id)
+            if alert_row:
+                if alert_row.transaction_id:
+                    transaction_ids.append(alert_row.transaction_id)
+                if alert_row.parser_run_id:
+                    run_ids.append(alert_row.parser_run_id)
+                if alert_row.account_id:
+                    account_ids.append(alert_row.account_id)
+
+    filters = []
+    if file_ids:
+        filters.append(Transaction.file_id.in_(sorted(set(file_ids))))
+    if run_ids:
+        filters.append(Transaction.parser_run_id.in_(sorted(set(run_ids))))
+    if account_ids:
+        filters.append(Transaction.account_id.in_(sorted(set(account_ids))))
+    if transaction_ids:
+        filters.append(Transaction.id.in_(sorted(set(transaction_ids))))
+    if not filters:
+        return Transaction.id == "__no_case_tag_transaction_match__"
+    return or_(*filters)
+
+
 def build_copilot_context_pack(
     session: Session,
     scope: dict[str, Any],
@@ -357,6 +461,8 @@ def build_copilot_context_pack(
     parser_run: ParserRun | None = None
     file_row: FileRecord | None = None
     account_rows: list[Account] = []
+    case_tag_row, case_tag_links, case_tag_warnings = _resolve_case_tag_scope(session, scope_ids)
+    warnings.extend(case_tag_warnings)
 
     if scope_ids["parser_run_id"]:
         parser_run = session.get(ParserRun, scope_ids["parser_run_id"])
@@ -393,6 +499,36 @@ def build_copilot_context_pack(
                 )
         else:
             warnings.append("selected account was not found in the account registry")
+    elif case_tag_links:
+        linked_account_ids: set[str] = set()
+        for link in case_tag_links:
+            object_type = str(link.object_type or "").strip().lower()
+            object_id = str(link.object_id or "").strip()
+            if not object_id:
+                continue
+            if object_type == "account":
+                linked_account_ids.add(object_id)
+            elif object_type == "alert":
+                alert_row = session.get(Alert, object_id)
+                if alert_row and alert_row.account_id:
+                    linked_account_ids.add(alert_row.account_id)
+        if linked_account_ids:
+            account_rows = list(
+                session.scalars(
+                    select(Account)
+                    .where(Account.id.in_(sorted(linked_account_ids)))
+                    .order_by(Account.last_seen_at.desc())
+                )
+            )
+            for row in account_rows:
+                citations.append(
+                    _citation(
+                        "account",
+                        row.id,
+                        row.display_account_number or row.normalized_account_number or row.id,
+                        bank=row.bank_code or row.bank_name or "",
+                    )
+                )
 
     conditions = []
     if parser_run:
@@ -403,6 +539,8 @@ def build_copilot_context_pack(
         conditions.append(Transaction.account_id.in_([row.id for row in account_rows]))
     elif scope_ids["account_digits"]:
         conditions.append(Transaction.id == "__no_account_match__")
+    if case_tag_row:
+        conditions.append(_case_tag_transaction_filter(session, case_tag_links))
 
     if not conditions:
         raise CopilotScopeError("copilot_scope did not resolve to a transaction filter")
@@ -577,6 +715,16 @@ def build_copilot_context_pack(
             "warning_count": parser_run.warning_count if parser_run else 0,
             "error_count": parser_run.error_count if parser_run else 0,
         },
+        "case_tag": {
+            "case_tag_id": case_tag_row.id if case_tag_row else "",
+            "tag": case_tag_row.tag if case_tag_row else "",
+            "description": case_tag_row.description if case_tag_row else "",
+            **(_case_tag_link_summary(case_tag_links) if case_tag_row else {
+                "linked_object_count": 0,
+                "linked_object_counts": {},
+                "linked_objects": [],
+            }),
+        },
         "accounts": accounts,
         "summary": {
             "transaction_count": transaction_count,
@@ -621,6 +769,7 @@ def build_copilot_prompt(question: str, context_pack: dict[str, Any], *, task_mo
         "Answer in Thai unless the analyst explicitly asks otherwise.\n"
         "Use only the deterministic context pack below. Do not use outside knowledge, guesses, or hidden database context.\n"
         "Every factual claim must cite at least one evidence id exactly like [txn:<id>], [alert:<id>], [run:<id>], [file:<id>], or [account:<id>].\n"
+        "Case tags are scope filters, not evidence citations; cite the linked file/run/account/transaction/alert records instead.\n"
         "When discussing graph_metrics, cite scoped account ids and supporting transaction ids from top_transactions when available.\n"
         "When discussing review_history or audit_events, cite the underlying record id from each event's citation_id field.\n"
         "If the context pack does not contain enough evidence, say หลักฐานไม่พอ and explain what scoped evidence is missing.\n"

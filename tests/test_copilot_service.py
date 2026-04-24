@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from persistence.base import Base
-from persistence.models import Account, Alert, AuditLog, FileRecord, ParserRun, ReviewDecision, Transaction
+from persistence.models import Account, Alert, AuditLog, CaseTag, CaseTagLink, FileRecord, ParserRun, ReviewDecision, Transaction
 from services.copilot_service import (
     CopilotScopeError,
     answer_copilot_question,
@@ -103,6 +103,23 @@ def _seed_scope(session: Session) -> None:
     )
     session.add_all(
         [
+            CaseTag(
+                id="case-tag-copilot-1",
+                tag="CASE-ALPHA",
+                description="Alpha evidence group",
+                created_at=datetime(2026, 1, 3, 9, 0, tzinfo=timezone.utc),
+            ),
+            CaseTagLink(
+                id="case-tag-link-copilot-1",
+                case_tag_id="case-tag-copilot-1",
+                object_type="transaction",
+                object_id="txn-copilot-1",
+                created_at=datetime(2026, 1, 3, 9, 1, tzinfo=timezone.utc),
+            ),
+        ]
+    )
+    session.add_all(
+        [
             ReviewDecision(
                 id="review-copilot-1",
                 object_type="transaction",
@@ -180,6 +197,25 @@ def test_build_copilot_context_pack_requires_scope(tmp_path: Path):
             raise AssertionError("empty copilot scope should fail closed")
 
 
+def test_build_copilot_context_pack_accepts_case_tag_scope(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    with Session(engine) as session:
+        _seed_scope(session)
+        pack = build_copilot_context_pack(
+            session,
+            {"case_tag_id": "case-tag-copilot-1"},
+            max_transactions=5,
+        )
+
+    assert pack["scope"]["case_tag_id"] == "case-tag-copilot-1"
+    assert pack["evidence"]["case_tag"]["tag"] == "CASE-ALPHA"
+    assert pack["evidence"]["case_tag"]["linked_object_count"] == 1
+    assert pack["evidence"]["summary"]["transaction_count"] == 1
+    assert pack["evidence"]["top_transactions"][0]["transaction_id"] == "txn-copilot-1"
+    assert pack["evidence"]["graph_metrics"]["transaction_edge_count"] == 1
+    assert pack["evidence"]["review_history"]["decision_count"] == 1
+
+
 def test_answer_copilot_question_calls_llm_without_auto_context_and_audits(tmp_path: Path):
     engine = _make_engine(tmp_path)
     calls = []
@@ -215,6 +251,7 @@ def test_answer_copilot_question_calls_llm_without_auto_context_and_audits(tmp_p
     assert calls[0]["model"] == "qwen3.5:9b"
     assert "Deterministic context pack" in calls[0]["message"]
     assert "Task mode: freeform" in calls[0]["message"]
+    assert "Case tags are scope filters" in calls[0]["message"]
     assert "When discussing graph_metrics" in calls[0]["message"]
     assert "When discussing review_history or audit_events" in calls[0]["message"]
     assert audit.object_type == "llm_copilot"

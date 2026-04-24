@@ -10,6 +10,8 @@ type CopilotScope = {
   parser_run_id: string
   file_id: string
   account: string
+  case_tag_id: string
+  case_tag: string
 }
 
 type CopilotTaskMode = 'account_summary' | 'alert_explanation' | 'review_checklist' | 'draft_report_paragraph'
@@ -24,7 +26,7 @@ interface CopilotTabProps {
   crossAccountNumber?: string
 }
 
-const EMPTY_SCOPE: CopilotScope = { parser_run_id: '', file_id: '', account: '' }
+const EMPTY_SCOPE: CopilotScope = { parser_run_id: '', file_id: '', account: '', case_tag_id: '', case_tag: '' }
 const TASK_MODES: CopilotTaskMode[] = ['account_summary', 'alert_explanation', 'review_checklist', 'draft_report_paragraph']
 const TASK_MODE_ICONS = {
   account_summary: FileText,
@@ -38,7 +40,7 @@ function shortHash(value: string) {
 }
 
 function hasScope(scope: CopilotScope) {
-  return Boolean(scope.parser_run_id.trim() || scope.file_id.trim() || scope.account.trim())
+  return Boolean(scope.parser_run_id.trim() || scope.file_id.trim() || scope.account.trim() || scope.case_tag_id.trim() || scope.case_tag.trim())
 }
 
 function normalizeAccount(value: string) {
@@ -130,7 +132,7 @@ export function CopilotTab({
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
             {t('investigation.copilot.parserRunId')}
             <input
@@ -152,6 +154,22 @@ export function CopilotTab({
             <input
               value={scope.account}
               onChange={(event) => setScope((state) => ({ ...state, account: normalizeAccount(event.target.value) }))}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 font-mono text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.caseTagId')}
+            <input
+              value={scope.case_tag_id}
+              onChange={(event) => setScope((state) => ({ ...state, case_tag_id: event.target.value.trim() }))}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 font-mono text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.caseTag')}
+            <input
+              value={scope.case_tag}
+              onChange={(event) => setScope((state) => ({ ...state, case_tag: event.target.value.trim() }))}
               className="rounded-lg border border-border bg-surface2 px-3 py-2 font-mono text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
             />
           </label>

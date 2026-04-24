@@ -437,6 +437,8 @@ export async function askCopilot(payload: {
     parser_run_id?: string
     file_id?: string
     account?: string
+    case_tag_id?: string
+    case_tag?: string
   }
   operator?: string
   model?: string

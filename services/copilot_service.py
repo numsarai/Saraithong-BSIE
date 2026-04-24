@@ -7,10 +7,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Awaitable, Callable
 
-from sqlalchemy import case, desc, func, select
+from sqlalchemy import and_, case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
-from persistence.models import Account, Alert, AuditLog, FileRecord, ParserRun, Transaction
+from persistence.models import Account, Alert, AuditLog, FileRecord, ParserRun, ReviewDecision, Transaction
 from services.audit_service import log_audit
 from services.llm_service import chat, resolve_model
 
@@ -176,6 +176,69 @@ def _alert_dict(row: Alert) -> dict[str, Any]:
     }
 
 
+def _preview_value(value: Any, *, limit: int = 240) -> str:
+    if value in (None, ""):
+        return ""
+    if isinstance(value, (dict, list)):
+        text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    else:
+        text = str(value)
+    return text if len(text) <= limit else f"{text[: limit - 3]}..."
+
+
+def _related_citation_id(object_type: str, object_id: str) -> str:
+    citation_type_by_object = {
+        "transaction": "txn",
+        "account": "account",
+        "file": "file",
+        "parser_run": "run",
+        "alert": "alert",
+    }
+    citation_type = citation_type_by_object.get(object_type)
+    return f"{citation_type}:{object_id}" if citation_type else ""
+
+
+def _object_scope_filter(model: Any, object_ids_by_type: dict[str, list[str]]) -> Any:
+    filters = [
+        and_(model.object_type == object_type, model.object_id.in_(sorted(set(object_ids))))
+        for object_type, object_ids in object_ids_by_type.items()
+        if object_ids
+    ]
+    if not filters:
+        return model.object_id == "__no_review_scope__"
+    return or_(*filters)
+
+
+def _review_decision_dict(row: ReviewDecision) -> dict[str, Any]:
+    return {
+        "review_decision_id": row.id,
+        "object_type": row.object_type,
+        "object_id": row.object_id,
+        "citation_id": _related_citation_id(row.object_type, row.object_id),
+        "decision_type": row.decision_type,
+        "decision_value": row.decision_value,
+        "reviewer": row.reviewer,
+        "reviewer_note": row.reviewer_note or "",
+        "created_at": _iso(row.created_at),
+    }
+
+
+def _audit_event_dict(row: AuditLog) -> dict[str, Any]:
+    return {
+        "audit_id": row.id,
+        "object_type": row.object_type,
+        "object_id": row.object_id,
+        "citation_id": _related_citation_id(row.object_type, row.object_id),
+        "action_type": row.action_type,
+        "field_name": row.field_name or "",
+        "changed_by": row.changed_by,
+        "changed_at": _iso(row.changed_at),
+        "reason": row.reason or "",
+        "old_value": _preview_value(row.old_value_json),
+        "new_value": _preview_value(row.new_value_json),
+    }
+
+
 def build_copilot_context_pack(
     session: Session,
     scope: dict[str, Any],
@@ -335,6 +398,45 @@ def build_copilot_context_pack(
     alerts = [_alert_dict(row) for row in alert_rows]
     citations.extend(_citation("alert", row.id, row.rule_type, severity=row.severity) for row in alert_rows)
 
+    review_scope: dict[str, list[str]] = {}
+    if file_row:
+        review_scope.setdefault("file", []).append(file_row.id)
+    if parser_run:
+        review_scope.setdefault("parser_run", []).append(parser_run.id)
+    if account_rows:
+        review_scope["account"] = [row.id for row in account_rows]
+    if transaction_rows:
+        review_scope["transaction"] = [row.id for row in transaction_rows]
+    if alert_rows:
+        review_scope["alert"] = [row.id for row in alert_rows]
+
+    review_decision_rows = list(
+        session.scalars(
+            select(ReviewDecision)
+            .where(_object_scope_filter(ReviewDecision, review_scope))
+            .order_by(ReviewDecision.created_at.desc())
+            .limit(20)
+        )
+    )
+    audit_rows = list(
+        session.scalars(
+            select(AuditLog)
+            .where(
+                _object_scope_filter(AuditLog, review_scope),
+                AuditLog.object_type != "llm_copilot",
+            )
+            .order_by(AuditLog.changed_at.desc())
+            .limit(20)
+        )
+    )
+    review_history = {
+        "scope_note": "review/audit history is limited to scoped accounts, alerts, file/run rows, and included top transactions",
+        "decision_count": len(review_decision_rows),
+        "audit_event_count": len(audit_rows),
+        "review_decisions": [_review_decision_dict(row) for row in review_decision_rows],
+        "audit_events": [_audit_event_dict(row) for row in audit_rows],
+    }
+
     accounts = [
         {
             "citation_id": f"account:{row.id}",
@@ -379,6 +481,7 @@ def build_copilot_context_pack(
         "top_transactions": transactions,
         "top_counterparties": counterparties,
         "alerts": alerts,
+        "review_history": review_history,
     }
     pack_without_hash = {
         "source": "deterministic_copilot_context",
@@ -408,6 +511,7 @@ def build_copilot_prompt(question: str, context_pack: dict[str, Any], *, task_mo
         "Answer in Thai unless the analyst explicitly asks otherwise.\n"
         "Use only the deterministic context pack below. Do not use outside knowledge, guesses, or hidden database context.\n"
         "Every factual claim must cite at least one evidence id exactly like [txn:<id>], [alert:<id>], [run:<id>], [file:<id>], or [account:<id>].\n"
+        "When discussing review_history or audit_events, cite the underlying record id from each event's citation_id field.\n"
         "If the context pack does not contain enough evidence, say หลักฐานไม่พอ and explain what scoped evidence is missing.\n"
         "Do not mutate evidence, classify transactions, promote mappings, change alerts, or issue final investigative findings.\n\n"
         f"Task mode: {task_mode_id}\n"

@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from persistence.base import Base
-from persistence.models import Account, Alert, AuditLog, FileRecord, ParserRun, Transaction
+from persistence.models import Account, Alert, AuditLog, FileRecord, ParserRun, ReviewDecision, Transaction
 from services.copilot_service import (
     CopilotScopeError,
     answer_copilot_question,
@@ -101,6 +101,32 @@ def _seed_scope(session: Session) -> None:
             evidence_json={"transaction_ids": ["txn-copilot-1"]},
         )
     )
+    session.add_all(
+        [
+            ReviewDecision(
+                id="review-copilot-1",
+                object_type="transaction",
+                object_id="txn-copilot-1",
+                decision_type="correction",
+                decision_value="applied",
+                reviewer="Case Reviewer",
+                reviewer_note="Corrected counterparty name",
+                created_at=datetime(2026, 1, 3, 10, 0, tzinfo=timezone.utc),
+            ),
+            AuditLog(
+                id="audit-copilot-review-1",
+                object_type="transaction",
+                object_id="txn-copilot-1",
+                action_type="field_update",
+                field_name="counterparty_name_normalized",
+                old_value_json="Counterparty Old",
+                new_value_json="Counterparty A",
+                changed_by="Case Reviewer",
+                changed_at=datetime(2026, 1, 3, 10, 1, tzinfo=timezone.utc),
+                reason="Corrected name from source evidence",
+            ),
+        ]
+    )
     session.commit()
 
 
@@ -125,6 +151,12 @@ def test_build_copilot_context_pack_scopes_transactions_and_citations(tmp_path: 
     citation_ids = {item["id"] for item in pack["citations"]}
     assert {"run:run-copilot-1", "file:file-copilot-1", "account:acct-copilot-1"} <= citation_ids
     assert {"txn:txn-copilot-1", "txn:txn-copilot-2", "alert:alert-copilot-1"} <= citation_ids
+    review_history = pack["evidence"]["review_history"]
+    assert review_history["decision_count"] == 1
+    assert review_history["audit_event_count"] == 1
+    assert review_history["review_decisions"][0]["citation_id"] == "txn:txn-copilot-1"
+    assert review_history["audit_events"][0]["citation_id"] == "txn:txn-copilot-1"
+    assert review_history["audit_events"][0]["field_name"] == "counterparty_name_normalized"
     assert len(pack["context_hash"]) == 64
 
 
@@ -174,6 +206,7 @@ def test_answer_copilot_question_calls_llm_without_auto_context_and_audits(tmp_p
     assert calls[0]["model"] == "qwen3.5:9b"
     assert "Deterministic context pack" in calls[0]["message"]
     assert "Task mode: freeform" in calls[0]["message"]
+    assert "When discussing review_history or audit_events" in calls[0]["message"]
     assert audit.object_type == "llm_copilot"
     assert audit.action_type == "copilot_answered"
     assert audit.changed_by == "Case Reviewer"

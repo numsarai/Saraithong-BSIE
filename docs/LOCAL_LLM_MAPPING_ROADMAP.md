@@ -294,7 +294,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 4 — AI Copilot / Investigation Copilot
 
-สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036, unified AI Copilot workspace implemented ตาม DEC-038, และ Evidence task modes implemented ตาม DEC-039
+สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036, unified AI Copilot workspace implemented ตาม DEC-038, Evidence task modes implemented ตาม DEC-039, และ scoped review/audit history implemented ตาม DEC-040
 
 เป้าหมาย:
 
@@ -321,6 +321,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] เพิ่ม project-scope guardrail ให้ generic local chat/refuse คำถามนอก BSIE/project scope
 - [x] เพิ่ม backend-owned `task_mode` contract สำหรับ `account_summary`, `alert_explanation`, `review_checklist`, และ `draft_report_paragraph`
 - [x] ให้ Evidence UI ส่ง structured task mode พร้อม analyst focus text แทนการพึ่ง frontend quick prompt copy
+- [x] เพิ่ม scoped `review_history` จาก `review_decisions` และ `audit_logs` เข้า deterministic context pack
 - [ ] เพิ่ม case filters / case tag scope
 - [x] แตก read-only tool modes: account summary, alert explanation, review checklist, และ draft report paragraph
 - [x] ห้าม mutate evidence, override, classify, promote, หรือ auto-generate findings โดยไม่มี analyst action ใน task prompt contract

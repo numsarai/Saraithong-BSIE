@@ -13,7 +13,52 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Evidence Copilot Task Modes
+## Done (latest session) — Evidence Copilot Review History Context
+
+### What I changed
+- Enriched `services/copilot_service.py` deterministic context packs with `evidence.review_history`.
+- `review_history` includes bounded `review_decisions` and `audit_events` from scoped file/run rows, scoped accounts, scoped alerts, and included top transactions.
+- Review/audit entries carry `citation_id` back to the underlying `txn`, `account`, `file`, `run`, or `alert` record instead of introducing a new citation type.
+- Updated the copilot prompt to tell the model to cite the underlying record id when discussing `review_history` or `audit_events`.
+- Added regression coverage for review decision/audit event inclusion and citation mapping.
+- Added DEC-040 and updated the roadmap.
+
+### Files changed
+- `services/copilot_service.py`
+- `tests/test_copilot_service.py`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `380 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/copilot_service.py tests/test_copilot_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_copilot_service.py -q` -> `6 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `380 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-040: Evidence Copilot context includes scoped review and audit history.
+
+### Warnings / Next
+- Review history is intentionally bounded to scoped accounts/alerts/file/run and included top transactions. It is not a full case-wide audit search yet.
+- Case tag scope is still pending.
+- Graph metrics are still pending.
+- Next useful slice: add case tag scope or graph metrics into context packs while preserving bounded citations.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Evidence Copilot Task Modes
 
 ### What I changed
 - Added backend-owned `task_mode` support to `POST /api/llm/copilot`.

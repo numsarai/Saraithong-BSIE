@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-040: Evidence Copilot context includes scoped review and audit history
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Evidence Copilot task modes can now ask for review checklists and report drafts, but the deterministic context pack only included files, parser runs, accounts, transactions, counterparties, and alerts. That meant the assistant could not distinguish raw extracted evidence from analyst-reviewed or corrected records.
+- **Decision:** Enrich the deterministic copilot context pack with a bounded `review_history` section built from `review_decisions` and `audit_logs` for the scoped file/run, scoped accounts, scoped alerts, and included top transactions. Review/audit entries carry a `citation_id` pointing back to the underlying `txn`, `account`, `file`, `run`, or `alert` record; the prompt instructs the model to cite that underlying evidence id when discussing review history.
+- **Alternatives:** (1) Let the LLM inspect the whole audit log -- too broad and not scope-safe. (2) Add a new citation type for audit events immediately -- larger contract change and not necessary while the reviewed object already has an evidence id. (3) Keep review history out until a review-specific UI exists -- weakens the current review checklist task.
+- **Consequences:** Evidence Copilot can now mention prior analyst corrections/review decisions from scoped context without mutating records or using hidden data. The history is intentionally bounded to avoid huge prompts; future work can add case-level review history once case tag scope exists.
+
 ### DEC-039: Evidence Copilot task modes are backend-owned prompt contracts
 - **Date:** 2026-04-24
 - **Status:** accepted

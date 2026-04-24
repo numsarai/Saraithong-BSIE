@@ -9,11 +9,66 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `336 passed`, frontend `36 passed`, frontend build passed
+- **Baseline:** backend `341 passed`, frontend `36 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 3 Local LLM Model Role Config
+## Done (latest session) — Phase 3 Local LLM Benchmark Harness
+
+### What I changed
+- Added a local-only benchmark harness for configured Ollama model roles.
+- Added `benchmark_llm_roles(...)` in `services/llm_service.py`:
+  - uses a fixed synthetic prompt only
+  - disables DB auto-context
+  - supports `text`, `fast`, and optional `vision` roles
+  - records latency, JSON validity, token counts, and short response previews
+  - returns structured `offline` / `partial` results when local Ollama or model JSON output is not ready
+  - does not persist benchmark results or touch evidence data
+- Added `POST /api/llm/benchmark` in `routers/llm.py`.
+- Added frontend API helper `benchmarkLlm(...)` for future UI use.
+- Added service and API regression tests.
+- Updated roadmap and decision log.
+
+### Files changed
+- `services/llm_service.py`
+- `routers/llm.py`
+- `frontend/src/api.ts`
+- `tests/test_llm_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before changes:
+  - `.venv/bin/python -m pytest tests/ -q` -> `336 passed`
+  - `npm test` in `frontend/` -> `36 passed`
+- Focused after changes:
+  - `.venv/bin/python -m py_compile services/llm_service.py routers/llm.py tests/test_llm_service.py tests/test_app_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_llm_service.py tests/test_app_api.py -q` -> `52 passed`
+  - `npm test -- --run src/App.workflow.test.tsx` -> `2 passed`
+- Final verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `341 passed`
+  - `npm test` in `frontend/` -> `36 passed`
+  - `npm run build` in `frontend/` -> passed, Vite large chunk warning only
+
+### Decisions made
+- Added `DEC-016`: Local LLM benchmark uses synthetic prompts only.
+- Benchmarking is runtime-only and non-persistent; real machine measurements still require local Ollama models to be installed.
+
+### Warnings
+- Live benchmark calls require local Ollama to be running.
+- Vision benchmark is optional because it requires a local vision-capable model.
+- No evidence rows, uploads, parser runs, or mappings are touched by the benchmark path.
+
+### Failed attempts / Notes
+- Accidentally tried `python -m py_compile`, but this shell has no `python` binary; reran successfully with `.venv/bin/python`.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Phase 3 Local LLM Model Role Config
 
 ### What I changed
 - Added centralized local Ollama model role config in `services/llm_service.py`.

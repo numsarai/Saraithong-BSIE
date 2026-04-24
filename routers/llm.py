@@ -13,6 +13,7 @@ from services.auth_service import require_auth
 from pydantic import BaseModel, Field
 
 from services.llm_service import (
+    benchmark_llm_roles,
     chat,
     chat_with_file,
     check_ollama_status,
@@ -52,6 +53,13 @@ class SummarizeRequest(BaseModel):
 class ClassifyRequest(BaseModel):
     transaction: dict = Field(default_factory=dict)
     model: str = ""
+
+
+class BenchmarkRequest(BaseModel):
+    roles: list[str] = Field(default_factory=list)
+    iterations: int = Field(default=1, ge=1, le=5)
+    include_vision: bool = False
+    model_overrides: dict[str, str] = Field(default_factory=dict)
 
 
 @router.get("/status")
@@ -119,6 +127,26 @@ async def api_llm_classify(req: ClassifyRequest):
         raise HTTPException(status_code=503, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.post("/benchmark")
+async def api_llm_benchmark(req: BenchmarkRequest):
+    """Run a small local-only benchmark against configured Ollama model roles."""
+    try:
+        overrides = {
+            role: _validate_model(model.strip())
+            for role, model in req.model_overrides.items()
+            if model.strip()
+        }
+        result = await benchmark_llm_roles(
+            roles=req.roles,
+            iterations=req.iterations,
+            include_vision=req.include_vision,
+            model_overrides=overrides,
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/bmp"}

@@ -7,9 +7,11 @@ All processing stays on-premise — no data leaves the machine.
 """
 
 import base64
+import json
 import logging
 import os as _os
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,14 @@ _MODEL_ROLE_DEFAULTS = {
     "vision": DEFAULT_VISION_MODEL,
     "fast": DEFAULT_FAST_MODEL,
 }
+_BENCHMARK_ROLES = {"text", "fast", "vision"}
+_BENCHMARK_PROMPT = (
+    "Local BSIE model benchmark. Do not use real case data. "
+    "Return JSON only: {\"status\":\"ok\",\"language\":\"th\",\"fields\":[\"date\",\"amount\",\"description\"]}"
+)
+_BENCHMARK_IMAGE_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+)
 
 
 def resolve_model(model: str | None = "", role: str = "default") -> str:
@@ -62,6 +72,37 @@ def get_llm_model_config() -> dict[str, Any]:
         "default_model": DEFAULT_MODEL,
         "roles": dict(_MODEL_ROLE_DEFAULTS),
     }
+
+
+def _json_object_ok(text: str) -> bool:
+    content = str(text or "").strip()
+    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, flags=re.DOTALL | re.IGNORECASE)
+    if fence_match:
+        content = fence_match.group(1).strip()
+    elif "{" in content and "}" in content:
+        content = content[content.find("{"):content.rfind("}") + 1]
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(parsed, dict)
+
+
+def _benchmark_roles(roles: list[str] | None, *, include_vision: bool) -> list[str]:
+    if roles:
+        selected = [str(role or "").strip().lower() for role in roles]
+    else:
+        selected = ["text", "fast"]
+        if include_vision:
+            selected.append("vision")
+
+    result: list[str] = []
+    for role in selected:
+        if role not in _BENCHMARK_ROLES:
+            raise ValueError(f"Unsupported benchmark role: {role}")
+        if role not in result:
+            result.append(role)
+    return result
 
 
 def _load_system_prompt() -> str:
@@ -388,6 +429,106 @@ async def check_ollama_status() -> dict[str, Any]:
             "model_roles": config["roles"],
             "llm_config": config,
         }
+
+
+async def benchmark_llm_roles(
+    *,
+    roles: list[str] | None = None,
+    iterations: int = 1,
+    include_vision: bool = False,
+    model_overrides: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Run a tiny local-only benchmark against configured Ollama model roles."""
+    selected_roles = _benchmark_roles(roles, include_vision=include_vision)
+    count = max(1, min(5, int(iterations or 1)))
+    overrides = {
+        str(role or "").strip().lower(): str(model or "").strip()
+        for role, model in (model_overrides or {}).items()
+        if str(model or "").strip()
+    }
+    config = get_llm_model_config()
+    role_results: list[dict[str, Any]] = []
+
+    for role in selected_roles:
+        selected_model = resolve_model(overrides.get(role, ""), role)
+        runs: list[dict[str, Any]] = []
+        for index in range(count):
+            started = time.perf_counter()
+            try:
+                if role == "vision":
+                    response = await chat_with_file(
+                        _BENCHMARK_PROMPT,
+                        _BENCHMARK_IMAGE_BYTES,
+                        "image/png",
+                        model=selected_model,
+                    )
+                else:
+                    response = await chat(_BENCHMARK_PROMPT, auto_context=False, model=selected_model)
+                elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+                text = str(response.get("response", "") or "")
+                json_ok = _json_object_ok(text)
+                runs.append({
+                    "iteration": index + 1,
+                    "status": "ok" if json_ok else "invalid_json",
+                    "duration_ms": elapsed_ms,
+                    "json_ok": json_ok,
+                    "prompt_tokens": int(response.get("prompt_tokens", 0) or 0),
+                    "completion_tokens": int(response.get("completion_tokens", 0) or 0),
+                    "response_preview": text[:240],
+                })
+            except ConnectionError as exc:
+                elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+                runs.append({
+                    "iteration": index + 1,
+                    "status": "offline",
+                    "duration_ms": elapsed_ms,
+                    "json_ok": False,
+                    "error": str(exc),
+                })
+            except RuntimeError as exc:
+                elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+                runs.append({
+                    "iteration": index + 1,
+                    "status": "error",
+                    "duration_ms": elapsed_ms,
+                    "json_ok": False,
+                    "error": str(exc),
+                })
+
+        durations = [float(run["duration_ms"]) for run in runs]
+        ok_runs = [run for run in runs if run["status"] == "ok"]
+        if len(ok_runs) == len(runs):
+            role_status = "ok"
+        elif all(run["status"] == "offline" for run in runs):
+            role_status = "offline"
+        else:
+            role_status = "partial"
+
+        role_results.append({
+            "role": role,
+            "model": selected_model,
+            "status": role_status,
+            "iterations": count,
+            "ok_count": len(ok_runs),
+            "average_duration_ms": round(sum(durations) / len(durations), 2) if durations else 0,
+            "runs": runs,
+        })
+
+    if all(item["status"] == "ok" for item in role_results):
+        status = "ok"
+    elif all(item["status"] == "offline" for item in role_results):
+        status = "offline"
+    else:
+        status = "partial"
+
+    return {
+        "status": status,
+        "source": "local_llm_benchmark",
+        "local_only": True,
+        "iterations": count,
+        "model_roles": config["roles"],
+        "results": role_results,
+    }
 
 
 async def chat(

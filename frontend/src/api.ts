@@ -372,6 +372,21 @@ export async function llmChat(message: string, opts?: { account?: string; transa
   return r.json()
 }
 
+export async function benchmarkLlm(opts?: {
+  roles?: string[]
+  iterations?: number
+  include_vision?: boolean
+  model_overrides?: Record<string, string>
+}) {
+  const r = await apiFetch('/api/llm/benchmark', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(opts || {}),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function llmSummarize(transactions: any[], account?: string, model?: string) {
   const r = await apiFetch('/api/llm/summarize', {
     method: 'POST',

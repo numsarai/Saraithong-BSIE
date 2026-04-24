@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-016: Local LLM benchmark uses synthetic prompts only
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Phase 3 needs model benchmarking for text/fast/vision roles, but benchmark tooling must not leak, persist, or transform investigative evidence. It should also be usable before Ollama is fully configured by failing closed with structured status.
+- **Decision:** Add `/api/llm/benchmark` backed by `benchmark_llm_roles(...)`. It sends only a fixed synthetic JSON prompt, disables database auto-context, does not persist results, supports `text`, `fast`, and optional `vision` roles, records latency/token/JSON-validity metrics, and returns `offline`/`partial` instead of throwing for unavailable local Ollama calls.
+- **Alternatives:** (1) Benchmark with real uploaded statements — more realistic but unsafe for evidence handling. (2) Keep benchmarking as an ad hoc shell/manual process — lower code cost but hard to reproduce or expose in UI later.
+- **Consequences:** Operators can compare local models without involving case data. Real machine benchmarks still require local Ollama and the configured models to be installed.
+
 ### DEC-015: Local Ollama endpoints resolve models by role
 - **Date:** 2026-04-24
 - **Status:** accepted

@@ -965,6 +965,46 @@ def test_mapping_assist_endpoint_returns_suggestion_only_payload():
     assert assist.call_args.kwargs["columns"] == ["วันที่", "รายการ", "จำนวนเงิน"]
 
 
+def test_llm_benchmark_endpoint_returns_local_only_payload():
+    benchmark_result = {
+        "status": "ok",
+        "source": "local_llm_benchmark",
+        "local_only": True,
+        "iterations": 1,
+        "model_roles": {"text": "qwen2.5:14b", "fast": "gemma4:e4b", "vision": "qwen2.5vl:7b"},
+        "results": [
+            {
+                "role": "text",
+                "model": "qwen2.5:14b",
+                "status": "ok",
+                "iterations": 1,
+                "ok_count": 1,
+                "average_duration_ms": 10.0,
+                "runs": [{"iteration": 1, "status": "ok", "duration_ms": 10.0, "json_ok": True}],
+            }
+        ],
+    }
+    with patch("routers.llm.benchmark_llm_roles", new=AsyncMock(return_value=benchmark_result)) as benchmark:
+        response = client.post(
+            "/api/llm/benchmark",
+            json={
+                "roles": ["text"],
+                "iterations": 1,
+                "model_overrides": {"text": "qwen2.5:14b"},
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "local_llm_benchmark"
+    assert payload["local_only"] is True
+    assert payload["results"][0]["role"] == "text"
+    benchmark.assert_awaited_once()
+    assert benchmark.call_args.kwargs["roles"] == ["text"]
+    assert benchmark.call_args.kwargs["iterations"] == 1
+    assert benchmark.call_args.kwargs["model_overrides"] == {"text": "qwen2.5:14b"}
+
+
 def test_mapping_confirm_defaults_to_run_confirmation_without_shared_promotion():
     payload = {
         "bank": "scb",

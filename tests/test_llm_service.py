@@ -1,4 +1,6 @@
-from services.llm_service import get_llm_model_config, resolve_model
+import asyncio
+
+from services.llm_service import benchmark_llm_roles, get_llm_model_config, resolve_model
 
 
 def test_llm_model_config_exposes_role_defaults():
@@ -19,3 +21,67 @@ def test_resolve_model_uses_explicit_model_before_role_default():
     assert resolve_model("", "vision") == config["roles"]["vision"]
     assert resolve_model("", "fast") == config["roles"]["fast"]
     assert resolve_model("", "unknown") == config["default_model"]
+
+
+def test_benchmark_llm_roles_runs_text_and_fast_without_database_context(monkeypatch):
+    calls = []
+
+    async def fake_chat(message, **kwargs):
+        calls.append({"message": message, **kwargs})
+        return {
+            "model": kwargs["model"],
+            "response": '{"status":"ok","language":"th"}',
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+        }
+
+    monkeypatch.setattr("services.llm_service.chat", fake_chat)
+
+    result = asyncio.run(benchmark_llm_roles(iterations=1))
+
+    assert result["status"] == "ok"
+    assert result["source"] == "local_llm_benchmark"
+    assert result["local_only"] is True
+    assert [item["role"] for item in result["results"]] == ["text", "fast"]
+    assert all(item["ok_count"] == 1 for item in result["results"])
+    assert all(call["auto_context"] is False for call in calls)
+
+
+def test_benchmark_llm_roles_marks_invalid_json_as_partial(monkeypatch):
+    async def fake_chat(*args, **kwargs):
+        return {"model": kwargs["model"], "response": "plain text"}
+
+    monkeypatch.setattr("services.llm_service.chat", fake_chat)
+
+    result = asyncio.run(benchmark_llm_roles(roles=["text"], iterations=1))
+
+    assert result["status"] == "partial"
+    assert result["results"][0]["status"] == "partial"
+    assert result["results"][0]["runs"][0]["status"] == "invalid_json"
+
+
+def test_benchmark_llm_roles_can_include_vision(monkeypatch):
+    async def fake_chat(*args, **kwargs):
+        return {"model": kwargs["model"], "response": '{"status":"ok"}'}
+
+    async def fake_chat_with_file(message, file_bytes, file_type, **kwargs):
+        assert file_bytes
+        assert file_type == "image/png"
+        return {"model": kwargs["model"], "response": '{"status":"ok"}'}
+
+    monkeypatch.setattr("services.llm_service.chat", fake_chat)
+    monkeypatch.setattr("services.llm_service.chat_with_file", fake_chat_with_file)
+
+    result = asyncio.run(benchmark_llm_roles(include_vision=True, iterations=1))
+
+    assert result["status"] == "ok"
+    assert [item["role"] for item in result["results"]] == ["text", "fast", "vision"]
+
+
+def test_benchmark_llm_roles_rejects_unknown_roles():
+    try:
+        asyncio.run(benchmark_llm_roles(roles=["text", "unknown"], iterations=1))
+    except ValueError as exc:
+        assert "Unsupported benchmark role" in str(exc)
+    else:
+        raise AssertionError("unknown benchmark roles should be rejected")

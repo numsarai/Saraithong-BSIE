@@ -218,7 +218,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 3 — LLM-Assisted Detect / Mapping
 
-สถานะ: guarded mapping-assist + role-based local model config implemented เมื่อ 2026-04-24
+สถานะ: guarded mapping-assist + role-based local model config + benchmark harness implemented เมื่อ 2026-04-24
 
 เป้าหมาย:
 
@@ -235,7 +235,8 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] บังคับ structured JSON output และ fail closed เมื่อ LLM ตอบไม่เป็น JSON
 - [x] แสดงเหตุผล/คำเตือนใน UI และให้ analyst กด apply เอง
 - [x] แยก local Ollama model roles สำหรับ text / vision / fast fallback
-- [ ] เพิ่ม benchmark บนเครื่องจริงสำหรับ `qwen2.5:14b` / fallback model
+- [x] เพิ่ม benchmark harness สำหรับ text / fast / optional vision roles
+- [ ] รันและบันทึก benchmark บนเครื่องจริงสำหรับ `qwen2.5:14b` / fallback model เมื่อ Ollama models พร้อม
 - [ ] เพิ่ม OCR/vision mapping assist แยกจาก Excel text context
 
 หมายเหตุ:
@@ -244,6 +245,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - service drop column ที่ LLM แต่งขึ้นเอง, repair amount/debit-credit conflict, และ validate mapping ก่อนคืนผล
 - Step 2 ไม่ auto-apply ผลจาก LLM; analyst ต้องกด `Apply suggestion`
 - LLM endpoints ใช้ config กลางจาก `services/llm_service.py`; text chat/mapping ใช้ text role และ image/PDF analysis ใช้ vision role
+- `/api/llm/benchmark` ใช้ synthetic prompt เท่านั้น, ปิด DB auto-context, ไม่ persist ผล และคืน `offline` / `partial` เมื่อ Ollama หรือ JSON output ยังไม่พร้อม
 
 ไฟล์หลัก:
 
@@ -251,6 +253,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - `services/llm_service.py`
 - `routers/ingestion.py`
 - `routers/llm.py`
+- `frontend/src/api.ts`
 - `frontend/src/components/steps/Step2Map.tsx`
 
 ### Phase 4 — Investigation Copilot

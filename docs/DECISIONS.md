@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-020: Gemma 4 variants need task-specific accuracy tests before default changes
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** After installing `gemma4:e2b` and `gemma4:26b`, a Gemma-only benchmark showed all tested Gemma variants pass strict JSON text and vision smoke tests. `e2b` is fastest overall, `e4b` remains a balanced pinned model, and `26b` has heavier cold load but similar warm latency on the tiny smoke prompt.
+- **Decision:** Keep `gemma4:e4b` as the balanced pinned fast fallback for now. Treat `gemma4:e2b` as an ultra-fast/lightweight candidate and `gemma4:26b` as the next quality candidate for synthetic mapping/OCR fixtures. Do not switch defaults based on smoke latency alone.
+- **Alternatives:** (1) Promote `gemma4:e2b` because it is fastest — risks lower mapping/OCR quality. (2) Promote `gemma4:26b` because official benchmarks are stronger — risks heavier cold load and memory pressure. (3) Use `gemma4:latest` because it is currently fast/warm — not reproducible.
+- **Consequences:** The next model-selection step should benchmark synthetic bank-header mapping and document-layout tasks, not just JSON compliance. Role defaults remain stable until those task-specific results are available.
+
 ### DEC-019: Benchmark thinking models through Ollama native chat when disabling reasoning
 - **Date:** 2026-04-24
 - **Status:** accepted

@@ -2,6 +2,52 @@
 
 > Local-only benchmark log. Prompts are synthetic and do not include case evidence.
 
+## 2026-04-24 — Gemma Variant Follow-up Sweep
+
+### Environment
+
+- Branch: `Smarter-BSIE`
+- Runtime: local Ollama via `OLLAMA_BASE_URL=http://localhost:11434`
+- Benchmark source: `services.llm_service.benchmark_llm_roles(...)`
+- Endpoint path: native Ollama `/api/chat` with `think=false`
+- Evidence data: none; benchmark prompt and 1x1 PNG are synthetic
+
+Newly installed local models at run time:
+
+| Model | ID | Size | Note |
+|---|---|---:|---|
+| `gemma4:e2b` | `7fbdbf8f5e45` | 7.2 GB | Newly installed edge model |
+| `gemma4:26b` | `5571076f3d70` | 17 GB | Newly installed MoE workstation model |
+
+### Single-Pass Gemma Sweep
+
+| Model | Text status | Text duration | Vision status | Vision duration | Notes |
+|---|---|---:|---|---:|---|
+| `gemma4:e2b` | `ok` | 4,389.15 ms | `ok` | 757.84 ms | Cold text load visible; vision already warm |
+| `gemma4:e4b` | `ok` | 6,120.88 ms | `ok` | 1,378.78 ms | Same pinned baseline; cold-ish after model switch |
+| `gemma4:latest` | `ok` | 577.38 ms | `ok` | 994.74 ms | Same local ID as `e4b`, warmed by prior `e4b` call |
+| `gemma4:26b` | `ok` | 8,468.53 ms | `ok` | 1,858.47 ms | Largest cold load; JSON and vision smoke both passed |
+
+Because `gemma4:e4b` and `gemma4:latest` share the same local ID, their single-pass latency mainly shows warm/cold load effects, not a real quality difference.
+
+### Three-Iteration Focused Sweep
+
+| Model | Text avg | Text warm runs | Vision avg | Vision warm runs | Result |
+|---|---:|---|---:|---|---|
+| `gemma4:e2b` | 1,682.78 ms | 376.02 ms, 368.96 ms | 492.80 ms | 369.59 ms, 374.22 ms | Fastest cold+warm overall |
+| `gemma4:e4b` | 2,251.77 ms | 492.44 ms, 483.00 ms | 646.14 ms | 481.54 ms, 468.16 ms | Balanced pinned default candidate |
+| `gemma4:26b` | 3,045.11 ms | 489.03 ms, 471.78 ms | 890.70 ms | 487.21 ms, 484.61 ms | Higher-quality candidate; cold load heavier |
+
+All three variants returned valid JSON on all text and vision runs.
+
+### Takeaways
+
+- `gemma4:e2b` is the fastest Gemma option in this smoke test and is a good candidate for ultra-fast fallback / lightweight document triage.
+- Keep `gemma4:e4b` as the balanced pinned fast fallback for now; it is stronger than `e2b` and still warm-runs under ~0.5s on this prompt.
+- `gemma4:26b` is worth testing on real mapping/OCR-like synthetic fixtures next. The cold load is heavier, but warm latency was close to `e4b` on this tiny JSON prompt.
+- Do not switch production-like defaults to `gemma4:latest`; even when it currently points to the same ID as `e4b`, the tag is not reproducible enough.
+- This benchmark only measures strict JSON smoke behavior, not mapping accuracy or OCR quality. The next useful test should use synthetic bank-header and document-layout fixtures.
+
 ## 2026-04-24 — Installed Model Sweep
 
 ### Environment

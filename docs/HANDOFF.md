@@ -13,7 +13,57 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Installed Local LLM Model Sweep
+## Done (latest session) — Gemma Variant Follow-up Sweep
+
+### What I changed
+- Ran local-only benchmark sweeps after the user installed additional Gemma variants.
+- New models found:
+  - `gemma4:e2b` (`7fbdbf8f5e45`, 7.2 GB)
+  - `gemma4:26b` (`5571076f3d70`, 17 GB)
+- Compared `gemma4:e2b`, `gemma4:e4b`, `gemma4:latest`, and `gemma4:26b` with text + vision smoke tests.
+- Added a 3-iteration focused sweep for `e2b`, `e4b`, and `26b` to separate cold-load effects from warm latency.
+- Recorded results in `docs/LOCAL_LLM_BENCHMARKS.md`.
+- Added `DEC-020` and updated `docs/LOCAL_LLM_MAPPING_ROADMAP.md`.
+
+### Benchmark results
+- Single-pass Gemma sweep:
+  - `gemma4:e2b`: text `ok` `4,389.15 ms`, vision `ok` `757.84 ms`
+  - `gemma4:e4b`: text `ok` `6,120.88 ms`, vision `ok` `1,378.78 ms`
+  - `gemma4:latest`: text `ok` `577.38 ms`, vision `ok` `994.74 ms`; same ID as `e4b`, warmed by the previous `e4b` call
+  - `gemma4:26b`: text `ok` `8,468.53 ms`, vision `ok` `1,858.47 ms`
+- Three-iteration focused sweep:
+  - `gemma4:e2b`: text avg `1,682.78 ms`, warm text `~0.37s`; vision avg `492.80 ms`, warm vision `~0.37s`
+  - `gemma4:e4b`: text avg `2,251.77 ms`, warm text `~0.49s`; vision avg `646.14 ms`, warm vision `~0.48s`
+  - `gemma4:26b`: text avg `3,045.11 ms`, warm text `~0.48s`; vision avg `890.70 ms`, warm vision `~0.49s`
+
+### Decisions made
+- Keep `gemma4:e4b` as balanced pinned fast fallback for now.
+- Treat `gemma4:e2b` as ultra-fast/lightweight triage candidate.
+- Treat `gemma4:26b` as higher-quality candidate for the next synthetic mapping/OCR fixture benchmark.
+- Do not switch defaults based on JSON smoke latency alone.
+
+### Files changed
+- `docs/LOCAL_LLM_BENCHMARKS.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- No code changes in this session.
+- Verification was the local Ollama benchmark sweep only; previous code regression baseline remains backend `344 passed`, frontend `37 passed`, frontend build passed.
+
+### Warnings
+- `gemma4:latest` currently shares the same ID as `gemma4:e4b`, but must not be used for production-like reproducibility.
+- Smoke benchmark only validates JSON compliance and latency. It does not measure mapping accuracy, OCR quality, hallucination resistance, or Thai finance-domain reasoning.
+
+### Failed attempts / Notes
+- Single-pass latency is affected by model load/warm state. Use the 3-iteration focused sweep for operational comparison.
+
+### Environment changes
+- No dependencies installed by Codex.
+- User installed additional Ollama models before this benchmark.
+
+## Done (previous session) — Installed Local LLM Model Sweep
 
 ### What I changed
 - Hardened `services/llm_service.py` benchmark calls:

@@ -56,6 +56,13 @@ _BENCHMARK_PROMPT = (
     "No markdown, no explanation, no extra keys: "
     "{\"status\":\"ok\",\"language\":\"th\",\"fields\":[\"date\",\"amount\",\"description\"]}"
 )
+_PROJECT_SCOPE_GUARDRAIL = (
+    "\n\n## Project Scope Guardrail\n"
+    "You must answer only about BSIE, this project's workflows, bank-statement processing, "
+    "Thai financial investigation, supported evidence files, local LLM usage in BSIE, or the data/context explicitly provided in this request. "
+    "If the question is outside that scope, politely refuse and briefly redirect the user back to BSIE/project work. "
+    "Do not provide general-purpose advice unrelated to this project."
+)
 
 
 def _png_chunk(kind: bytes, data: bytes) -> bytes:
@@ -141,8 +148,8 @@ def _benchmark_roles(roles: list[str] | None, *, include_vision: bool) -> list[s
 def _load_system_prompt() -> str:
     """Load project context markdown as the system prompt."""
     if _CONTEXT_FILE.exists():
-        return _CONTEXT_FILE.read_text(encoding="utf-8")
-    return "คุณเป็นผู้ช่วยวิเคราะห์ทางการเงินของระบบ BSIE"
+        return _CONTEXT_FILE.read_text(encoding="utf-8") + _PROJECT_SCOPE_GUARDRAIL
+    return "คุณเป็นผู้ช่วยวิเคราะห์ทางการเงินของระบบ BSIE" + _PROJECT_SCOPE_GUARDRAIL
 
 
 # ── Database Query Helpers ────────────────────────────────────────────────

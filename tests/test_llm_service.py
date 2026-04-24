@@ -1,6 +1,6 @@
 import asyncio
 
-from services.llm_service import benchmark_llm_roles, get_llm_model_config, resolve_model
+from services.llm_service import benchmark_llm_roles, chat, get_llm_model_config, resolve_model
 
 
 def test_llm_model_config_exposes_role_defaults():
@@ -89,3 +89,41 @@ def test_benchmark_llm_roles_rejects_unknown_roles():
         assert "Unsupported benchmark role" in str(exc)
     else:
         raise AssertionError("unknown benchmark roles should be rejected")
+
+
+def test_project_chat_system_prompt_is_scoped_to_bsie(monkeypatch):
+    captured = {}
+
+    class DummyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "model": "test:model",
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {},
+            }
+
+    class DummyClient:
+        def __init__(self, *args, **kwargs):
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, json):
+            captured["payload"] = json
+            return DummyResponse()
+
+    monkeypatch.setattr("services.llm_service.httpx.AsyncClient", DummyClient)
+
+    result = asyncio.run(chat("Who won a sports game?", auto_context=False, model="test:model"))
+
+    assert result["response"] == "ok"
+    system_prompt = captured["payload"]["messages"][0]["content"]
+    assert "Project Scope Guardrail" in system_prompt
+    assert "answer only about BSIE" in system_prompt

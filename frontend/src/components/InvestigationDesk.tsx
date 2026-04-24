@@ -42,16 +42,15 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { TimelineChart } from '@/components/TimelineChart'
 import { LinkChart } from '@/components/LinkChart'
-import { LlmChat } from '@/components/LlmChat'
 import { toast } from 'sonner'
 import { fmt, fmtDate } from '@/lib/utils'
 import { normalizeOperatorName, useStore } from '@/store'
 import { DatabaseTab } from '@/components/investigation/DatabaseTab'
 import { AlertsTab } from '@/components/investigation/AlertsTab'
 import { CrossAccountTab } from '@/components/investigation/CrossAccountTab'
-import { CopilotTab } from '@/components/investigation/CopilotTab'
+import { AiCopilotTab } from '@/components/investigation/AiCopilotTab'
 
-const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'link-chart', 'timeline', 'duplicates', 'matches', 'audit', 'exports', 'copilot', 'llm'] as const
+const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'link-chart', 'timeline', 'duplicates', 'matches', 'audit', 'exports', 'llm'] as const
 const TABLE_TAB_IDS = ['files', 'runs', 'accounts', 'search', 'duplicates', 'matches', 'audit', 'exports'] as const
 
 type TabId = (typeof TAB_IDS)[number]
@@ -169,7 +168,6 @@ export function InvestigationDesk() {
     { id: 'matches' as const, label: t('investigation.tabs.matches') },
     { id: 'audit' as const, label: t('investigation.tabs.audit') },
     { id: 'exports' as const, label: t('investigation.tabs.exports') },
-    { id: 'copilot' as const, label: t('investigation.tabs.copilot') },
     { id: 'llm' as const, label: t('investigation.tabs.llm') },
   ]
 
@@ -836,11 +834,7 @@ export function InvestigationDesk() {
       )}
 
       {tab === 'llm' && (
-        <LlmChat />
-      )}
-
-      {tab === 'copilot' && (
-        <CopilotTab
+        <AiCopilotTab
           operatorName={resolvedOperatorName}
           selectedRunId={selectedRunId}
           selectedFileId={selectedFileId}

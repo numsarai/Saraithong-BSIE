@@ -9,11 +9,65 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `377 passed`, frontend `47 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `378 passed`, frontend `47 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 4 Investigation Copilot UI Panel
+## Done (latest session) — Unified AI Copilot Workspace
+
+### What I changed
+- Replaced the separate Investigation Desk `AI Analysis` + `Copilot` tabs with one `AI Copilot` tab.
+- Added `frontend/src/components/investigation/AiCopilotTab.tsx` with `Project` and `Evidence` modes.
+- `Project` mode keeps using `LlmChat` / `/api/llm/chat` for project-local AI help.
+- `Evidence` mode embeds the existing `CopilotTab` / `/api/llm/copilot` path, preserving explicit scope, citations, context hash, audit id, and read-only behavior.
+- Added a BSIE-only project scope guardrail to the generic LLM system prompt in `services/llm_service.py`.
+- Updated Investigation Desk tests to open `AI Copilot` then switch to `Evidence` before testing scoped copilot citations.
+- Added a backend regression that verifies project chat includes the BSIE/project scope guardrail.
+- Updated roadmap/decision docs so DEC-037 is superseded and DEC-038 is the current UX decision.
+
+### Files changed
+- `services/llm_service.py`
+- `tests/test_llm_service.py`
+- `frontend/src/components/InvestigationDesk.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/components/investigation/AiCopilotTab.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `377 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+- Focused:
+  - `.venv/bin/python -m pytest tests/test_llm_service.py -q` -> `7 passed`
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `4 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `378 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-038: AI Copilot unifies project chat and evidence-scoped investigation modes.
+- Marked DEC-037 as superseded by DEC-038.
+- Kept backend contracts separate: project chat is project-scoped, evidence copilot is scope/citation/audit-bound.
+
+### Warnings / Next
+- Project mode is prompt-guarded to BSIE/project scope, but it is not citation/audit-bound; evidence answers should use Evidence mode.
+- Evidence mode still uses free-form questions plus prompt presets; explicit backend task modes are not implemented yet.
+- Case tag scope is still pending.
+- Next useful slice: add backend task-mode presets or enrich context packs with graph metrics/review history while preserving citations.
+
+### Failed attempts
+- The first focused Investigation Desk test run failed because `LlmChat` now mounts inside the unified tab and the API mock did not yet include `getLlmStatus` / `llmChat`; the mock was updated and the focused test passed.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Phase 4 Investigation Copilot UI Panel
 
 ### What I changed
 - Added `askCopilot(...)` to `frontend/src/api.ts` for `POST /api/llm/copilot`.

@@ -191,6 +191,8 @@ vi.mock('@/api', () => ({
   restoreDatabase: vi.fn(async () => ({ restored_backup: 'backup.json' })),
   syncGraphToNeo4j: vi.fn(async () => ({ status: 'ok', node_count: 2, edge_count: 1, derived_edge_count: 0 })),
   updateDatabaseBackupSettings: vi.fn(async () => ({ enabled: false, interval_hours: 24, backup_format: 'json', effective_backup_format: 'json', retention_enabled: false, retain_count: 20, source: 'database' })),
+  getLlmStatus: vi.fn(async () => ({ status: 'ok', model_roles: { text: 'qwen3.5:9b' }, models: ['qwen3.5:9b'] })),
+  llmChat: vi.fn(async () => ({ response: 'ok' })),
   askCopilot: vi.fn(async () => ({
     status: 'ok',
     source: 'local_llm_investigation_copilot',
@@ -322,7 +324,8 @@ describe('InvestigationDesk date formatting', () => {
   it('asks the investigation copilot with a scoped parser run and shows citations', async () => {
     renderWithQueryClient()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Copilot' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'AI Copilot' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Evidence' }))
     fireEvent.change(screen.getByLabelText('Parser Run ID'), { target: { value: 'RUN-1' } })
     fireEvent.change(screen.getByLabelText('Question'), { target: { value: 'Summarize this scope' } })
     fireEvent.click(screen.getByRole('button', { name: 'Ask Copilot' }))

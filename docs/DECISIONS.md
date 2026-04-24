@@ -17,9 +17,17 @@
 
 ---
 
-### DEC-037: Investigation copilot UI remains scoped and separate from generic AI chat
+### DEC-038: AI Copilot unifies project chat and evidence-scoped investigation modes
 - **Date:** 2026-04-24
 - **Status:** accepted
+- **Context:** The operator preferred one AI workspace instead of separate `AI Analysis` and `Copilot` tabs. At the same time, even non-evidence AI chat must remain bounded to BSIE/project work rather than becoming a general-purpose assistant.
+- **Decision:** Keep the backend contracts separate (`/api/llm/chat` for project-scoped local chat and `/api/llm/copilot` for citation/audit-bound evidence work), but expose them together in one Investigation Desk tab named `AI Copilot`. The tab has `Project` and `Evidence` modes. Project mode uses the existing local chat path with an explicit BSIE-only system guardrail, while Evidence mode uses the scoped read-only copilot contract from DEC-036.
+- **Alternatives:** (1) Keep separate tabs as in DEC-037 -- clear separation, but creates an artificial UX split. (2) Merge everything into `/api/llm/chat` -- simpler UI, but weakens citations, scope requirements, and audit continuity for evidence answers. (3) Force every AI prompt through `/api/llm/copilot` -- too strict for project/workflow questions that do not have a specific evidence scope.
+- **Consequences:** Analysts see one AI entry point, but the evidence-sensitive path still requires explicit scope and records citation/audit metadata. Generic local chat is no longer general-purpose; it should refuse questions outside BSIE, bank-statement processing, Thai financial investigation workflows, supported evidence files, local LLM usage in BSIE, or explicitly provided project context.
+
+### DEC-037: Investigation copilot UI remains scoped and separate from generic AI chat
+- **Date:** 2026-04-24
+- **Status:** superseded by DEC-038
 - **Context:** BSIE already has a generic local AI analysis tab, but Phase 4 investigation copilot has stronger evidence requirements: explicit scope, read-only behavior, citations, and audit continuity. Mixing those flows in one chat surface would make it easy to ask unscoped questions by accident.
 - **Decision:** Add a dedicated Copilot tab inside Investigation Desk that calls only `POST /api/llm/copilot`. The panel exposes `parser_run_id`, `file_id`, and `account` scope fields, quick scope-fill buttons from selected investigation context, bounded transaction count, and answer metadata including status, citation policy, context hash, audit id, and citations.
 - **Alternatives:** (1) Reuse `LlmChat` for copilot prompts -- faster but preserves auto-context/general-chat mental model. (2) Put copilot inside Link Chart first -- too narrow for file/run/account review workflows. (3) Hide scope fields and infer everything from current UI state -- convenient but weaker for auditability.

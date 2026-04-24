@@ -292,13 +292,15 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - `frontend/src/components/steps/Step2Map.tsx`
 - `docs/LOCAL_LLM_BENCHMARKS.md`
 
-### Phase 4 — Investigation Copilot
+### Phase 4 — AI Copilot / Investigation Copilot
 
-สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036 และ frontend Copilot tab implemented ตาม DEC-037
+สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036 และ unified AI Copilot workspace implemented ตาม DEC-038
 
 เป้าหมาย:
 
-- ขยาย Local LLM จาก mapping assist ไปเป็นผู้ช่วย analyst ที่ตอบจาก evidence set / parser run ที่เลือกเท่านั้น
+- ขยาย Local LLM จาก mapping assist ไปเป็นผู้ช่วย analyst แบบแท็บเดียว โดยแยกโหมด Project กับ Evidence ชัดเจน
+- Project mode ตอบเฉพาะเรื่อง BSIE/project workflows และ context ที่ผู้ใช้ให้มา
+- Evidence mode ตอบจาก evidence set / parser run / account ที่เลือกเท่านั้น พร้อม citation/audit
 
 ความหมาย:
 
@@ -315,6 +317,8 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] audit model, context hash, prompt hash, operator, และ response status ทุกครั้งที่ endpoint สำเร็จ
 - [x] เริ่ม backend read-only endpoint: `POST /api/llm/copilot`
 - [x] เพิ่ม frontend investigation copilot panel ใน Investigation Desk
+- [x] รวม `AI Analysis` และ `Copilot` เป็นแท็บเดียวชื่อ `AI Copilot` โดยมี `Project` / `Evidence` modes
+- [x] เพิ่ม project-scope guardrail ให้ generic local chat/refuse คำถามนอก BSIE/project scope
 - [x] เพิ่ม quick prompts สำหรับ account summary, alert explanation, review checklist, report draft
 - [ ] เพิ่ม case filters / case tag scope
 - [ ] แตก read-only tool modes: account summary, alert explanation, review checklist, และ draft report paragraph

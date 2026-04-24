@@ -462,10 +462,14 @@
       "crossAccount": "Cross-Account",
       "linkChart": "Link Chart",
       "exports": "Exports",
-      "copilot": "Copilot",
-      "llm": "AI Analysis"
+      "llm": "AI Copilot"
     },
     "timelineEmpty": "No transaction data available for the selected filters. Try adjusting date range or account.",
+    "aiCopilot": {
+      "title": "AI Copilot",
+      "projectMode": "Project",
+      "evidenceMode": "Evidence"
+    },
     "copilot": {
       "title": "Investigation Copilot",
       "readOnly": "Read-only",
@@ -624,8 +628,8 @@
     "noData": "No data available"
   },
   "llm": {
-    "title": "AI Analysis Assistant",
-    "hint": "Ask about transactions, suspicious patterns, or case summaries",
+    "title": "Project Assistant",
+    "hint": "Ask about BSIE workflows, transactions, suspicious patterns, or case summaries",
     "placeholder": "Type your question...",
     "offline": "Ollama not running — please run ollama serve",
     "thinking": "Analyzing...",

@@ -1257,6 +1257,7 @@ def test_llm_copilot_endpoint_returns_scoped_read_only_answer():
         "read_only": True,
         "mutations_allowed": False,
         "model": "qwen3.5:9b",
+        "task_mode": "alert_explanation",
         "answer": "พบรายการออกสำคัญ [txn:TX-1]",
         "scope": {"parser_run_id": "RUN-1", "file_id": "", "account": "1234567890", "account_digits": "1234567890"},
         "context_hash": "a" * 64,
@@ -1278,6 +1279,7 @@ def test_llm_copilot_endpoint_returns_scoped_read_only_answer():
                 "scope": {"parser_run_id": "RUN-1", "account": "123-456-7890"},
                 "operator": "Case Reviewer",
                 "max_transactions": 12,
+                "task_mode": "alert_explanation",
             },
         )
 
@@ -1286,12 +1288,14 @@ def test_llm_copilot_endpoint_returns_scoped_read_only_answer():
     assert payload["source"] == "local_llm_investigation_copilot"
     assert payload["read_only"] is True
     assert payload["mutations_allowed"] is False
+    assert payload["task_mode"] == "alert_explanation"
     assert payload["citation_policy"]["status"] == "ok"
     copilot.assert_awaited_once()
     assert copilot.call_args.args[0].__class__.__name__ == "DummySession"
     assert copilot.call_args.kwargs["scope"] == {"parser_run_id": "RUN-1", "file_id": "", "account": "123-456-7890"}
     assert copilot.call_args.kwargs["operator"] == "Case Reviewer"
     assert copilot.call_args.kwargs["max_transactions"] == 12
+    assert copilot.call_args.kwargs["task_mode"] == "alert_explanation"
 
 
 def test_mapping_confirm_defaults_to_run_confirmation_without_shared_promotion():

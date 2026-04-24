@@ -76,11 +76,12 @@ class CopilotScopeRequest(BaseModel):
 
 
 class CopilotRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=2000)
+    question: str = Field(default="", max_length=2000)
     scope: CopilotScopeRequest = Field(default_factory=CopilotScopeRequest)
     operator: str = Field(default="analyst", max_length=255)
     model: str = Field(default="", max_length=100)
     max_transactions: int = Field(default=20, ge=1, le=50)
+    task_mode: str = Field(default="freeform", max_length=64)
 
 
 @router.get("/status")
@@ -189,6 +190,7 @@ async def api_llm_copilot(req: CopilotRequest):
                 operator=req.operator,
                 model=model,
                 max_transactions=req.max_transactions,
+                task_mode=req.task_mode,
             )
             session.commit()
             return JSONResponse(result)

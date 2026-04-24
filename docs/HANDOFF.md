@@ -9,11 +9,66 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `378 passed`, frontend `47 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `380 passed`, frontend `47 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Unified AI Copilot Workspace
+## Done (latest session) — Evidence Copilot Task Modes
+
+### What I changed
+- Added backend-owned `task_mode` support to `POST /api/llm/copilot`.
+- Supported task modes are `account_summary`, `alert_explanation`, `review_checklist`, and `draft_report_paragraph`, with `freeform` kept for backward-compatible scoped questions.
+- Moved the main Evidence Copilot task instructions into `services/copilot_service.py` instead of relying on frontend quick-prompt text.
+- Backend now records `task_mode` in audit context and returns it in copilot responses.
+- Unknown task modes fail closed with `CopilotScopeError` / API 400.
+- Evidence UI now presents structured task mode buttons and sends `task_mode` plus optional analyst focus text.
+- Updated frontend API typing, Investigation Desk tests, locale strings, roadmap, and decisions.
+
+### Files changed
+- `services/copilot_service.py`
+- `routers/llm.py`
+- `tests/test_copilot_service.py`
+- `tests/test_app_api.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `378 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/copilot_service.py routers/llm.py tests/test_copilot_service.py tests/test_app_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_copilot_service.py tests/test_app_api.py::test_llm_copilot_endpoint_returns_scoped_read_only_answer -q` -> `7 passed`
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `4 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `380 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-039: Evidence Copilot task modes are backend-owned prompt contracts.
+- Evidence task behavior should now be changed through backend mode definitions plus regression tests before UI exposure.
+
+### Warnings / Next
+- Task modes still use the existing context pack shape; graph metrics, review history, and richer alert evidence are not included yet.
+- Case tag scope is still pending.
+- Next useful slice: enrich context packs with graph metrics/review history or add case tag scope, keeping citations and audit metadata.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Unified AI Copilot Workspace
 
 ### What I changed
 - Replaced the separate Investigation Desk `AI Analysis` + `Copilot` tabs with one `AI Copilot` tab.

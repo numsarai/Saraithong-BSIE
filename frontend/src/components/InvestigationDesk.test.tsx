@@ -199,6 +199,7 @@ vi.mock('@/api', () => ({
     read_only: true,
     mutations_allowed: false,
     model: 'qwen3.5:9b',
+    task_mode: 'account_summary',
     answer: 'พบรายการออกสำคัญ [txn:TX-1]',
     scope: { parser_run_id: 'RUN-1', file_id: '', account: '', account_digits: '' },
     context_hash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -327,11 +328,12 @@ describe('InvestigationDesk date formatting', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'AI Copilot' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Evidence' }))
     fireEvent.change(screen.getByLabelText('Parser Run ID'), { target: { value: 'RUN-1' } })
-    fireEvent.change(screen.getByLabelText('Question'), { target: { value: 'Summarize this scope' } })
+    fireEvent.change(screen.getByLabelText('Analyst focus'), { target: { value: 'Summarize this scope' } })
     fireEvent.click(screen.getByRole('button', { name: 'Ask Copilot' }))
 
     await waitFor(() => expect(askCopilot).toHaveBeenCalledWith({
       question: 'Summarize this scope',
+      task_mode: 'account_summary',
       scope: { parser_run_id: 'RUN-1', file_id: '', account: '' },
       operator: 'Case Reviewer',
       max_transactions: 20,

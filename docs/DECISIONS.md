@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-039: Evidence Copilot task modes are backend-owned prompt contracts
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** The unified AI Copilot workspace exposed Evidence mode, but its presets were still frontend prompt text. That made important investigation workflows depend on UI copy instead of a testable backend contract.
+- **Decision:** Add a `task_mode` field to `POST /api/llm/copilot` with backend-owned modes: `account_summary`, `alert_explanation`, `review_checklist`, and `draft_report_paragraph`, while keeping `freeform` for backward-compatible scoped questions. The backend injects task instructions into the prompt, records `task_mode` in audit context and responses, preserves explicit scope/citations/context hash, and still rejects unknown modes. The frontend now selects task modes and sends optional analyst focus text instead of storing the main task prompt in UI strings.
+- **Alternatives:** (1) Keep quick prompt buttons only in the frontend -- faster, but the task behavior is not auditable as a contract. (2) Create separate endpoints per task -- clearer names, but duplicates the scope/citation/audit path. (3) Let the LLM infer the task from the question -- weaker reproducibility and harder to test.
+- **Consequences:** Evidence Copilot workflows are now easier to regression-test and evolve. Future task modes should be added in the backend first, with tests for read-only behavior, citations, and audit metadata before UI exposure.
+
 ### DEC-038: AI Copilot unifies project chat and evidence-scoped investigation modes
 - **Date:** 2026-04-24
 - **Status:** accepted

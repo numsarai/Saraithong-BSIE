@@ -27,9 +27,63 @@ _ACCOUNT_DIGIT_RE = re.compile(r"\D+")
 _CITATION_RE = re.compile(r"\[(?:txn|alert|run|file|account):[A-Za-z0-9_.:\-]+\]")
 _INSUFFICIENT_RE = re.compile(r"(หลักฐานไม่พอ|หลักฐานไม่เพียงพอ|insufficient|not enough evidence)", re.I)
 _COPILOT_MAX_TOKENS = 900
+_COPILOT_TASKS: dict[str, dict[str, Any]] = {
+    "freeform": {
+        "label": "Freeform evidence question",
+        "default_question": "",
+        "instructions": [
+            "Answer the analyst question directly from the deterministic context pack.",
+            "Separate confirmed evidence from uncertainty.",
+        ],
+    },
+    "account_summary": {
+        "label": "Account summary",
+        "default_question": "Summarize this scoped account, parser run, or file evidence.",
+        "instructions": [
+            "Summarize transaction count, total incoming, total outgoing, net flow, date range, key counterparties, and notable alerts when present.",
+            "Cite account/run/file ids for scope-level claims and transaction/alert ids for record-level claims.",
+            "Do not infer account ownership or intent beyond the context pack.",
+        ],
+    },
+    "alert_explanation": {
+        "label": "Alert explanation",
+        "default_question": "Explain the alerts in this scoped evidence.",
+        "instructions": [
+            "Explain each alert's rule type, severity, confidence, and why the pattern matters for review.",
+            "Cite alert ids and supporting transaction ids when available.",
+            "If no alert rows are present, say หลักฐานไม่พอ for alert explanation and state which scoped alert evidence is missing.",
+        ],
+    },
+    "review_checklist": {
+        "label": "Review checklist",
+        "default_question": "Create an analyst review checklist for this scoped evidence.",
+        "instructions": [
+            "Return a concise checklist of review actions grounded in the context pack.",
+            "Separate items already supported by evidence from items requiring analyst review.",
+            "Do not mark anything final, confirmed, resolved, classified, or promoted.",
+        ],
+    },
+    "draft_report_paragraph": {
+        "label": "Draft report paragraph",
+        "default_question": "Draft a report paragraph from this scoped evidence.",
+        "instructions": [
+            "Draft one court-ready paragraph in cautious language.",
+            "Every factual claim must include citations.",
+            "Make clear it is a draft based only on the scoped evidence, not a final investigative conclusion.",
+        ],
+    },
+}
 
 
 ChatCallable = Callable[..., Awaitable[dict[str, Any]]]
+
+
+def _normalize_task_mode(task_mode: str | None) -> str:
+    clean = str(task_mode or "freeform").strip() or "freeform"
+    if clean not in _COPILOT_TASKS:
+        allowed = ", ".join(sorted(_COPILOT_TASKS))
+        raise CopilotScopeError(f"unsupported copilot task_mode: {clean}; allowed: {allowed}")
+    return clean
 
 
 def _iso(value: Any) -> str | None:
@@ -343,8 +397,11 @@ def build_copilot_context_pack(
     }
 
 
-def build_copilot_prompt(question: str, context_pack: dict[str, Any]) -> str:
+def build_copilot_prompt(question: str, context_pack: dict[str, Any], *, task_mode: str = "freeform") -> str:
     """Create the LLM prompt from deterministic context only."""
+    task_mode_id = _normalize_task_mode(task_mode)
+    task = _COPILOT_TASKS[task_mode_id]
+    task_instructions = "\n".join(f"- {item}" for item in task["instructions"])
     compact_context = json.dumps(context_pack, ensure_ascii=False, sort_keys=True, default=str)
     return (
         "You are BSIE Investigation Copilot for Thai police financial analysis.\n"
@@ -353,7 +410,10 @@ def build_copilot_prompt(question: str, context_pack: dict[str, Any]) -> str:
         "Every factual claim must cite at least one evidence id exactly like [txn:<id>], [alert:<id>], [run:<id>], [file:<id>], or [account:<id>].\n"
         "If the context pack does not contain enough evidence, say หลักฐานไม่พอ and explain what scoped evidence is missing.\n"
         "Do not mutate evidence, classify transactions, promote mappings, change alerts, or issue final investigative findings.\n\n"
-        f"Analyst question:\n{question.strip()}\n\n"
+        f"Task mode: {task_mode_id}\n"
+        f"Task label: {task['label']}\n"
+        f"Task instructions:\n{task_instructions}\n\n"
+        f"Analyst focus/question:\n{question.strip()}\n\n"
         f"Deterministic context pack:\n{compact_context}"
     )
 
@@ -378,15 +438,19 @@ async def answer_copilot_question(
     operator: str = "analyst",
     model: str = "",
     max_transactions: int = 20,
+    task_mode: str = "freeform",
     llm_chat: ChatCallable = chat,
 ) -> dict[str, Any]:
     """Answer a scoped investigation question without mutating evidence."""
+    task_mode_id = _normalize_task_mode(task_mode)
     clean_question = str(question or "").strip()
-    if not clean_question:
+    if not clean_question and task_mode_id == "freeform":
         raise CopilotScopeError("question is required")
+    if not clean_question:
+        clean_question = _COPILOT_TASKS[task_mode_id]["default_question"]
 
     context_pack = build_copilot_context_pack(session, scope, max_transactions=max_transactions)
-    prompt = build_copilot_prompt(clean_question, context_pack)
+    prompt = build_copilot_prompt(clean_question, context_pack, task_mode=task_mode_id)
     prompt_hash = _stable_hash({"prompt": prompt})
     selected_model = resolve_model(model, "text")
     audit_row: AuditLog = log_audit(
@@ -404,6 +468,8 @@ async def answer_copilot_question(
             "context_hash": context_pack["context_hash"],
             "prompt_hash": prompt_hash,
             "model": selected_model,
+            "task_mode": task_mode_id,
+            "task_label": _COPILOT_TASKS[task_mode_id]["label"],
             "question": clean_question[:500],
             "read_only": True,
             "mutations_allowed": False,
@@ -438,6 +504,7 @@ async def answer_copilot_question(
         "read_only": True,
         "mutations_allowed": False,
         "model": response.get("model") or selected_model,
+        "task_mode": task_mode_id,
         "answer": answer,
         "scope": context_pack["scope"],
         "context_hash": context_pack["context_hash"],
@@ -454,6 +521,7 @@ async def answer_copilot_question(
     audit_row.action_type = "copilot_answered"
     audit_row.new_value_json = {
         "status": result["status"],
+        "task_mode": task_mode_id,
         "citation_policy": policy["status"],
         "answer_preview": answer[:500],
     }

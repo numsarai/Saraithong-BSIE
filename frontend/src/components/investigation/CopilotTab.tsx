@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BrainCircuit, Loader2, Send, ShieldCheck } from 'lucide-react'
+import { BrainCircuit, FileText, ListChecks, Loader2, ScrollText, Send, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { askCopilot } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,8 @@ type CopilotScope = {
   file_id: string
   account: string
 }
+
+type CopilotTaskMode = 'account_summary' | 'alert_explanation' | 'review_checklist' | 'draft_report_paragraph'
 
 interface CopilotTabProps {
   operatorName: string
@@ -23,6 +25,13 @@ interface CopilotTabProps {
 }
 
 const EMPTY_SCOPE: CopilotScope = { parser_run_id: '', file_id: '', account: '' }
+const TASK_MODES: CopilotTaskMode[] = ['account_summary', 'alert_explanation', 'review_checklist', 'draft_report_paragraph']
+const TASK_MODE_ICONS = {
+  account_summary: FileText,
+  alert_explanation: ShieldAlert,
+  review_checklist: ListChecks,
+  draft_report_paragraph: ScrollText,
+} as const
 
 function shortHash(value: string) {
   return value ? `${value.slice(0, 12)}...` : ''
@@ -47,6 +56,7 @@ export function CopilotTab({
 }: CopilotTabProps) {
   const { t } = useTranslation()
   const [scope, setScope] = useState<CopilotScope>(EMPTY_SCOPE)
+  const [taskMode, setTaskMode] = useState<CopilotTaskMode>('account_summary')
   const [question, setQuestion] = useState('')
   const [maxTransactions, setMaxTransactions] = useState('20')
   const [isAsking, setIsAsking] = useState(false)
@@ -86,20 +96,14 @@ export function CopilotTab({
     },
   ], [crossAccountNumber, filterFileId, filterRunId, selectedAccountNumber, selectedFileId, selectedRunId, t])
 
-  const quickQuestions = [
-    ['accountSummary', t('investigation.copilot.promptAccountSummary')],
-    ['alertExplanation', t('investigation.copilot.promptAlertExplanation')],
-    ['reviewChecklist', t('investigation.copilot.promptReviewChecklist')],
-    ['reportDraft', t('investigation.copilot.promptReportDraft')],
-  ] as const
-
   const submit = async () => {
-    if (!question.trim() || !hasScope(scope)) return
+    if (!hasScope(scope)) return
     setIsAsking(true)
     setError('')
     try {
       const payload = await askCopilot({
         question: question.trim(),
+        task_mode: taskMode,
         scope,
         operator: operatorName,
         max_transactions: Math.max(1, Math.min(50, Number(maxTransactions || 20))),
@@ -172,22 +176,38 @@ export function CopilotTab({
       </Card>
 
       <Card className="space-y-4">
+        <div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.taskMode')}
+          </div>
+          <div className="grid gap-2 md:grid-cols-4">
+            {TASK_MODES.map((mode) => {
+              const Icon = TASK_MODE_ICONS[mode]
+              return (
+                <Button
+                  key={mode}
+                  size="sm"
+                  variant={taskMode === mode ? 'primary' : 'outline'}
+                  onClick={() => setTaskMode(mode)}
+                  className="justify-start"
+                >
+                  <Icon size={14} />
+                  {t(`investigation.copilot.task.${mode}`)}
+                </Button>
+              )
+            })}
+          </div>
+        </div>
         <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
-          {t('investigation.copilot.question')}
+          {t('investigation.copilot.focus')}
           <textarea
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
+            placeholder={t('investigation.copilot.focusPlaceholder')}
             rows={5}
             className="min-h-[132px] resize-y rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
           />
         </label>
-        <div className="flex flex-wrap gap-2">
-          {quickQuestions.map(([key, value]) => (
-            <Button key={key} size="sm" variant="ghost" onClick={() => setQuestion(value)}>
-              {t(`investigation.copilot.quick.${key}`)}
-            </Button>
-          ))}
-        </div>
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <label className="flex w-36 flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
             {t('investigation.copilot.maxTxns')}
@@ -200,7 +220,7 @@ export function CopilotTab({
               className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
             />
           </label>
-          <Button onClick={submit} disabled={!question.trim() || !hasScope(scope) || isAsking}>
+          <Button onClick={submit} disabled={!hasScope(scope) || isAsking}>
             {isAsking ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             {isAsking ? t('investigation.copilot.asking') : t('investigation.copilot.ask')}
           </Button>
@@ -220,6 +240,11 @@ export function CopilotTab({
               {t('investigation.copilot.answer')}
             </CardTitle>
             <div className="flex flex-wrap gap-2">
+              {answer.task_mode && (
+                <Badge variant="blue">
+                  {t(`investigation.copilot.task.${answer.task_mode}`, { defaultValue: answer.task_mode })}
+                </Badge>
+              )}
               <Badge variant={answer.status === 'ok' ? 'green' : 'yellow'}>{answer.status}</Badge>
               <Badge variant={answer.citation_policy?.status === 'ok' ? 'green' : 'yellow'}>
                 {answer.citation_policy?.status || 'unknown'}

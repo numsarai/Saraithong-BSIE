@@ -432,6 +432,7 @@ export async function llmChat(message: string, opts?: { account?: string; transa
 
 export async function askCopilot(payload: {
   question: string
+  task_mode?: string
   scope: {
     parser_run_id?: string
     file_id?: string

@@ -483,7 +483,9 @@
       "scopeTransactionFilters": "ตัวกรองรายการ",
       "scopeCrossAccount": "ข้ามบัญชี",
       "clearScope": "ล้าง scope",
-      "question": "คำถาม",
+      "taskMode": "โหมดงาน",
+      "focus": "ประเด็นที่ต้องการเน้น",
+      "focusPlaceholder": "ใส่รายละเอียดเพิ่มเติมสำหรับโหมดที่เลือกได้",
       "maxTxns": "จำนวนรายการ",
       "ask": "ถาม Copilot",
       "asking": "กำลังถาม",
@@ -493,16 +495,12 @@
       "contextHash": "Context hash",
       "auditId": "Audit ID",
       "citations": "หลักฐานอ้างอิง",
-      "quick": {
-        "accountSummary": "สรุปบัญชี",
-        "alertExplanation": "อธิบาย alert",
-        "reviewChecklist": "รายการตรวจทาน",
-        "reportDraft": "ร่างรายงาน"
-      },
-      "promptAccountSummary": "สรุปหลักฐานของบัญชีใน scope นี้ โดยระบุจำนวนรายการ เงินเข้า/ออก คู่บัญชีสำคัญ และ citation",
-      "promptAlertExplanation": "อธิบาย alert ใน scope นี้ เหตุผลที่สำคัญ และ record ที่รองรับ",
-      "promptReviewChecklist": "จัดทำ checklist ตรวจทานสำหรับ scope นี้ แยกหลักฐานที่ยืนยันแล้วออกจากรายการที่ต้องให้ analyst ตรวจ",
-      "promptReportDraft": "ร่างย่อหน้ารายงานที่ใช้ในคดีจาก scope นี้ โดยใส่ citation ทุกข้อเท็จจริง"
+      "task": {
+        "account_summary": "สรุปบัญชี",
+        "alert_explanation": "อธิบาย alert",
+        "review_checklist": "รายการตรวจทาน",
+        "draft_report_paragraph": "ร่างรายงาน"
+      }
     },
     "crossAccount": {
       "selectAccount": "เลือกบัญชีเพื่อวิเคราะห์กระแสเงิน",

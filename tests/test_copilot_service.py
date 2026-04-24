@@ -173,12 +173,14 @@ def test_answer_copilot_question_calls_llm_without_auto_context_and_audits(tmp_p
     assert calls[0]["think"] is False
     assert calls[0]["model"] == "qwen3.5:9b"
     assert "Deterministic context pack" in calls[0]["message"]
+    assert "Task mode: freeform" in calls[0]["message"]
     assert audit.object_type == "llm_copilot"
     assert audit.action_type == "copilot_answered"
     assert audit.changed_by == "Case Reviewer"
     assert audit.extra_context_json["context_hash"] == result["context_hash"]
     assert audit.extra_context_json["prompt_hash"] == result["prompt_hash"]
     assert audit.extra_context_json["model"] == "qwen3.5:9b"
+    assert audit.extra_context_json["task_mode"] == "freeform"
 
 
 def test_answer_copilot_question_flags_uncited_answers_for_review(tmp_path: Path):
@@ -204,3 +206,55 @@ def test_answer_copilot_question_flags_uncited_answers_for_review(tmp_path: Path
     assert result["status"] == "needs_review"
     assert result["citation_policy"]["status"] == "missing_citation"
     assert any("required evidence citations" in warning for warning in result["warnings"])
+
+
+def test_answer_copilot_question_applies_structured_task_mode(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    calls = []
+
+    async def fake_chat(message, **kwargs):
+        calls.append({"message": message, **kwargs})
+        return {
+            "model": kwargs["model"],
+            "response": "รายการตรวจทานควรดูรายการออก 1,500 บาท [txn:txn-copilot-1] และ alert fan-out [alert:alert-copilot-1]",
+        }
+
+    with Session(engine) as session:
+        _seed_scope(session)
+        result = asyncio.run(
+            answer_copilot_question(
+                session,
+                question="",
+                scope={"parser_run_id": "run-copilot-1", "account": "1234567890"},
+                task_mode="review_checklist",
+                operator="Reviewer",
+                llm_chat=fake_chat,
+            )
+        )
+        audit = session.scalars(select(AuditLog).where(AuditLog.id == result["audit_id"])).one()
+
+    assert result["status"] == "ok"
+    assert result["task_mode"] == "review_checklist"
+    assert "Task mode: review_checklist" in calls[0]["message"]
+    assert "Create an analyst review checklist" in calls[0]["message"]
+    assert "Do not mark anything final" in calls[0]["message"]
+    assert audit.extra_context_json["task_mode"] == "review_checklist"
+
+
+def test_answer_copilot_question_rejects_unknown_task_mode(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    with Session(engine) as session:
+        _seed_scope(session)
+        try:
+            asyncio.run(
+                answer_copilot_question(
+                    session,
+                    question="Summarize",
+                    scope={"parser_run_id": "run-copilot-1"},
+                    task_mode="mutate_evidence",
+                )
+            )
+        except CopilotScopeError as exc:
+            assert "unsupported copilot task_mode" in str(exc)
+        else:
+            raise AssertionError("unknown copilot task modes should fail closed")

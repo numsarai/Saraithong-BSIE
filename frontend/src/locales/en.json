@@ -483,7 +483,9 @@
       "scopeTransactionFilters": "Transaction filters",
       "scopeCrossAccount": "Cross-account",
       "clearScope": "Clear scope",
-      "question": "Question",
+      "taskMode": "Task mode",
+      "focus": "Analyst focus",
+      "focusPlaceholder": "Optional detail for the selected task...",
       "maxTxns": "Max txns",
       "ask": "Ask Copilot",
       "asking": "Asking",
@@ -493,16 +495,12 @@
       "contextHash": "Context hash",
       "auditId": "Audit ID",
       "citations": "Citations",
-      "quick": {
-        "accountSummary": "Account summary",
-        "alertExplanation": "Alert explanation",
-        "reviewChecklist": "Review checklist",
-        "reportDraft": "Report draft"
-      },
-      "promptAccountSummary": "Summarize this scoped account evidence with transaction counts, money in/out, key counterparties, and citations.",
-      "promptAlertExplanation": "Explain the alerts in this scope, why they matter, and which records support them.",
-      "promptReviewChecklist": "Create a review checklist for this scope. Separate confirmed evidence from items that need analyst review.",
-      "promptReportDraft": "Draft a court-ready report paragraph from this scope. Include citations for every factual claim."
+      "task": {
+        "account_summary": "Account summary",
+        "alert_explanation": "Alert explanation",
+        "review_checklist": "Review checklist",
+        "draft_report_paragraph": "Report draft"
+      }
     },
     "crossAccount": {
       "selectAccount": "Select Account for Flow Analysis",

@@ -60,6 +60,19 @@ export async function uploadFile(file: File, uploaded_by?: string, force_redetec
   return r.json()
 }
 
+export async function redetectFile(fileId: string, fileName?: string) {
+  const r = await apiFetch('/api/redetect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      file_id: fileId,
+      file_name: fileName || '',
+    }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function confirmMapping(
   bank: string,
   mapping: Record<string, string | null>,

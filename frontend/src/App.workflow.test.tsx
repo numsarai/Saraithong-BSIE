@@ -6,6 +6,7 @@ import { useStore } from '@/store'
 
 vi.mock('@/api', () => ({
   uploadFile: vi.fn(),
+  redetectFile: vi.fn(),
   assistMapping: vi.fn(async () => ({ status: 'ok' })),
   assistVisionMapping: vi.fn(async () => ({ status: 'ok' })),
   confirmMapping: vi.fn(async () => ({ status: 'ok' })),
@@ -57,7 +58,7 @@ vi.mock('@/components/LlmChat', () => ({
   LlmChat: () => null,
 }))
 
-const { getAuthStatus, getStoredAuthToken, login, uploadFile, confirmMapping, getBanks, previewMapping } = await import('@/api')
+const { getAuthStatus, getStoredAuthToken, login, uploadFile, redetectFile, confirmMapping, getBanks, previewMapping } = await import('@/api')
 
 async function flushAsyncWork() {
   await Promise.resolve()
@@ -205,5 +206,45 @@ describe('App workflow', () => {
     await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
     expect(previewMapping).toHaveBeenCalledTimes(1)
     expect(await screen.findByText(/configure pipeline/i)).toBeInTheDocument()
+  })
+
+  it('re-detects duplicate uploads through the authenticated API helper', async () => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(makeUploadResponse({
+      file_id: 'FILE-1',
+      already_processed: true,
+      prior_result: {
+        parser_run_id: 'RUN-OLD',
+        account: '1883167399',
+        bank_key: 'kbank',
+        bank_name: 'Kasikornbank',
+        subject_name: 'Case Subject',
+        transaction_count: 1595,
+      },
+    }))
+    vi.mocked(redetectFile).mockResolvedValueOnce(makeUploadResponse({
+      file_id: 'FILE-1',
+      temp_file_path: '/tmp/duplicate.xlsx',
+    }))
+
+    const { container } = renderApp()
+    await waitFor(() => expect(container.querySelector('input[type="file"]')).not.toBeNull())
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['bank data'], 'duplicate.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } })
+    })
+
+    expect(await screen.findByText(/This file was already processed|ไฟล์นี้เคยประมวลผลแล้ว/i)).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Re-process|ประมวลผลใหม่/i }))
+      await flushAsyncWork()
+    })
+
+    await waitFor(() => expect(redetectFile).toHaveBeenCalledWith('FILE-1', 'duplicate.xlsx'))
+    expect(await screen.findByText(/Detect & Map Columns|ตรวจจับและแมปคอลัมน์/i)).toBeInTheDocument()
   })
 })

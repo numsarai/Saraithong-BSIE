@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone'
 import { FileSpreadsheet, RotateCcw, FastForward } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { uploadFile } from '@/api'
+import { redetectFile, uploadFile } from '@/api'
 import { normalizeOperatorName, useStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { LlmChat } from '@/components/LlmChat'
@@ -74,20 +74,10 @@ export function Step1Upload() {
 
   const handleReprocess = useCallback(async () => {
     if (!priorChoice) return
-    // Re-detect: call /api/redetect with the stored file path
     setUploading(true)
     setPriorChoice(null)
     try {
-      const resp = await fetch('/api/redetect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          file_id: priorChoice.data.file_id,
-          file_name: priorChoice.fileName,
-        }),
-      })
-      if (!resp.ok) throw new Error(await resp.text())
-      const data = await resp.json()
+      const data = await redetectFile(priorChoice.data.file_id, priorChoice.fileName)
       setUploadResult(data, priorChoice.fileName)
       setStep(2)
       toast.success(t('step1.reprocessing'))

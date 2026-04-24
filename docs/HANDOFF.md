@@ -10,11 +10,56 @@
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
 - **Active dev runtime:** backend `127.0.0.1:8757`, frontend `127.0.0.1:6776`; stale frontend port `6777` is closed
-- **Baseline:** backend `398 passed`, frontend `54 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `398 passed`, frontend `56 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth required (`BSIE_AUTH_REQUIRED=true`) + local SQLite WAL (`bsie.db`) now contains one processed real test statement
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Runtime Restart and Port Cleanup
+## Done (latest session) — Duplicate Upload Reprocess Auth Fix
+
+### What I changed
+- Investigated Chrome after the operator reported that uploading an already-processed file could not be reprocessed.
+- Chrome was correctly on `http://127.0.0.1:6776/` and logged in.
+- Backend log showed the exact failure:
+  - `POST /api/upload` -> `200`
+  - `POST /api/redetect` -> `401 Unauthorized`
+- Root cause: `Step1Upload.handleReprocess()` called `fetch('/api/redetect')` directly, bypassing the centralized `apiFetch()` helper that attaches the stored JWT.
+- Added `redetectFile()` to `frontend/src/api.ts`.
+- Changed `Step1Upload` to call `redetectFile()` for duplicate-file re-detection.
+- Added regression tests covering:
+  - duplicate upload reprocess uses the authenticated API helper
+  - `redetectFile()` sends `Authorization: Bearer <token>`
+
+### Files changed
+- `frontend/src/api.ts`
+- `frontend/src/components/steps/Step1Upload.tsx`
+- `frontend/src/App.workflow.test.tsx`
+- `frontend/src/api.test.ts`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `398 passed`
+  - `npm test -- --run` in `frontend/` -> `54 passed`
+- Focused:
+  - `npm test -- --run src/api.test.ts src/App.workflow.test.tsx` in `frontend/` -> `5 passed`
+- Full frontend verification:
+  - `git diff --check` -> passed
+  - `npm test -- --run` in `frontend/` -> `56 passed`
+  - `npm run build` in `frontend/` -> passed
+
+### Decisions made
+- No architecture decision. This keeps the existing auth pattern: frontend API calls must go through `apiFetch()` or a helper that uses it.
+
+### Warnings / Next
+- Chrome was reloaded after restarting the frontend dev server. If a duplicate-file dialog was already open before the fix, choose the file again so the page recreates the dialog with the new handler.
+- No database changes were made.
+- No dependencies installed.
+
+### Environment changes
+- Frontend dev server restarted in tmux session `bsie-frontend-dev` on `127.0.0.1:6776`.
+- Backend remains running on `127.0.0.1:8757`.
+
+## Done (previous session) — Runtime Restart and Port Cleanup
 
 ### What I changed
 - Restarted the local BSIE runtime.

@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-056: Investigation PDF reports can include local LLM analysis
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Operators want the investigation report workflow to include an LLM-assisted analysis section, but reports must remain court-oriented and evidence-preserving. The system already has a scoped, read-only Evidence Copilot contract with citations and audit logging, so report generation should reuse that contract instead of letting an LLM inspect arbitrary data or mutate records.
+- **Decision:** Add an optional `include_llm_analysis` flag to report generation. The frontend account/case report download helpers request it by default. The backend builds a local-only, read-only LLM analysis through the scoped Copilot context pack using the new `investigation_report_analysis` task mode, then embeds the returned answer, status, model, audit/context metadata, warnings, and citations in the PDF. If the local model is unavailable or scope is insufficient, report generation continues with a fallback note instead of failing. Multi-account case reports combine bounded per-account LLM analyses and explicitly warn that this is not a final cross-account conclusion.
+- **Alternatives:** (1) Let the PDF generator call Ollama directly with raw report text -- simpler but bypasses scope, citation, and audit contracts. (2) Make LLM analysis mandatory and fail the report when Ollama is down -- too brittle for operational reporting. (3) Keep LLM analysis only in the Copilot tab -- safer, but forces analysts to copy text manually and loses a reproducible report section.
+- **Consequences:** Generated investigation PDFs can now contain a clearly marked Local LLM draft analysis while preserving deterministic report sections. The LLM section must be treated as analyst-assist text, not a final investigative or legal conclusion. The audit trail is recorded when Copilot successfully builds the section.
+
 ### DEC-055: Live-use mode requires frontend JWT login and retained backups
 - **Date:** 2026-04-24
 - **Status:** accepted

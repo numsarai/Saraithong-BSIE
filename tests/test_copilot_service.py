@@ -321,6 +321,38 @@ def test_answer_copilot_question_applies_structured_task_mode(tmp_path: Path):
     assert audit.extra_context_json["task_mode"] == "review_checklist"
 
 
+def test_answer_copilot_question_supports_report_analysis_task_mode(tmp_path: Path):
+    engine = _make_engine(tmp_path)
+    calls = []
+
+    async def fake_chat(message, **kwargs):
+        calls.append({"message": message, **kwargs})
+        return {
+            "model": kwargs["model"],
+            "response": "บทวิเคราะห์รายงานระบุรายการออกสำคัญ [txn:txn-copilot-1] และ alert ที่ต้องตรวจสอบ [alert:alert-copilot-1]",
+        }
+
+    with Session(engine) as session:
+        _seed_scope(session)
+        result = asyncio.run(
+            answer_copilot_question(
+                session,
+                question="",
+                scope={"parser_run_id": "run-copilot-1", "account": "1234567890"},
+                task_mode="investigation_report_analysis",
+                operator="Reviewer",
+                llm_chat=fake_chat,
+            )
+        )
+        audit = session.scalars(select(AuditLog).where(AuditLog.id == result["audit_id"])).one()
+
+    assert result["status"] == "ok"
+    assert result["task_mode"] == "investigation_report_analysis"
+    assert "Task mode: investigation_report_analysis" in calls[0]["message"]
+    assert "not a final investigative or legal conclusion" in calls[0]["message"]
+    assert audit.extra_context_json["task_mode"] == "investigation_report_analysis"
+
+
 def test_answer_copilot_question_rejects_unknown_task_mode(tmp_path: Path):
     engine = _make_engine(tmp_path)
     with Session(engine) as session:

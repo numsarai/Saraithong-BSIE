@@ -10,11 +10,84 @@
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
 - **Active dev runtime:** backend `127.0.0.1:8757`, frontend `127.0.0.1:6776`; stale frontend port `6777` is closed
-- **Baseline:** backend `398 passed`, frontend `56 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `402 passed`, frontend `57 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth required (`BSIE_AUTH_REQUIRED=true`) + local SQLite WAL (`bsie.db`) now contains one processed real test statement
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Duplicate Upload Reprocess Auth Fix
+## Done (latest session) — Local LLM Analysis in Investigation Reports
+
+### What I changed
+- Added a scoped Local LLM analysis section to investigation PDF report generation.
+- Added Copilot task mode `investigation_report_analysis` with strict instructions:
+  - use only deterministic scoped BSIE context
+  - cite evidence ids for factual claims
+  - avoid final investigative/legal conclusions
+  - do not infer intent, guilt, ownership, or criminal elements beyond evidence
+- Added `build_account_report_llm_analysis()` in `services/report_service.py`, reusing the audited Evidence Copilot contract.
+- Added `build_case_report_llm_analysis()` for multi-account case reports. It is bounded per-account and warns that it is not a final cross-account conclusion.
+- Embedded the LLM output into PDF reports with:
+  - status
+  - model
+  - audit id and context hash when available
+  - caution note
+  - answer text
+  - warnings
+  - cited evidence rows
+- Added `include_llm_analysis` support to:
+  - `POST /api/reports/account`
+  - `POST /api/reports/case`
+- Updated frontend report download helpers to request LLM analysis by default.
+- Updated the report button label to show that the PDF includes AI analysis.
+
+### Evidence / safety behavior
+- All LLM work stays local through existing Ollama/Copilot plumbing.
+- LLM failure does not block report generation; the PDF gets a fallback note instead.
+- Successful LLM report analysis is audited through the Copilot audit flow.
+- The LLM section is explicitly labeled as a draft analyst-assist section, not a final conclusion.
+
+### Files changed
+- `services/copilot_service.py`
+- `services/report_service.py`
+- `routers/reports.py`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `tests/test_report_service.py`
+- `tests/test_copilot_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `398 passed`
+  - `npm test -- --run` in `frontend/` -> `56 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile routers/reports.py services/report_service.py services/copilot_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_report_service.py tests/test_copilot_service.py tests/test_app_api.py::test_account_report_endpoint_can_include_llm_analysis -q` -> `13 passed`
+  - `npm test -- --run src/api.test.ts` in `frontend/` -> `2 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `402 passed`
+  - `npm test -- --run` in `frontend/` -> `57 passed`
+  - `npm run build` in `frontend/` -> passed
+
+### Decisions made
+- Added `DEC-056: Investigation PDF reports can include local LLM analysis`.
+
+### Warnings / Next
+- LLM analysis quality depends on the configured local text model (`qwen3.5:9b` by default in this runtime).
+- Multi-account case report analysis is intentionally bounded and per-account; richer cross-account LLM synthesis should be a later feature backed by deterministic graph/case context.
+- No database reset or evidence mutation was performed.
+- No dependencies installed.
+
+### Environment changes
+- Backend restarted in tmux session `bsie-backend-dev` on `127.0.0.1:8757`.
+- Frontend restarted in tmux session `bsie-frontend-dev` on `127.0.0.1:6776`.
+- Chrome was opened/reloaded at `http://127.0.0.1:6776/`.
+
+## Done (previous session) — Duplicate Upload Reprocess Auth Fix
 
 ### What I changed
 - Investigated Chrome after the operator reported that uploading an already-processed file could not be reprocessed.

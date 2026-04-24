@@ -72,6 +72,17 @@ _COPILOT_TASKS: dict[str, dict[str, Any]] = {
             "Make clear it is a draft based only on the scoped evidence, not a final investigative conclusion.",
         ],
     },
+    "investigation_report_analysis": {
+        "label": "Investigation report analysis",
+        "default_question": "Draft an investigation report analysis section from this scoped evidence.",
+        "instructions": [
+            "Draft a concise Thai investigation-report analysis section with cautious language.",
+            "Cover transaction overview, key counterparties, alert patterns, review limits, and recommended follow-up only when supported by the context pack.",
+            "Every factual claim must include citations.",
+            "State clearly that this is a local LLM draft based only on scoped BSIE evidence and not a final investigative or legal conclusion.",
+            "Do not infer intent, guilt, account ownership, or criminal elements beyond the scoped evidence.",
+        ],
+    },
 }
 
 

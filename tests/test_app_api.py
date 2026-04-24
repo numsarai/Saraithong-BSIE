@@ -1363,6 +1363,42 @@ def test_llm_copilot_endpoint_returns_scoped_read_only_answer():
     assert copilot.call_args.kwargs["task_mode"] == "alert_explanation"
 
 
+def test_account_report_endpoint_can_include_llm_analysis(tmp_path):
+    pdf_path = tmp_path / "report.pdf"
+    pdf_path.write_bytes(b"%PDF-FAKE")
+    llm_result = {
+        "enabled": True,
+        "status": "ok",
+        "source": "local_llm_investigation_copilot",
+        "model": "qwen3.5:9b",
+        "answer": "พบรายการที่ควรตรวจสอบ [txn:TX-1]",
+        "citations": [{"id": "txn:TX-1"}],
+        "warnings": [],
+    }
+
+    with (
+        patch("routers.reports.get_db_session", _fake_db_session),
+        patch("routers.reports.build_account_report_llm_analysis", new=AsyncMock(return_value=llm_result)) as build_llm,
+        patch("routers.reports.generate_account_report", return_value=pdf_path) as generate_report,
+    ):
+        response = client.post(
+            "/api/reports/account",
+            json={
+                "account": "1883167399",
+                "parser_run_id": "RUN-1",
+                "analyst": "Case Reviewer",
+                "include_llm_analysis": True,
+            },
+        )
+
+    assert response.status_code == 200
+    build_llm.assert_awaited_once()
+    assert build_llm.call_args.kwargs["parser_run_id"] == "RUN-1"
+    assert build_llm.call_args.kwargs["analyst"] == "Case Reviewer"
+    generate_report.assert_called_once()
+    assert generate_report.call_args.kwargs["llm_analysis"] == llm_result
+
+
 def test_llm_classification_preview_endpoint_is_read_only():
     preview_result = {
         "status": "ok",

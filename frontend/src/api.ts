@@ -371,7 +371,7 @@ export async function generateAccountReport(account: string, parserRunId?: strin
   const r = await apiFetch('/api/reports/account', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ account, parser_run_id: parserRunId || '', analyst }),
+    body: JSON.stringify({ account, parser_run_id: parserRunId || '', analyst, include_llm_analysis: true }),
   })
   if (!r.ok) throw new Error(await r.text())
   const blob = await r.blob()
@@ -387,7 +387,7 @@ export async function generateCaseReport(accounts: string[], analyst = 'analyst'
   const r = await apiFetch('/api/reports/case', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accounts, analyst }),
+    body: JSON.stringify({ accounts, analyst, include_llm_analysis: true }),
   })
   if (!r.ok) throw new Error(await r.text())
   const blob = await r.blob()

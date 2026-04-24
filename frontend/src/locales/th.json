@@ -230,7 +230,7 @@
       "i2ImportSpec": "i2 Import Spec (.ximp)",
       "originalSource": "ไฟล์ต้นฉบับ",
       "metadataJson": "ข้อมูลเมตา (.json)",
-      "reportPdf": "รายงานสอบสวน (.pdf)"
+      "reportPdf": "รายงานสอบสวน + วิเคราะห์ AI (.pdf)"
     },
     "overrideModal": {
       "title": "แก้ไขความสัมพันธ์",

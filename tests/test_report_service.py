@@ -1,6 +1,7 @@
 """Regression tests for report scoping in services/report_service.py."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -11,7 +12,7 @@ from sqlmodel import SQLModel
 
 from persistence.base import Base, utcnow
 from persistence.models import Account, Alert, FileRecord, ParserRun, StatementBatch, Transaction
-from services.report_service import generate_account_report, generate_case_report
+from services.report_service import build_case_report_llm_analysis, generate_account_report, generate_case_report
 
 
 def _make_engine(tmp_path: Path):
@@ -30,6 +31,7 @@ class FakeReport:
         self.report_date = report_date
         self.info_rows: list[tuple[str, str]] = []
         self.section_titles: list[str] = []
+        self.paragraphs: list[str] = []
         self.table_rows: list[list[str]] = []
         self.table_headers: list[list[str]] = []
         self.output_path: Path | None = None
@@ -65,6 +67,10 @@ class FakeReport:
     def table_row(self, cells: list[str], _widths: list[int], fill: bool = False):
         del fill
         self.table_rows.append([str(cell) for cell in cells])
+
+    def paragraph(self, text: str, *, size: int = 13):
+        del size
+        self.paragraphs.append(str(text))
 
     def output(self, path: str):
         output_path = Path(path)
@@ -270,6 +276,65 @@ def test_account_report_uses_selected_parser_run_for_account_and_alert_scope(tmp
     assert all("Stale run alert" not in row for row in report.table_rows)
 
 
+def test_account_report_embeds_scoped_llm_analysis_section(tmp_path: Path, monkeypatch):
+    engine = _make_engine(tmp_path)
+    monkeypatch.setattr("services.report_service.BSIEReport", FakeReport)
+    monkeypatch.setattr("services.report_service.OUTPUT_DIR", tmp_path / "reports")
+    FakeReport.instances.clear()
+
+    file_row = _make_file("66666666-6666-6666-6666-666666666666")
+    run = _make_run("run-llm-report", file_row.id, "kbank")
+    run_id = run.id
+    account = _make_account(
+        "acct-llm-report",
+        "1883167399",
+        bank_code="kbank",
+        bank_name="Kasikornbank",
+        holder="Report Holder",
+    )
+    account_number = account.normalized_account_number
+    batch = _make_statement_batch("batch-llm-report", file_row.id, run.id, account.id)
+    txn = _make_transaction(
+        "txn-llm-report",
+        file_row.id,
+        run.id,
+        account.id,
+        "2500.00",
+        when=datetime(2024, 5, 1, 9, 0, tzinfo=timezone.utc),
+    )
+    llm_analysis = {
+        "status": "ok",
+        "source": "local_llm_investigation_copilot",
+        "model": "qwen3.5:9b",
+        "answer": "บัญชีนี้มีรายการออกที่ควรตรวจสอบ [txn:txn-llm-report]",
+        "context_hash": "a" * 64,
+        "audit_id": "AUDIT-REPORT-1",
+        "warnings": ["ต้องตรวจสอบกับ statement ต้นฉบับ"],
+        "citations": [
+            {"id": "txn:txn-llm-report", "type": "txn", "object_id": "txn-llm-report", "label": "OUT 2,500 THB"},
+        ],
+    }
+
+    with Session(engine) as session:
+        session.add_all([file_row, run, account, batch, txn])
+        session.commit()
+
+    with Session(engine) as session:
+        pdf_path = generate_account_report(
+            session,
+            account_number,
+            parser_run_id=run_id,
+            analyst="tester",
+            llm_analysis=llm_analysis,
+        )
+
+    report = FakeReport.instances[-1]
+    assert pdf_path.exists()
+    assert "บทวิเคราะห์จาก Local LLM" in report.section_titles
+    assert any("รายการออกที่ควรตรวจสอบ" in paragraph for paragraph in report.paragraphs)
+    assert any("txn:txn-llm-report" in row for row in report.table_rows)
+
+
 def test_case_report_includes_alerts_only_for_requested_accounts(tmp_path: Path, monkeypatch):
     engine = _make_engine(tmp_path)
     monkeypatch.setattr("services.report_service.BSIEReport", FakeReport)
@@ -340,3 +405,36 @@ def test_case_report_includes_alerts_only_for_requested_accounts(tmp_path: Path,
     assert pdf_path.exists()
     assert any("Requested alert" in row for row in report.table_rows)
     assert all("Unrelated alert" not in row for row in report.table_rows)
+
+
+def test_case_report_llm_analysis_is_bounded_per_account(tmp_path: Path, monkeypatch):
+    engine = _make_engine(tmp_path)
+    calls: list[str] = []
+
+    async def fake_account_analysis(_session, account, **_kwargs):
+        calls.append(account)
+        return {
+            "status": "ok",
+            "model": "qwen3.5:9b",
+            "answer": f"วิเคราะห์บัญชี {account} [account:{account}]",
+            "citations": [{"id": f"account:{account}", "type": "account", "label": account}],
+            "warnings": [],
+        }
+
+    monkeypatch.setattr("services.report_service.build_account_report_llm_analysis", fake_account_analysis)
+
+    with Session(engine) as session:
+        result = asyncio.run(
+            build_case_report_llm_analysis(
+                session,
+                ["1000000001", "2000000002", "3000000003", "4000000004"],
+                analyst="tester",
+                max_accounts=2,
+            )
+        )
+
+    assert calls == ["1000000001", "2000000002"]
+    assert result["status"] == "ok"
+    assert "บัญชี 1000000001" in result["answer"]
+    assert "บัญชี 3000000003" not in result["answer"]
+    assert any("จำกัดบทวิเคราะห์ LLM" in warning for warning in result["warnings"])

@@ -230,7 +230,7 @@
       "i2ImportSpec": "i2 Import Spec (.ximp)",
       "originalSource": "Original Source",
       "metadataJson": "Metadata (.json)",
-      "reportPdf": "Investigation Report (.pdf)"
+      "reportPdf": "Investigation Report + AI Analysis (.pdf)"
     },
     "overrideModal": {
       "title": "Override Relationship",

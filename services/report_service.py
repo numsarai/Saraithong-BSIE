@@ -18,6 +18,11 @@ from sqlalchemy.orm import Session
 
 from paths import STATIC_DIR, OUTPUT_DIR
 from persistence.models import Account, Alert, StatementBatch, Transaction
+from services.copilot_service import (
+    CopilotNotFoundError,
+    CopilotScopeError,
+    answer_copilot_question,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +44,11 @@ def _fmt_amount(value: float | Decimal | None) -> str:
 def _fmt_date(value: Any) -> str:
     s = str(value or "")[:10]
     return s if len(s) >= 8 else "—"
+
+
+def _safe_text(value: Any, *, limit: int = 2000) -> str:
+    text = str(value or "").strip()
+    return text if len(text) <= limit else f"{text[: limit - 3]}..."
 
 
 def _resolve_account_for_report(
@@ -143,6 +153,187 @@ class BSIEReport(FPDF):
             self.cell(w, 6, str(c)[:30], border=1, fill=fill, align="L")
         self.ln()
 
+    def paragraph(self, text: str, *, size: int = 13):
+        self.set_font("THSarabun", "", size)
+        self.set_text_color(15, 23, 42)
+        self.multi_cell(0, 6, str(text or "—"))
+        self.ln(2)
+
+
+async def build_account_report_llm_analysis(
+    session: Session,
+    account: str,
+    *,
+    parser_run_id: str = "",
+    analyst: str = "analyst",
+    model: str = "",
+    max_transactions: int = 30,
+) -> dict[str, Any]:
+    """Build a read-only local LLM analysis payload for the account report."""
+    norm = "".join(c for c in account if c.isdigit())
+    scope = {
+        "parser_run_id": str(parser_run_id or ""),
+        "file_id": "",
+        "account": norm,
+        "case_tag_id": "",
+        "case_tag": "",
+    }
+    question = (
+        "จัดทำบทวิเคราะห์สำหรับใส่ในรายงานการสอบสวนจากหลักฐานที่กำหนดเท่านั้น "
+        "ให้ระบุภาพรวมธุรกรรม คู่สัญญาสำคัญ สัญญาณเตือนหรือรูปแบบที่ควรตรวจสอบ "
+        "ข้อจำกัดของข้อมูล และรายการที่ควรตรวจสอบต่อ โดยต้องอ้างอิง evidence id ทุกข้อเท็จจริง"
+    )
+
+    try:
+        result = await answer_copilot_question(
+            session,
+            question=question,
+            scope=scope,
+            operator=analyst,
+            model=model,
+            max_transactions=max_transactions,
+            task_mode="investigation_report_analysis",
+        )
+        return {
+            "enabled": True,
+            "status": result.get("status", "ok"),
+            "source": result.get("source", "local_llm_investigation_copilot"),
+            "model": result.get("model", model or "local-default"),
+            "task_mode": result.get("task_mode", "investigation_report_analysis"),
+            "answer": _safe_text(result.get("answer"), limit=3600),
+            "scope": result.get("scope", scope),
+            "context_hash": result.get("context_hash", ""),
+            "citation_policy": result.get("citation_policy", {}),
+            "citations": list(result.get("citations") or [])[:20],
+            "warnings": list(result.get("warnings") or []),
+            "audit_id": result.get("audit_id", ""),
+        }
+    except (CopilotNotFoundError, CopilotScopeError, ConnectionError, RuntimeError, ValueError) as exc:
+        return {
+            "enabled": True,
+            "status": "unavailable",
+            "source": "local_llm_report_analysis",
+            "model": model or "local-default",
+            "task_mode": "investigation_report_analysis",
+            "answer": "ไม่สามารถสร้างบทวิเคราะห์จาก Local LLM ได้ในรอบนี้ รายงานส่วนอื่นยังสร้างจากข้อมูลธุรกรรมและการแจ้งเตือนที่ตรวจสอบได้ตามปกติ",
+            "scope": scope,
+            "context_hash": "",
+            "citation_policy": {"status": "unavailable", "requires_review": True, "warning": str(exc)[:300]},
+            "citations": [],
+            "warnings": [str(exc)[:300]],
+            "audit_id": "",
+        }
+
+
+async def build_case_report_llm_analysis(
+    session: Session,
+    accounts: list[str],
+    *,
+    analyst: str = "analyst",
+    model: str = "",
+    max_accounts: int = 3,
+    max_transactions: int = 20,
+) -> dict[str, Any]:
+    """Build a bounded local LLM analysis payload for a multi-account case report."""
+    clean_accounts = ["".join(c for c in str(account or "") if c.isdigit()) for account in accounts]
+    clean_accounts = [account for account in clean_accounts if account]
+    if not clean_accounts:
+        return {
+            "enabled": True,
+            "status": "unavailable",
+            "source": "local_llm_report_analysis",
+            "model": model or "local-default",
+            "task_mode": "investigation_report_analysis",
+            "answer": "ไม่สามารถสร้างบทวิเคราะห์จาก Local LLM ได้ เนื่องจากไม่พบเลขบัญชีที่ใช้เป็นขอบเขตหลักฐาน",
+            "scope": {"accounts": []},
+            "context_hash": "",
+            "citation_policy": {"status": "unavailable", "requires_review": True, "warning": "no account scope"},
+            "citations": [],
+            "warnings": ["no account scope"],
+            "audit_id": "",
+        }
+
+    analyses: list[dict[str, Any]] = []
+    for account in clean_accounts[:max_accounts]:
+        analyses.append(
+            await build_account_report_llm_analysis(
+                session,
+                account,
+                analyst=analyst,
+                model=model,
+                max_transactions=max_transactions,
+            )
+        )
+
+    answer_parts = []
+    citations: list[dict[str, Any]] = []
+    warnings = [
+        "บทวิเคราะห์ Local LLM สำหรับรายงานหลายบัญชีนี้เป็นการวิเคราะห์รายบัญชี ไม่ใช่ข้อสรุป cross-account ขั้นสุดท้าย"
+    ]
+    for account, analysis in zip(clean_accounts[:max_accounts], analyses):
+        answer_parts.append(f"บัญชี {account}: {_safe_text(analysis.get('answer'), limit=1800)}")
+        citations.extend(list(analysis.get("citations") or []))
+        warnings.extend(str(item) for item in (analysis.get("warnings") or []) if str(item).strip())
+
+    if len(clean_accounts) > max_accounts:
+        warnings.append(f"จำกัดบทวิเคราะห์ LLM ไว้ที่ {max_accounts} บัญชีแรกจากทั้งหมด {len(clean_accounts)} บัญชี")
+
+    statuses = {str(item.get("status") or "") for item in analyses}
+    status = "ok" if statuses == {"ok"} else "needs_review" if analyses else "unavailable"
+    return {
+        "enabled": True,
+        "status": status,
+        "source": "local_llm_case_report_analysis",
+        "model": analyses[0].get("model") if analyses else (model or "local-default"),
+        "task_mode": "investigation_report_analysis",
+        "answer": "\n\n".join(answer_parts),
+        "scope": {"accounts": clean_accounts[:max_accounts], "account_count": len(clean_accounts)},
+        "context_hash": "",
+        "citation_policy": {"status": status, "requires_review": status != "ok", "warning": ""},
+        "citations": citations[:20],
+        "warnings": warnings[:12],
+        "audit_id": "",
+    }
+
+
+def _add_llm_analysis_section(pdf: BSIEReport, llm_analysis: dict[str, Any] | None):
+    if not llm_analysis:
+        return
+
+    pdf.add_page()
+    pdf.section_title("บทวิเคราะห์จาก Local LLM")
+    pdf.info_row("สถานะ:", str(llm_analysis.get("status") or "—"))
+    pdf.info_row("โมเดล:", str(llm_analysis.get("model") or "—"))
+    if llm_analysis.get("audit_id"):
+        pdf.info_row("Audit ID:", str(llm_analysis.get("audit_id")))
+    if llm_analysis.get("context_hash"):
+        pdf.info_row("Context Hash:", str(llm_analysis.get("context_hash"))[:16])
+
+    pdf.paragraph(
+        "หมายเหตุ: ส่วนนี้เป็นร่างบทวิเคราะห์จาก Local LLM โดยใช้เฉพาะหลักฐานที่อยู่ในขอบเขตรายงานนี้ "
+        "ไม่ใช่ข้อสรุปสุดท้ายทางคดีหรือข้อวินิจฉัยทางกฎหมาย ผู้วิเคราะห์ต้องตรวจสอบกับรายการต้นฉบับและพยานหลักฐานประกอบอีกครั้ง"
+    )
+    pdf.paragraph(_safe_text(llm_analysis.get("answer"), limit=3600))
+
+    warnings = [str(item) for item in (llm_analysis.get("warnings") or []) if str(item).strip()]
+    if warnings:
+        pdf.section_title("ข้อควรตรวจสอบจาก LLM")
+        for warning in warnings[:5]:
+            pdf.paragraph(f"- {_safe_text(warning, limit=300)}", size=12)
+
+    citations = list(llm_analysis.get("citations") or [])[:12]
+    if citations:
+        pdf.section_title("หลักฐานที่ LLM อ้างอิง")
+        headers = ["Citation", "ประเภท", "รายละเอียด"]
+        widths = [42, 25, 110]
+        pdf.table_header(headers, widths)
+        for i, item in enumerate(citations):
+            pdf.table_row([
+                item.get("id", "—"),
+                item.get("type", "—"),
+                item.get("label", item.get("object_id", "—")),
+            ], widths, fill=(i % 2 == 1))
+
 
 def generate_account_report(
     session: Session,
@@ -150,6 +341,7 @@ def generate_account_report(
     *,
     parser_run_id: str = "",
     analyst: str = "analyst",
+    llm_analysis: dict[str, Any] | None = None,
 ) -> Path:
     """Generate a single-account investigation PDF report."""
     norm = "".join(c for c in account if c.isdigit())
@@ -230,8 +422,10 @@ def generate_account_report(
     for label, value in stats:
         pdf.info_row(label, value)
 
+    _add_llm_analysis_section(pdf, llm_analysis)
+
     # ── Top Counterparties ──
-    pdf.ln(5)
+    pdf.add_page()
     pdf.section_title("คู่สัญญาหลัก (Top 20)")
     headers = ["ลำดับ", "เลขบัญชี", "ชื่อ", "ยอดเข้า", "ยอดออก", "รวม"]
     widths = [12, 35, 45, 30, 30, 30]
@@ -307,6 +501,7 @@ def generate_case_report(
     accounts: list[str],
     *,
     analyst: str = "analyst",
+    llm_analysis: dict[str, Any] | None = None,
 ) -> Path:
     """Generate a multi-account case investigation PDF report."""
     pdf = BSIEReport()
@@ -326,6 +521,8 @@ def generate_case_report(
     pdf.info_row("จำนวนบัญชี:", f"{len(accounts)} บัญชี")
     pdf.info_row("ผู้วิเคราะห์:", analyst)
     pdf.info_row("วันที่จัดทำ:", datetime.now().strftime("%d/%m/%Y %H:%M"))
+
+    _add_llm_analysis_section(pdf, llm_analysis)
 
     # Per-account summaries
     requested_account_ids: set[str] = set()

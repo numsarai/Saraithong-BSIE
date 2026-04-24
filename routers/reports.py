@@ -9,13 +9,26 @@ from fastapi import Depends, APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from persistence.base import get_db_session
-from services.report_service import generate_account_report, generate_case_report
+from services.report_service import (
+    build_account_report_llm_analysis,
+    build_case_report_llm_analysis,
+    generate_account_report,
+    generate_case_report,
+)
 from services.report_template_service import (
     list_templates, get_template, save_template, delete_template,
     list_criteria, save_criteria,
 )
 
 router = APIRouter(prefix="/api/reports", tags=["reports"], dependencies=[Depends(require_auth)])
+
+
+def _payload_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
 
 
 @router.post("/account")
@@ -25,17 +38,31 @@ async def api_generate_account_report(request: Request):
     account = str(payload.get("account", ""))
     parser_run_id = str(payload.get("parser_run_id", ""))
     analyst = str(payload.get("analyst", "analyst"))
+    include_llm_analysis = _payload_bool(payload.get("include_llm_analysis", False))
+    llm_model = str(payload.get("llm_model", ""))
 
     if not account:
         raise HTTPException(400, "account is required")
 
     with get_db_session() as session:
+        llm_analysis = None
+        if include_llm_analysis:
+            llm_analysis = await build_account_report_llm_analysis(
+                session,
+                account,
+                parser_run_id=parser_run_id,
+                analyst=analyst,
+                model=llm_model,
+            )
         pdf_path = generate_account_report(
             session,
             account,
             parser_run_id=parser_run_id,
             analyst=analyst,
+            llm_analysis=llm_analysis,
         )
+        if include_llm_analysis:
+            session.commit()
 
     return FileResponse(
         str(pdf_path),
@@ -98,16 +125,29 @@ async def api_generate_case_report(request: Request):
     payload = await request.json()
     accounts = payload.get("accounts", [])
     analyst = str(payload.get("analyst", "analyst"))
+    include_llm_analysis = _payload_bool(payload.get("include_llm_analysis", False))
+    llm_model = str(payload.get("llm_model", ""))
 
     if not accounts:
         raise HTTPException(400, "accounts list is required")
 
     with get_db_session() as session:
+        llm_analysis = None
+        if include_llm_analysis:
+            llm_analysis = await build_case_report_llm_analysis(
+                session,
+                accounts,
+                analyst=analyst,
+                model=llm_model,
+            )
         pdf_path = generate_case_report(
             session,
             accounts,
             analyst=analyst,
+            llm_analysis=llm_analysis,
         )
+        if include_llm_analysis:
+            session.commit()
 
     return FileResponse(
         str(pdf_path),

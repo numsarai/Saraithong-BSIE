@@ -13,7 +13,41 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Inline Evidence Preview Drawer
+## Done (latest session) — OCR Marker Overlay For Image Evidence
+
+### What I changed
+- Step 2 evidence preview drawer now renders image evidence as an `<img>` instead of an iframe.
+- When an account-presence location includes OCR `x_center` / `y_center`, the drawer draws a visible marker over the source image after the image dimensions load.
+- The metadata panel now shows the marker position as percentages of the image dimensions.
+- PDF evidence still uses the existing iframe preview and keeps the `#page=N` fragment.
+- Updated the OCR lineage frontend regression to verify the image preview URL, marker placement, and `Open in new tab` URL.
+
+### Files changed
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `372 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `13 passed`
+- Focused:
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `13 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+- Full verification:
+  - `npm test -- --run` in `frontend/` -> `46 passed`
+
+### Decisions made
+- No new architecture decision. This is a UI overlay improvement inside the DEC-033 evidence preview boundary.
+
+### Warnings / Next
+- The overlay marks OCR center coordinates only. It does not yet draw full OCR bounding boxes because account-presence locations currently expose `x_center`/`y_center` but not the full bbox.
+- The next useful slice is to carry OCR bbox coordinates through account-presence locations, or move into Phase 4 investigation copilot scope locking.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Inline Evidence Preview Drawer
 
 ### What I changed
 - Step 2 account-presence location cards now open an inline evidence preview drawer instead of only linking to a new tab.

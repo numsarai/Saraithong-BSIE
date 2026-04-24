@@ -333,7 +333,8 @@ export function Step2Map() {
   const possiblePresenceLocations = Array.isArray(accountPresence?.possible_locations) ? accountPresence.possible_locations : []
   const presenceSummaryItems = buildPresenceSummaryItems(accountPresence)
   const hasPresenceLocations = exactPresenceLocations.length > 0 || possiblePresenceLocations.length > 0
-  const previewableEvidenceFileId = isPreviewableEvidence(accountPresence, fileName) ? fileId : null
+  const previewableEvidenceKind = getPreviewableEvidenceKind(accountPresence, fileName)
+  const previewableEvidenceFileId = previewableEvidenceKind ? fileId : null
   const rankedCandidates = candidateKeys.map((key: string) => ({
     key,
     name: banks.find((bank: any) => bank.key === key)?.name || key.toUpperCase(),
@@ -1121,6 +1122,7 @@ export function Step2Map() {
           location={evidencePreview.location}
           title={evidencePreview.title}
           tone={evidencePreview.tone}
+          previewKind={previewableEvidenceKind}
           onClose={() => setEvidencePreview(null)}
         />
       )}
@@ -1303,10 +1305,14 @@ function buildPresenceSummaryItems(accountPresence: any | null) {
   return items.slice(0, 8)
 }
 
-function isPreviewableEvidence(accountPresence: any | null, fileName: unknown) {
+type EvidencePreviewKind = 'pdf' | 'image'
+
+function getPreviewableEvidenceKind(accountPresence: any | null, fileName: unknown): EvidencePreviewKind | null {
   const fileType = String(accountPresence?.file_type || '').trim().toLowerCase()
-  if (fileType === 'pdf' || fileType === 'image') return true
-  return /\.(pdf|png|jpe?g|bmp)$/i.test(String(fileName || ''))
+  const name = String(fileName || '')
+  if (fileType === 'image' || /\.(png|jpe?g|bmp)$/i.test(name)) return 'image'
+  if (fileType === 'pdf' || /\.pdf$/i.test(name)) return 'pdf'
+  return null
 }
 
 function appendCount(items: Array<{ label: string; value: string }>, label: string, value: unknown) {
@@ -1382,17 +1388,22 @@ function EvidencePreviewDrawer({
   location,
   title,
   tone,
+  previewKind,
   onClose,
 }: {
   fileId: string
   location: any
   title: string
   tone: 'green' | 'yellow'
+  previewKind: EvidencePreviewKind | null
   onClose: () => void
 }) {
-  const previewUrl = evidencePreviewUrl(fileId, location.page_number)
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null)
+  const isImagePreview = previewKind === 'image'
+  const previewUrl = evidencePreviewUrl(fileId, isImagePreview ? null : location.page_number)
   const confidence = formatOcrConfidence(location.ocr_confidence)
   const position = formatOcrPosition(location)
+  const marker = buildOcrImageMarker(location, imageSize)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
@@ -1418,11 +1429,36 @@ function EvidencePreviewDrawer({
 
         <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-h-[420px] bg-black/20">
-            <iframe
-              title="Evidence preview frame"
-              src={previewUrl}
-              className="h-full min-h-[420px] w-full border-0 bg-white"
-            />
+            {isImagePreview ? (
+              <div className="flex h-full min-h-[420px] items-center justify-center overflow-auto p-3">
+                <div className="relative inline-block">
+                  <img
+                    src={previewUrl}
+                    alt="Evidence source preview"
+                    className="max-h-[70vh] max-w-full object-contain"
+                    onLoad={event => {
+                      const image = event.currentTarget
+                      setImageSize({ width: image.naturalWidth, height: image.naturalHeight })
+                    }}
+                  />
+                  {marker && (
+                    <div
+                      aria-label="OCR position marker"
+                      className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-warning bg-warning/25 shadow-[0_0_0_4px_rgba(245,158,11,0.20)]"
+                      style={{ left: `${marker.leftPercent}%`, top: `${marker.topPercent}%` }}
+                    >
+                      <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-warning" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <iframe
+                title="Evidence preview frame"
+                src={previewUrl}
+                className="h-full min-h-[420px] w-full border-0 bg-white"
+              />
+            )}
           </div>
           <div className="overflow-y-auto border-t border-border bg-surface2/50 p-4 md:border-l md:border-t-0">
             <div className="space-y-3">
@@ -1440,6 +1476,7 @@ function EvidencePreviewDrawer({
                 <EvidenceDetail label="Column" value={location.column_label ? formatEvidenceItem(location.column_label) : ''} />
                 <EvidenceDetail label="Zone" value={location.row_zone ? formatEvidenceItem(location.row_zone) : ''} />
                 <EvidenceDetail label="Position" value={position} />
+                <EvidenceDetail label="Image marker" value={marker ? `${marker.leftPercent.toFixed(1)}% x, ${marker.topPercent.toFixed(1)}% y` : ''} />
               </div>
 
               {location.value_preview && (
@@ -1522,6 +1559,18 @@ function formatOcrPosition(location: any) {
   const y = Number(location.y_center)
   if (!Number.isFinite(x) || !Number.isFinite(y)) return ''
   return `Position: x ${x.toFixed(1)}, y ${y.toFixed(1)}`
+}
+
+function buildOcrImageMarker(location: any, imageSize: { width: number; height: number } | null) {
+  if (!imageSize || imageSize.width <= 0 || imageSize.height <= 0) return null
+  const x = Number(location.x_center)
+  const y = Number(location.y_center)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  if (x < 0 || y < 0 || x > imageSize.width || y > imageSize.height) return null
+  return {
+    leftPercent: (x / imageSize.width) * 100,
+    topPercent: (y / imageSize.height) * 100,
+  }
 }
 
 function FlowCard({

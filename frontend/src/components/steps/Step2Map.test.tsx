@@ -297,6 +297,49 @@ describe('Step2Map analyst gate', () => {
     expect(screen.getAllByText('Required').length).toBeGreaterThan(0)
   })
 
+  it('blocks high-confidence bank overrides until explicitly confirmed', async () => {
+    seedUpload({
+      detected_bank: {
+        key: 'scb',
+        bank: 'SCB',
+        confidence: 0.96,
+        ambiguous: false,
+        scores: { scb: 12.0, ktb: 4.0 },
+        top_candidates: ['scb', 'ktb'],
+        evidence: { positive: ['keyword:SCB'], negative: [], layout: 'dual_account_like' },
+      },
+    })
+
+    render(<Step2Map />)
+
+    const continueButton = await screen.findByRole('button', { name: /^confirm mapping$/i })
+    expect(continueButton).toBeEnabled()
+
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'ktb' } })
+
+    await waitFor(() => expect(continueButton).toBeDisabled())
+    expect(screen.getByText(/selected bank overrides auto-detection/i)).toBeInTheDocument()
+    expect(screen.getByText(/selected bank \(KTB\) differs from detected bank \(SCB\)/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /confirm selected bank/i }))
+
+    await waitFor(() => expect(continueButton).toBeEnabled())
+    fireEvent.click(continueButton)
+
+    await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
+    expect(previewMapping).toHaveBeenCalledWith(expect.objectContaining({ bank: 'ktb' }))
+    expect(confirmMapping).toHaveBeenCalledWith(
+      'ktb',
+      expect.any(Object),
+      expect.any(Array),
+      1,
+      'Sheet1',
+      expect.objectContaining({
+        detected_bank: expect.objectContaining({ key: 'scb' }),
+      }),
+    )
+  })
+
   it('clears mapping review when a critical mapping changes after confirmation', async () => {
     seedUpload({
       detected_bank: {

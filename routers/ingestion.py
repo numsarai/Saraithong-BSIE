@@ -576,11 +576,8 @@ async def api_confirm_mapping(request: Request):
     header_row = int(body.header_row or 0)
     sheet_name = str(body.sheet_name or "")
     reviewer = str(body.reviewer or "analyst").strip() or "analyst"
-    detected_bank = detected_bank_key(
-        payload.get("detected_bank")
-        if "detected_bank" in payload
-        else payload.get("detectedBank"),
-    )
+    detected_bank_raw = payload.get("detected_bank") if "detected_bank" in payload else payload.get("detectedBank")
+    detected_bank = detected_bank_key(detected_bank_raw)
     suggested_mapping = payload.get("suggested_mapping") or payload.get("suggestedMapping") or {}
 
     validation = validate_and_preview_mapping(
@@ -596,6 +593,13 @@ async def api_confirm_mapping(request: Request):
     columns = validation["columns"]
     bank_feedback = bank_feedback_status(bank, detected_bank)
     mapping_feedback = mapping_feedback_status(mapping, suggested_mapping)
+    bank_override_detected = bool(detected_bank and bank_feedback == "corrected")
+    bank_authority_context = {
+        "selected_bank": str(bank or "").strip().lower(),
+        "detected_bank": detected_bank,
+        "bank_override_detected": bank_override_detected,
+        "authority": "analyst_selected" if bank_override_detected else "detected_or_selected",
+    }
     promote_shared = bool(body.promote_shared)
     if promote_shared and not _can_promote_shared_mapping(reviewer):
         raise HTTPException(403, "Shared mapping promotion requires a named reviewer")
@@ -630,6 +634,9 @@ async def api_confirm_mapping(request: Request):
                 new_value=mapping,
                 extra_context={
                     "bank": bank,
+                    "bank_authority": bank_authority_context,
+                    "detected_bank": detected_bank_raw if isinstance(detected_bank_raw, dict) else detected_bank,
+                    "bank_feedback": bank_feedback,
                     "columns": list(columns or []),
                     "variant_action": variant["action"],
                     "trust_state": variant["trust_state"],
@@ -650,6 +657,9 @@ async def api_confirm_mapping(request: Request):
                 new_value=mapping,
                 extra_context={
                     "bank": bank,
+                    "bank_authority": bank_authority_context,
+                    "detected_bank": detected_bank_raw if isinstance(detected_bank_raw, dict) else detected_bank,
+                    "bank_feedback": bank_feedback,
                     "columns": list(columns or []),
                     "promotion_requested": False,
                     "dry_run_summary": validation["dry_run_preview"]["summary"],
@@ -663,6 +673,7 @@ async def api_confirm_mapping(request: Request):
         "fingerprint_id": None,
         "variant_id": variant["variant_id"] if variant else None,
         "bank_feedback": bank_feedback,
+        "bank_authority": bank_authority_context,
         "mapping_feedback": mapping_feedback,
         "feedback_mode": feedback_mode,
         "validation": {

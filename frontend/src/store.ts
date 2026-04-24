@@ -194,18 +194,21 @@ export const useStore = create<AppState>((set) => ({
     const confirmedMapping = data.suggested_mapping || {}
     const bankReviewed = !evaluateReviewGate({
       detectedBank,
+      selectedBankKey: detectedBank?.key || detectedBank?.config_key || '',
       mapping: confirmedMapping,
       bankReviewed: false,
       mappingReviewed: false,
     }).bankNeedsReview
     const mappingReviewed = !evaluateReviewGate({
       detectedBank,
+      selectedBankKey: detectedBank?.key || detectedBank?.config_key || '',
       mapping: confirmedMapping,
       bankReviewed,
       mappingReviewed: false,
     }).mappingNeedsReview
     const gate = evaluateReviewGate({
       detectedBank,
+      selectedBankKey: detectedBank?.key || detectedBank?.config_key || '',
       mapping: confirmedMapping,
       bankReviewed,
       mappingReviewed,
@@ -232,7 +235,7 @@ export const useStore = create<AppState>((set) => ({
       mappingReviewed,
       isBlockedCase: gate.isBlockedCase,
       canProceedToConfig: gate.canProceedToConfig,
-      bankKey: detectedBank?.key || '',
+      bankKey: detectedBank?.key || detectedBank?.config_key || '',
       account: data.account_guess || '',
       name: data.name_guess || '',
     }
@@ -240,6 +243,7 @@ export const useStore = create<AppState>((set) => ({
   setConfirmedMapping: (mapping) => set((state) => {
     const gateBeforeReset = evaluateReviewGate({
       detectedBank: state.detectedBank,
+      selectedBankKey: state.bankKey,
       mapping,
       bankReviewed: state.bankReviewed,
       mappingReviewed: state.mappingReviewed,
@@ -247,6 +251,7 @@ export const useStore = create<AppState>((set) => ({
     const mappingReviewed = gateBeforeReset.mappingNeedsReview ? false : state.mappingReviewed
     const gate = evaluateReviewGate({
       detectedBank: state.detectedBank,
+      selectedBankKey: state.bankKey,
       mapping,
       bankReviewed: state.bankReviewed,
       mappingReviewed,
@@ -261,6 +266,7 @@ export const useStore = create<AppState>((set) => ({
   setBankReviewed: (bankReviewed) => set((state) => {
     const gate = evaluateReviewGate({
       detectedBank: state.detectedBank,
+      selectedBankKey: state.bankKey,
       mapping: state.confirmedMapping,
       bankReviewed,
       mappingReviewed: state.mappingReviewed,
@@ -270,6 +276,7 @@ export const useStore = create<AppState>((set) => ({
   setMappingReviewed: (mappingReviewed) => set((state) => {
     const gate = evaluateReviewGate({
       detectedBank: state.detectedBank,
+      selectedBankKey: state.bankKey,
       mapping: state.confirmedMapping,
       bankReviewed: state.bankReviewed,
       mappingReviewed,
@@ -280,6 +287,7 @@ export const useStore = create<AppState>((set) => ({
     const bankReviewed = false
     const gate = evaluateReviewGate({
       detectedBank: state.detectedBank,
+      selectedBankKey: bankKey,
       mapping: state.confirmedMapping,
       bankReviewed,
       mappingReviewed: state.mappingReviewed,

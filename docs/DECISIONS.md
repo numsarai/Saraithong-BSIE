@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-026: Analyst-selected bank is authoritative after explicit review
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Investigators may know the issuing bank from the legal request even when BSIE's auto-detection says a different bank because the file layout resembles another template. Auto-detection should help, but it must not override known investigator context or silently learn under the wrong bank.
+- **Decision:** Treat the selected bank as the authority for the current mapping run after explicit analyst confirmation. If selected bank differs from detected bank, Step 2 blocks until the analyst confirms the bank override; mapping assist is prompted to map under the selected bank; mapping confirmation records `bank_authority` and bank feedback in audit context.
+- **Alternatives:** (1) Always trust auto-detection — can attach mappings to the wrong bank. (2) Always trust user selection without a gate — hides conflicts and weakens auditability. (3) Disable mapping assist on bank conflicts — safer but less useful for unfamiliar layouts where help is most needed.
+- **Consequences:** Auto-detection remains advisory. Overrides are visible, analyst-confirmed, and traceable. Template variants created from promoted mappings are tied to the selected bank, not the detected-but-overridden bank.
+
 ### DEC-025: Balance-like mapping suggestions prefer curated statement-balance aliases
 - **Date:** 2026-04-24
 - **Status:** accepted

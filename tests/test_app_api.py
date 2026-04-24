@@ -836,6 +836,12 @@ def test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_conte
 
     assert response.status_code == 200
     assert response.json()["bank_feedback"] == "corrected"
+    assert response.json()["bank_authority"] == {
+        "selected_bank": "ktb",
+        "detected_bank": "scb",
+        "bank_override_detected": True,
+        "authority": "analyst_selected",
+    }
     assert response.json()["mapping_feedback"] == "corrected"
     assert response.json()["feedback_mode"] == "corrected"
     assert "correction" in response.json()["message"].lower()
@@ -860,6 +866,10 @@ def test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_conte
     assert mapping_call["learning_domain"] == "bank_template_variant"
     assert mapping_call["feedback_status"] == "corrected"
     assert mapping_call["changed_by"] == "reviewer.one"
+    assert mapping_call["extra_context"]["bank_authority"]["selected_bank"] == "ktb"
+    assert mapping_call["extra_context"]["bank_authority"]["detected_bank"] == "scb"
+    assert mapping_call["extra_context"]["bank_authority"]["bank_override_detected"] is True
+    assert mapping_call["extra_context"]["bank_feedback"] == "corrected"
 
 
 def test_mapping_confirm_endpoint_keeps_confirmed_feedback_at_normal_weight():
@@ -964,6 +974,45 @@ def test_mapping_assist_endpoint_returns_suggestion_only_payload():
     assist.assert_awaited_once()
     assert assist.call_args.kwargs["bank"] == "scb"
     assert assist.call_args.kwargs["columns"] == ["วันที่", "รายการ", "จำนวนเงิน"]
+
+
+def test_mapping_assist_endpoint_uses_selected_bank_as_authority():
+    assist_result = {
+        "status": "ok",
+        "source": "local_llm_mapping_assist",
+        "suggestion_only": True,
+        "auto_pass_eligible": False,
+        "model": "gemma4:26b",
+        "bank_authority": {
+            "selected_bank": "ktb",
+            "detected_bank": "scb",
+            "bank_override_detected": True,
+            "authority": "analyst_selected",
+        },
+        "mapping": {"date": "วันที่", "description": "รายการ", "amount": "จำนวนเงิน"},
+        "confidence": 0.8,
+        "reasons": ["headers matched"],
+        "warnings": ["selected bank differs from detected bank"],
+        "validation": {"ok": True, "errors": [], "warnings": [], "amount_mode": "signed", "mapped_fields": ["amount", "date", "description"]},
+    }
+    with patch("routers.ingestion.suggest_mapping_with_llm", new=AsyncMock(return_value=assist_result)) as assist:
+        response = client.post(
+            "/api/mapping/assist",
+            json={
+                "bank": "ktb",
+                "detected_bank": {"key": "scb", "confidence": 0.91},
+                "columns": ["วันที่", "รายการ", "จำนวนเงิน"],
+                "sample_rows": [{"วันที่": "2026-01-01", "รายการ": "ฝากเงิน", "จำนวนเงิน": "100.00"}],
+                "current_mapping": {"date": "วันที่", "description": "รายการ"},
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["bank_authority"]["selected_bank"] == "ktb"
+    assert response.json()["bank_authority"]["detected_bank"] == "scb"
+    assist.assert_awaited_once()
+    assert assist.call_args.kwargs["bank"] == "ktb"
+    assert assist.call_args.kwargs["detected_bank"] == {"key": "scb", "confidence": 0.91}
 
 
 def test_mapping_vision_assist_endpoint_uses_stored_evidence_file(tmp_path):

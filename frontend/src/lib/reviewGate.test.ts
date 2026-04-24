@@ -62,4 +62,20 @@ describe('reviewGate', () => {
     expect(gate.canProceedToConfig).toBe(true)
     expect(gate.blockingReasons).toEqual([])
   })
+
+  it('blocks when analyst-selected bank differs from the detected bank', () => {
+    const gate = evaluateReviewGate({
+      detectedBank: { key: 'scb', confidence: 0.95, ambiguous: false },
+      selectedBankKey: 'ktb',
+      mapping: { date: 'วันที่', description: 'รายละเอียด', amount: 'จำนวนเงิน' },
+      bankReviewed: false,
+      mappingReviewed: true,
+    })
+
+    expect(gate.bankOverrideDetected).toBe(true)
+    expect(gate.bankNeedsReview).toBe(true)
+    expect(gate.isBlockedCase).toBe(true)
+    expect(gate.canProceedToConfig).toBe(false)
+    expect(gate.blockingReasons[0]).toMatch(/differs from detected bank/i)
+  })
 })

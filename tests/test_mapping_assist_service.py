@@ -136,6 +136,49 @@ def test_mapping_assist_repairs_ambiguous_balance_to_curated_alias(monkeypatch):
     assert result["validation"]["ok"] is True
 
 
+def test_mapping_assist_marks_selected_bank_as_authority(monkeypatch):
+    async def fake_chat(message, *args, **kwargs):
+        assert "analyst-selected bank authority" in message
+        assert '"bank": "ktb"' in message
+        assert '"detected_bank": "scb"' in message
+        assert '"override_detected": true' in message
+        return {
+            "model": kwargs["model"],
+            "response": """
+            {
+              "mapping": {
+                "date": "วันที่",
+                "description": "รายละเอียด",
+                "amount": "จำนวนเงิน"
+              },
+              "confidence": 0.81,
+              "reasons": ["selected bank is the authority"],
+              "warnings": []
+            }
+            """,
+        }
+
+    monkeypatch.setattr("services.mapping_assist_service.chat", fake_chat)
+
+    result = asyncio.run(
+        suggest_mapping_with_llm(
+            bank="ktb",
+            detected_bank={"key": "scb", "bank": "SCB", "confidence": 0.95},
+            columns=["วันที่", "รายละเอียด", "จำนวนเงิน"],
+            sample_rows=[{"วันที่": "2026-01-10", "รายละเอียด": "TRANSFER", "จำนวนเงิน": "100.00"}],
+            current_mapping={},
+        )
+    )
+
+    assert result["bank_authority"] == {
+        "selected_bank": "ktb",
+        "detected_bank": "scb",
+        "bank_override_detected": True,
+        "authority": "analyst_selected",
+    }
+    assert any("differs from detected bank" in warning for warning in result["warnings"])
+
+
 def test_mapping_assist_rejects_non_json_llm_response(monkeypatch):
     async def fake_chat(*args, **kwargs):
         return {"model": "qwen2.5:14b", "response": "not json"}

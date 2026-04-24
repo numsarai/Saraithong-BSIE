@@ -9,11 +9,53 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `356 passed`, frontend `37 passed`, frontend build passed
+- **Baseline:** backend `358 passed`, frontend `39 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Balance Alias Disambiguation
+## Done (latest session) — Known Bank Override Authority
+
+### What I changed
+- Made Step 2 treat selected-bank mismatch as an explicit review blocker even when auto-detection confidence is high.
+- Added a visible warning when the selected bank overrides auto-detection.
+- Updated review gate state so `bankOverrideDetected` participates in `bankNeedsReview` and `canProceedToConfig`.
+- Updated mapping assist prompt/context so the selected bank is the analyst-selected authority for the run; conflicts are warning-only and mapping still happens under the selected bank.
+- Updated `/api/mapping/confirm` to return and audit `bank_authority`, including selected bank, detected bank, override flag, and feedback status.
+- Added regression tests for frontend bank override blocking, LLM authority prompt/response metadata, and backend audit context.
+
+### Files changed
+- `frontend/src/lib/reviewGate.ts`
+- `frontend/src/store.ts`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `services/mapping_assist_service.py`
+- `routers/ingestion.py`
+- `frontend/src/lib/reviewGate.test.ts`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `tests/test_mapping_assist_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- `.venv/bin/python -m pytest tests/test_mapping_assist_service.py tests/test_app_api.py::test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_context tests/test_app_api.py::test_mapping_assist_endpoint_uses_selected_bank_as_authority -q` -> `8 passed`
+- `npm test -- --run src/lib/reviewGate.test.ts src/components/steps/Step2Map.test.tsx` in `frontend/` -> `15 passed`
+- `.venv/bin/python -m py_compile services/mapping_assist_service.py routers/ingestion.py persistence/schemas.py` -> passed
+- `.venv/bin/python -m pytest tests/ -q` -> `358 passed`
+- `npm test -- --run` in `frontend/` -> `39 passed`
+- `npm run build` in `frontend/` -> passed
+
+### Decisions made
+- Added DEC-026: analyst-selected bank is authoritative after explicit review.
+
+### Warnings / Next
+- Known account is still mostly collected in Step 3. Next slice should move/duplicate known account context earlier so it can help bank/layout review and LLM mapping assist.
+- The override flow is now explicit for bank selection, but it does not yet verify whether the selected account appears in workbook body/header.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Balance Alias Disambiguation
 
 ### What I changed
 - Added deterministic repair for ambiguous balance-like suggestions in `utils/app_helpers.py`.

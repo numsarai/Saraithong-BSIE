@@ -241,6 +241,7 @@ export function Step2Map() {
   const hasBlockingMappingErrors = mappingValidation.errors.length > 0
   const reviewGate = evaluateReviewGate({
     detectedBank,
+    selectedBankKey: bankKey,
     mapping: confirmedMapping,
     bankReviewed,
     mappingReviewed,
@@ -257,8 +258,9 @@ export function Step2Map() {
   const counterpartyLabel = hasCounterparty ? 'Counterparty mapped' : 'Counterparty not mapped yet'
   const candidateKeys = Array.isArray(detectedBank?.top_candidates) ? detectedBank.top_candidates : []
   const selectedBank = banks.find((bank: any) => bank.key === bankKey) || null
-  const detectedBankKey = String(detectedBank?.key || bankKey || '').trim().toLowerCase()
+  const detectedBankKey = String(detectedBank?.key || detectedBank?.config_key || '').trim().toLowerCase()
   const detectedBankEntry = banks.find((bank: any) => bank.key === detectedBankKey) || null
+  const bankOverrideDetected = reviewGate.bankOverrideDetected
   const rankedCandidates = candidateKeys.map((key: string) => ({
     key,
     name: banks.find((bank: any) => bank.key === key)?.name || key.toUpperCase(),
@@ -346,6 +348,18 @@ export function Step2Map() {
             </Badge>
           </div>
         </div>
+
+        {bankOverrideDetected && (
+          <div className="mb-4 rounded-xl border border-warning/30 bg-warning/10 p-4">
+            <div className="flex items-center gap-2 text-text2 mb-1">
+              <ShieldAlert size={16} className="text-warning" />
+              <span className="text-sm font-semibold">Selected bank overrides auto-detection</span>
+            </div>
+            <p className="text-xs text-muted leading-relaxed">
+              BSIE detected {detectedBankEntry?.name || detectedBank?.bank || detectedBankKey.toUpperCase()}, but this run will use {selectedBank?.name || bankKey.toUpperCase()} after analyst confirmation.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-border bg-surface2/50 p-4">
@@ -516,7 +530,7 @@ export function Step2Map() {
             <div className="flex items-center justify-between gap-3 mb-3">
               <div>
                 <div className="text-sm font-semibold text-text">Confirm Selected Bank</div>
-                <div className="text-xs text-muted">Required when bank detection is ambiguous or below 75% confidence.</div>
+                <div className="text-xs text-muted">Required when detection is ambiguous, below 75% confidence, or manually overridden.</div>
               </div>
               <Badge variant={bankReviewed ? 'green' : reviewGate.bankNeedsReview ? 'red' : 'gray'}>
                 {bankReviewed ? 'Confirmed' : reviewGate.bankNeedsReview ? 'Required' : 'Auto-cleared'}

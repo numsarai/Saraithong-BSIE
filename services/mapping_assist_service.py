@@ -127,9 +127,16 @@ def _build_prompt(
     sheet_name: str,
     header_row: int,
 ) -> str:
+    detected_key = _detected_bank_key(detected_bank)
+    selected_key = str(bank or "").strip().lower()
     payload = {
         "bank": bank,
         "detected_bank": detected_bank if isinstance(detected_bank, dict) else {},
+        "bank_authority": {
+            "selected_bank": selected_key,
+            "detected_bank": detected_key,
+            "override_detected": bool(selected_key and detected_key and selected_key != detected_key),
+        },
         "sheet_name": sheet_name,
         "header_row": header_row,
         "columns": columns,
@@ -140,6 +147,7 @@ def _build_prompt(
     return (
         "You are assisting a Thai bank statement mapping review inside BSIE.\n"
         "Use only the provided column names. Do not invent columns, accounts, dates, amounts, banks, or transactions.\n"
+        "Treat Context JSON bank as the analyst-selected bank authority for this run. Do not change the bank; if detected_bank conflicts, map under the selected bank and mention the conflict in warnings.\n"
         "For unsigned amount columns paired with DR/CR, IN/OUT, or ฝาก/ถอน markers, map the amount column to amount and the marker column to direction_marker.\n"
         "Return JSON only with this exact shape:\n"
         "{\n"
@@ -164,9 +172,16 @@ def _build_vision_prompt(
     header_row: int,
     file_context: dict[str, Any],
 ) -> str:
+    detected_key = _detected_bank_key(detected_bank)
+    selected_key = str(bank or "").strip().lower()
     payload = {
         "bank": bank,
         "detected_bank": detected_bank if isinstance(detected_bank, dict) else {},
+        "bank_authority": {
+            "selected_bank": selected_key,
+            "detected_bank": detected_key,
+            "override_detected": bool(selected_key and detected_key and selected_key != detected_key),
+        },
         "sheet_name": sheet_name,
         "header_row": header_row,
         "source_type": file_context.get("source_type", ""),
@@ -180,6 +195,7 @@ def _build_vision_prompt(
         "You are assisting a Thai bank statement mapping review inside BSIE using the original PDF/image preview.\n"
         "Use the visual evidence only to choose among the provided OCR/extracted column names.\n"
         "Do not invent columns, rows, transactions, accounts, names, dates, amounts, banks, or balances.\n"
+        "Treat Context JSON bank as the analyst-selected bank authority for this run. Do not change the bank; if detected_bank conflicts, map under the selected bank and mention the conflict in warnings.\n"
         "For unsigned amount columns paired with DR/CR, IN/OUT, or ฝาก/ถอน markers, map the amount column to amount and the marker column to direction_marker.\n"
         "Return JSON only with this exact shape:\n"
         "{\n"
@@ -228,6 +244,16 @@ def _load_vision_preview(file_path: Path) -> tuple[bytes, str, dict[str, Any]]:
     )
 
 
+def _detected_bank_key(detected_bank: Any) -> str:
+    if isinstance(detected_bank, dict):
+        for key in ("config_key", "key", "bank_key"):
+            text = str(detected_bank.get(key) or "").strip().lower()
+            if text:
+                return text
+        return str(detected_bank.get("bank") or "").strip().lower()
+    return str(detected_bank or "").strip().lower()
+
+
 async def suggest_mapping_with_llm(
     *,
     bank: str,
@@ -267,12 +293,16 @@ async def suggest_mapping_with_llm(
         clean_columns,
     )
     validation = validate_mapping(merged_mapping, clean_columns, bank=str(bank or ""))
+    selected_key = str(bank or "").strip().lower()
+    detected_key = _detected_bank_key(detected_bank)
     confidence = raw.get("confidence", 0)
     try:
         confidence_float = max(0.0, min(1.0, float(confidence or 0)))
     except (TypeError, ValueError):
         confidence_float = 0.0
     warnings = [*mapping_warnings, *_list_text(raw.get("warnings"))]
+    if selected_key and detected_key and selected_key != detected_key:
+        warnings.append(f"Selected bank '{selected_key}' differs from detected bank '{detected_key}'; mapping uses selected bank authority.")
 
     return {
         "status": "ok",
@@ -280,6 +310,12 @@ async def suggest_mapping_with_llm(
         "suggestion_only": True,
         "auto_pass_eligible": False,
         "model": result.get("model") or selected_model,
+        "bank_authority": {
+            "selected_bank": selected_key,
+            "detected_bank": detected_key,
+            "bank_override_detected": bool(selected_key and detected_key and selected_key != detected_key),
+            "authority": "analyst_selected",
+        },
         "mapping": merged_mapping,
         "confidence": confidence_float,
         "reasons": _list_text(raw.get("reasons")),
@@ -337,12 +373,16 @@ async def suggest_mapping_with_vision_llm(
         clean_columns,
     )
     validation = validate_mapping(merged_mapping, clean_columns, bank=str(bank or ""))
+    selected_key = str(bank or "").strip().lower()
+    detected_key = _detected_bank_key(detected_bank)
     confidence = raw.get("confidence", 0)
     try:
         confidence_float = max(0.0, min(1.0, float(confidence or 0)))
     except (TypeError, ValueError):
         confidence_float = 0.0
     warnings = [*mapping_warnings, *_list_text(raw.get("warnings"))]
+    if selected_key and detected_key and selected_key != detected_key:
+        warnings.append(f"Selected bank '{selected_key}' differs from detected bank '{detected_key}'; mapping uses selected bank authority.")
 
     return {
         "status": "ok",
@@ -350,6 +390,12 @@ async def suggest_mapping_with_vision_llm(
         "suggestion_only": True,
         "auto_pass_eligible": False,
         "model": result.get("model") or selected_model,
+        "bank_authority": {
+            "selected_bank": selected_key,
+            "detected_bank": detected_key,
+            "bank_override_detected": bool(selected_key and detected_key and selected_key != detected_key),
+            "authority": "analyst_selected",
+        },
         "mapping": merged_mapping,
         "confidence": confidence_float,
         "reasons": _list_text(raw.get("reasons")),

@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-029: Negative account presence verification requires analyst confirmation
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Excel account-presence verification can now distinguish `exact_found`, `not_found`, and `possible_leading_zero_loss`. A selected account that is absent from the workbook, or only appears as a possible leading-zero-loss candidate, is evidence-relevant uncertainty and should not pass Step 2 silently.
+- **Decision:** Treat `not_found` and `possible_leading_zero_loss` account-presence results as account review blockers in Step 2. The analyst must explicitly confirm the known account before continuing to configuration. `exact_found` remains auto-cleared, while unsupported/read-error style statuses remain visible warnings until deterministic PDF/image/OCR verification policy exists.
+- **Alternatives:** (1) Block every unverified account — too strict for PDF/image sources until equivalent verification exists. (2) Warn only and allow pipeline continuation — hides evidence uncertainty behind a non-blocking UI message. (3) Ask the LLM to decide whether the account is acceptable — unsafe and non-reproducible.
+- **Consequences:** Workbook account mismatches and leading-zero risk now use the same explicit analyst gate as known account overrides. Confirmation remains auditable through the mapping confirmation context, and exact workbook matches still avoid unnecessary friction.
+
 ### DEC-028: Account presence verification scans stored workbook evidence deterministically
 - **Date:** 2026-04-24
 - **Status:** accepted

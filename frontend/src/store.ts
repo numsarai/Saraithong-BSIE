@@ -99,6 +99,7 @@ export interface AppState {
   suggestionSource: string
   bankReviewed: boolean
   accountReviewed: boolean
+  accountPresence: any | null
   mappingReviewed: boolean
   isBlockedCase: boolean
   canProceedToConfig: boolean
@@ -119,6 +120,7 @@ export interface AppState {
   setConfirmedMapping: (mapping: Record<string, string | null>) => void
   setBankReviewed: (reviewed: boolean) => void
   setAccountReviewed: (reviewed: boolean) => void
+  setAccountPresence: (presence: any | null) => void
   setMappingReviewed: (reviewed: boolean) => void
   setBankKey: (key: string) => void
   setAccount: (account: string) => void
@@ -158,6 +160,7 @@ const workflowInitialState = {
   suggestionSource: 'auto',
   bankReviewed: false,
   accountReviewed: false,
+  accountPresence: null as any | null,
   mappingReviewed: false,
   isBlockedCase: false,
   canProceedToConfig: false,
@@ -203,6 +206,7 @@ export const useStore = create<AppState>((set) => ({
       selectedBankKey,
       selectedAccount,
       inferredAccount,
+      accountPresence: null,
       mapping: confirmedMapping,
       bankReviewed: false,
       accountReviewed: false,
@@ -213,6 +217,7 @@ export const useStore = create<AppState>((set) => ({
       selectedBankKey,
       selectedAccount,
       inferredAccount,
+      accountPresence: null,
       mapping: confirmedMapping,
       bankReviewed,
       accountReviewed: false,
@@ -223,6 +228,7 @@ export const useStore = create<AppState>((set) => ({
       selectedBankKey,
       selectedAccount,
       inferredAccount,
+      accountPresence: null,
       mapping: confirmedMapping,
       bankReviewed,
       accountReviewed,
@@ -233,6 +239,7 @@ export const useStore = create<AppState>((set) => ({
       selectedBankKey,
       selectedAccount,
       inferredAccount,
+      accountPresence: null,
       mapping: confirmedMapping,
       bankReviewed,
       accountReviewed,
@@ -263,6 +270,7 @@ export const useStore = create<AppState>((set) => ({
       canProceedToConfig: gate.canProceedToConfig,
       bankKey: selectedBankKey,
       account: selectedAccount,
+      accountPresence: null,
       name: data.name_guess || '',
     }
   }),
@@ -272,6 +280,7 @@ export const useStore = create<AppState>((set) => ({
       selectedBankKey: state.bankKey,
       selectedAccount: state.account,
       inferredAccount: state.identityGuess?.account,
+      accountPresence: state.accountPresence,
       mapping,
       bankReviewed: state.bankReviewed,
       accountReviewed: state.accountReviewed,
@@ -283,6 +292,7 @@ export const useStore = create<AppState>((set) => ({
       selectedBankKey: state.bankKey,
       selectedAccount: state.account,
       inferredAccount: state.identityGuess?.account,
+      accountPresence: state.accountPresence,
       mapping,
       bankReviewed: state.bankReviewed,
       accountReviewed: state.accountReviewed,
@@ -301,6 +311,7 @@ export const useStore = create<AppState>((set) => ({
       selectedBankKey: state.bankKey,
       selectedAccount: state.account,
       inferredAccount: state.identityGuess?.account,
+      accountPresence: state.accountPresence,
       mapping: state.confirmedMapping,
       bankReviewed,
       accountReviewed: state.accountReviewed,
@@ -314,6 +325,7 @@ export const useStore = create<AppState>((set) => ({
       selectedBankKey: state.bankKey,
       selectedAccount: state.account,
       inferredAccount: state.identityGuess?.account,
+      accountPresence: state.accountPresence,
       mapping: state.confirmedMapping,
       bankReviewed: state.bankReviewed,
       accountReviewed,
@@ -321,12 +333,39 @@ export const useStore = create<AppState>((set) => ({
     })
     return { accountReviewed, isBlockedCase: gate.isBlockedCase, canProceedToConfig: gate.canProceedToConfig }
   }),
+  setAccountPresence: (accountPresence) => set((state) => {
+    const gateWithCurrentReview = evaluateReviewGate({
+      detectedBank: state.detectedBank,
+      selectedBankKey: state.bankKey,
+      selectedAccount: state.account,
+      inferredAccount: state.identityGuess?.account,
+      accountPresence,
+      mapping: state.confirmedMapping,
+      bankReviewed: state.bankReviewed,
+      accountReviewed: state.accountReviewed,
+      mappingReviewed: state.mappingReviewed,
+    })
+    const accountReviewed = gateWithCurrentReview.accountPresenceNeedsReview ? false : state.accountReviewed
+    const gate = evaluateReviewGate({
+      detectedBank: state.detectedBank,
+      selectedBankKey: state.bankKey,
+      selectedAccount: state.account,
+      inferredAccount: state.identityGuess?.account,
+      accountPresence,
+      mapping: state.confirmedMapping,
+      bankReviewed: state.bankReviewed,
+      accountReviewed,
+      mappingReviewed: state.mappingReviewed,
+    })
+    return { accountPresence, accountReviewed, isBlockedCase: gate.isBlockedCase, canProceedToConfig: gate.canProceedToConfig }
+  }),
   setMappingReviewed: (mappingReviewed) => set((state) => {
     const gate = evaluateReviewGate({
       detectedBank: state.detectedBank,
       selectedBankKey: state.bankKey,
       selectedAccount: state.account,
       inferredAccount: state.identityGuess?.account,
+      accountPresence: state.accountPresence,
       mapping: state.confirmedMapping,
       bankReviewed: state.bankReviewed,
       accountReviewed: state.accountReviewed,
@@ -341,6 +380,7 @@ export const useStore = create<AppState>((set) => ({
       selectedBankKey: bankKey,
       selectedAccount: state.account,
       inferredAccount: state.identityGuess?.account,
+      accountPresence: state.accountPresence,
       mapping: state.confirmedMapping,
       bankReviewed,
       accountReviewed: state.accountReviewed,
@@ -355,12 +395,13 @@ export const useStore = create<AppState>((set) => ({
       selectedBankKey: state.bankKey,
       selectedAccount: account,
       inferredAccount: state.identityGuess?.account,
+      accountPresence: null,
       mapping: state.confirmedMapping,
       bankReviewed: state.bankReviewed,
       accountReviewed,
       mappingReviewed: state.mappingReviewed,
     })
-    return { account, accountReviewed, isBlockedCase: gate.isBlockedCase, canProceedToConfig: gate.canProceedToConfig }
+    return { account, accountPresence: null, accountReviewed, isBlockedCase: gate.isBlockedCase, canProceedToConfig: gate.canProceedToConfig }
   }),
   setName: (name) => set({ name }),
   setJobId: (jobId) => set({ jobId }),

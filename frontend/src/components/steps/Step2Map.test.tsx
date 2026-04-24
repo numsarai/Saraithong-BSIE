@@ -443,6 +443,59 @@ describe('Step2Map analyst gate', () => {
     )
   })
 
+  it('requires analyst confirmation when workbook verification does not find the selected account', async () => {
+    vi.mocked(verifyAccountPresence).mockResolvedValueOnce({
+      status: 'ok',
+      source: 'deterministic_account_presence',
+      file_type: 'excel',
+      subject_account_raw: '1234567890',
+      normalized_account: '1234567890',
+      found: false,
+      possible_match: false,
+      match_status: 'not_found',
+      locations: [],
+      possible_locations: [],
+      summary: { exact_match_count: 0, possible_match_count: 0, sheets_scanned: 1, cells_scanned: 10, locations_returned: 0 },
+      warnings: ['Account was not found in workbook evidence'],
+    })
+    seedUpload({
+      account_guess: '1234567890',
+      identity_guess: {
+        account: '1234567890',
+        name: 'Detected Name',
+        account_source: 'workbook_header',
+      },
+    })
+
+    render(<Step2Map />)
+
+    const continueButton = await screen.findByRole('button', { name: /^confirm mapping$/i })
+    expect(continueButton).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: /verify in workbook/i }))
+
+    expect(await screen.findByText(/Account was not found in workbook evidence/i)).toBeInTheDocument()
+    await waitFor(() => expect(continueButton).toBeDisabled())
+    expect(screen.getByText(/was not found in workbook verification/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /confirm known account/i }))
+
+    await waitFor(() => expect(continueButton).toBeEnabled())
+    fireEvent.click(continueButton)
+
+    await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
+    expect(confirmMapping).toHaveBeenCalledWith(
+      'scb',
+      expect.any(Object),
+      expect.any(Array),
+      1,
+      'Sheet1',
+      expect.objectContaining({
+        account_presence: expect.objectContaining({ match_status: 'not_found' }),
+      }),
+    )
+  })
+
   it('clears mapping review when a critical mapping changes after confirmation', async () => {
     seedUpload({
       detected_bank: {

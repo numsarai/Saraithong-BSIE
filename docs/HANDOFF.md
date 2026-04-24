@@ -9,11 +9,53 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `364 passed`, frontend `42 passed`, frontend build passed
+- **Baseline:** backend `364 passed`, frontend `45 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Deterministic Account Presence Verification
+## Done (latest session) — Account Presence Review Gate Policy
+
+### What I changed
+- Extended the Step 2 review gate so account-presence verification results can block progression.
+- `not_found` and `possible_leading_zero_loss` now require the analyst to click `Confirm Known Account` before Step 3.
+- `exact_found` remains auto-cleared; unsupported/read-error style statuses remain visible warnings until deterministic PDF/image/OCR verification has an equivalent policy.
+- Moved `accountPresence` from local `Step2Map` state into Zustand so `canProceedToConfig` and the final confirm button use the same centralized gate state.
+- Clearing/changing the known account clears stale workbook verification and resets account review.
+- Added frontend regression tests for review-gate logic and the real Step 2 verify/confirm workflow.
+
+### Files changed
+- `frontend/src/lib/reviewGate.ts`
+- `frontend/src/store.ts`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/lib/reviewGate.test.ts`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `364 passed`
+  - `npm test -- --run` in `frontend/` -> `42 passed`
+- Focused:
+  - `npm test -- --run src/lib/reviewGate.test.ts src/components/steps/Step2Map.test.tsx` in `frontend/` -> `21 passed`
+- Full verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `364 passed`
+  - `npm test -- --run` in `frontend/` -> `45 passed`
+  - `npm run build` in `frontend/` -> passed; Vite chunk-size warning only
+
+### Decisions made
+- Added DEC-029: negative account-presence verification requires analyst confirmation.
+
+### Warnings / Next
+- Account-presence blocking is currently deterministic for Excel verification results only.
+- PDF/image/OCR sources still need a deterministic equivalent before their verification status should become a hard block.
+- Next useful slice: design OCR/PDF account-presence verification or start splitting the large Vite main chunk with lazy-loaded investigation/workflow surfaces.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Deterministic Account Presence Verification
 
 ### What I changed
 - Added `services/account_presence_service.py` to scan Excel workbook cells deterministically for a selected subject account.

@@ -32,7 +32,7 @@ export function Step2Map() {
     headerRow, sheetName, memoryMatch, bankMemoryMatch, templateVariantMatch, suggestionSource,
     bankReviewed, accountReviewed, mappingReviewed, setBankReviewed, setAccountReviewed, setMappingReviewed,
     isBlockedCase, canProceedToConfig, operatorName, fileId, fileName,
-    account, name, setAccount, setName, identityGuess,
+    account, name, accountPresence, setAccount, setName, setAccountPresence, identityGuess,
   } = useStore()
   const [saving, setSaving]         = useState(false)
   const [banks, setBanks]           = useState<any[]>([])
@@ -45,7 +45,6 @@ export function Step2Map() {
   const [assistLoading, setAssistLoading] = useState(false)
   const [mappingAssist, setMappingAssist] = useState<any | null>(null)
   const [presenceLoading, setPresenceLoading] = useState(false)
-  const [accountPresence, setAccountPresence] = useState<any | null>(null)
 
   useEffect(() => {
     getBanks().then(setBanks).catch((e) => toast.error(`Could not load banks: ${e.message}`))
@@ -293,6 +292,7 @@ export function Step2Map() {
     selectedBankKey: bankKey,
     selectedAccount: account,
     inferredAccount: identityGuess?.account,
+    accountPresence,
     mapping: confirmedMapping,
     bankReviewed,
     accountReviewed,
@@ -711,7 +711,7 @@ export function Step2Map() {
             <div className="flex items-center justify-between gap-3 mb-3">
               <div>
                 <div className="text-sm font-semibold text-text">Confirm Known Account</div>
-                <div className="text-xs text-muted">Required when analyst account conflicts with statement inference.</div>
+                <div className="text-xs text-muted">Required when account context conflicts with statement inference or workbook verification.</div>
               </div>
               <Badge variant={accountReviewed ? 'green' : reviewGate.accountNeedsReview ? 'red' : 'gray'}>
                 {accountReviewed ? 'Confirmed' : reviewGate.accountNeedsReview ? 'Required' : 'Auto-cleared'}

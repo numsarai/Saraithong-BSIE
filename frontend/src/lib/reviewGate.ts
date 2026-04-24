@@ -9,6 +9,7 @@ export interface ReviewGateState {
   bankOverrideDetected: boolean
   accountNeedsReview: boolean
   accountMismatchDetected: boolean
+  accountPresenceNeedsReview: boolean
   mappingNeedsReview: boolean
   isBlockedCase: boolean
   canProceedToConfig: boolean
@@ -27,12 +28,13 @@ export function evaluateReviewGate(params: {
   selectedBankKey?: string
   selectedAccount?: string
   inferredAccount?: string
+  accountPresence?: any
   mapping: MappingShape
   bankReviewed: boolean
   accountReviewed?: boolean
   mappingReviewed: boolean
 }): ReviewGateState {
-  const { detectedBank, selectedBankKey, selectedAccount, inferredAccount, mapping, bankReviewed, accountReviewed, mappingReviewed } = params
+  const { detectedBank, selectedBankKey, selectedAccount, inferredAccount, accountPresence, mapping, bankReviewed, accountReviewed, mappingReviewed } = params
 
   const confidencePercent = Math.round(Number(detectedBank?.confidence || 0) * 100)
   const ambiguous = Boolean(detectedBank?.ambiguous)
@@ -43,6 +45,11 @@ export function evaluateReviewGate(params: {
   const selectedAccountKey = normalizeAccount(selectedAccount)
   const inferredAccountKey = normalizeAccount(inferredAccount)
   const accountMismatchDetected = !!selectedAccountKey && !!inferredAccountKey && selectedAccountKey !== inferredAccountKey
+  const accountPresenceStatus = String(accountPresence?.match_status || '').trim().toLowerCase()
+  const accountPresenceNeedsReview = !!selectedAccountKey && (
+    accountPresenceStatus === 'not_found'
+    || accountPresenceStatus === 'possible_leading_zero_loss'
+  )
   const criticalMappingReady = hasCriticalMapping(mapping)
 
   const blockingReasons: string[] = []
@@ -50,10 +57,16 @@ export function evaluateReviewGate(params: {
   if (lowConfidence) blockingReasons.push(`Bank confidence is below ${REVIEW_CONFIDENCE_THRESHOLD}% and requires analyst confirmation.`)
   if (bankOverrideDetected) blockingReasons.push(`Selected bank (${selectedKey.toUpperCase()}) differs from detected bank (${detectedKey.toUpperCase()}) and requires analyst confirmation.`)
   if (accountMismatchDetected) blockingReasons.push(`Selected account (${selectedAccountKey}) differs from inferred account (${inferredAccountKey}) and requires analyst confirmation.`)
+  if (accountPresenceNeedsReview && accountPresenceStatus === 'not_found') {
+    blockingReasons.push(`Selected account (${selectedAccountKey}) was not found in workbook verification and requires analyst confirmation.`)
+  }
+  if (accountPresenceNeedsReview && accountPresenceStatus === 'possible_leading_zero_loss') {
+    blockingReasons.push(`Selected account (${selectedAccountKey}) only has possible leading-zero-loss workbook matches and requires analyst confirmation.`)
+  }
   if (!criticalMappingReady) blockingReasons.push('Critical mapping is incomplete. Map Date, Description, and one amount path before continuing.')
 
   const bankNeedsReview = ambiguous || lowConfidence || bankOverrideDetected
-  const accountNeedsReview = accountMismatchDetected
+  const accountNeedsReview = accountMismatchDetected || accountPresenceNeedsReview
   const mappingNeedsReview = !criticalMappingReady
   const isBlockedCase = bankNeedsReview || accountNeedsReview || mappingNeedsReview
   const canProceedToConfig = !isBlockedCase || (
@@ -69,6 +82,7 @@ export function evaluateReviewGate(params: {
     bankOverrideDetected,
     accountNeedsReview,
     accountMismatchDetected,
+    accountPresenceNeedsReview,
     mappingNeedsReview,
     isBlockedCase,
     canProceedToConfig,

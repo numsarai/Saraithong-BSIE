@@ -97,4 +97,43 @@ describe('reviewGate', () => {
     expect(gate.canProceedToConfig).toBe(false)
     expect(gate.blockingReasons[0]).toMatch(/selected account/i)
   })
+
+  it('blocks when workbook verification cannot find the selected account', () => {
+    const gate = evaluateReviewGate({
+      detectedBank: { key: 'scb', confidence: 0.95, ambiguous: false },
+      selectedBankKey: 'scb',
+      selectedAccount: '1234567890',
+      inferredAccount: '1234567890',
+      accountPresence: { match_status: 'not_found', found: false, possible_match: false },
+      mapping: { date: 'วันที่', description: 'รายละเอียด', amount: 'จำนวนเงิน' },
+      bankReviewed: true,
+      accountReviewed: false,
+      mappingReviewed: true,
+    })
+
+    expect(gate.accountMismatchDetected).toBe(false)
+    expect(gate.accountPresenceNeedsReview).toBe(true)
+    expect(gate.accountNeedsReview).toBe(true)
+    expect(gate.canProceedToConfig).toBe(false)
+    expect(gate.blockingReasons[0]).toMatch(/not found in workbook verification/i)
+  })
+
+  it('allows possible leading-zero-loss workbook matches only after account review', () => {
+    const gate = evaluateReviewGate({
+      detectedBank: { key: 'scb', confidence: 0.95, ambiguous: false },
+      selectedBankKey: 'scb',
+      selectedAccount: '0123456789',
+      inferredAccount: '0123456789',
+      accountPresence: { match_status: 'possible_leading_zero_loss', found: false, possible_match: true },
+      mapping: { date: 'วันที่', description: 'รายละเอียด', amount: 'จำนวนเงิน' },
+      bankReviewed: true,
+      accountReviewed: true,
+      mappingReviewed: true,
+    })
+
+    expect(gate.accountPresenceNeedsReview).toBe(true)
+    expect(gate.accountNeedsReview).toBe(true)
+    expect(gate.canProceedToConfig).toBe(true)
+    expect(gate.blockingReasons[0]).toMatch(/leading-zero-loss/i)
+  })
 })

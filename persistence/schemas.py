@@ -17,6 +17,9 @@ class MappingConfirmRequest(BaseModel):
     reviewer: str = "analyst"
     detected_bank: Any | None = None
     suggested_mapping: dict[str, str | None] = Field(default_factory=dict)
+    subject_account: str = ""
+    subject_name: str = ""
+    identity_guess: Any | None = None
     promote_shared: bool = False
 
 
@@ -33,6 +36,9 @@ class MappingAssistRequest(BaseModel):
     columns: list[str] = Field(default_factory=list)
     sample_rows: list[dict[str, Any]] = Field(default_factory=list)
     current_mapping: dict[str, str | None] = Field(default_factory=dict)
+    subject_account: str = ""
+    subject_name: str = ""
+    identity_guess: Any | None = None
     sheet_name: str = ""
     header_row: int = 0
     model: str = ""

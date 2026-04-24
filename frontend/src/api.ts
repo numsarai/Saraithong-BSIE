@@ -25,6 +25,9 @@ export async function confirmMapping(
     reviewer?: string
     detected_bank?: unknown
     suggested_mapping?: Record<string, string | null>
+    subject_account?: string
+    subject_name?: string
+    identity_guess?: unknown
     sample_rows?: Record<string, unknown>[]
     promote_shared?: boolean
   },
@@ -41,6 +44,9 @@ export async function confirmMapping(
       reviewer: context?.reviewer,
       detected_bank: context?.detected_bank,
       suggested_mapping: context?.suggested_mapping,
+      subject_account: context?.subject_account,
+      subject_name: context?.subject_name,
+      identity_guess: context?.identity_guess,
       sample_rows: context?.sample_rows,
       promote_shared: context?.promote_shared ?? false,
     }),
@@ -70,6 +76,9 @@ export async function assistMapping(payload: {
   columns: string[]
   sample_rows?: Record<string, unknown>[]
   current_mapping: Record<string, string | null>
+  subject_account?: string
+  subject_name?: string
+  identity_guess?: unknown
   sheet_name?: string
   header_row?: number
   model?: string
@@ -90,6 +99,9 @@ export async function assistVisionMapping(payload: {
   columns: string[]
   sample_rows?: Record<string, unknown>[]
   current_mapping: Record<string, string | null>
+  subject_account?: string
+  subject_name?: string
+  identity_guess?: unknown
   sheet_name?: string
   header_row?: number
   model?: string

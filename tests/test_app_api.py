@@ -817,6 +817,9 @@ def test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_conte
             "description": "รายละเอียด",
             "amount": "จำนวนเงิน",
         },
+        "subject_account": "222-222-2222",
+        "subject_name": "Known Holder",
+        "identity_guess": {"account": "1111111111", "name": "Detected Holder", "account_source": "workbook_header"},
         "promote_shared": True,
     }
 
@@ -842,6 +845,9 @@ def test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_conte
         "bank_override_detected": True,
         "authority": "analyst_selected",
     }
+    assert response.json()["subject_context"]["selected_account"] == "2222222222"
+    assert response.json()["subject_context"]["inferred_account"] == "1111111111"
+    assert response.json()["subject_context"]["account_match_status"] == "selected_conflicts_with_inferred"
     assert response.json()["mapping_feedback"] == "corrected"
     assert response.json()["feedback_mode"] == "corrected"
     assert "correction" in response.json()["message"].lower()
@@ -869,6 +875,8 @@ def test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_conte
     assert mapping_call["extra_context"]["bank_authority"]["selected_bank"] == "ktb"
     assert mapping_call["extra_context"]["bank_authority"]["detected_bank"] == "scb"
     assert mapping_call["extra_context"]["bank_authority"]["bank_override_detected"] is True
+    assert mapping_call["extra_context"]["subject_context"]["selected_account"] == "2222222222"
+    assert mapping_call["extra_context"]["subject_context"]["inferred_account"] == "1111111111"
     assert mapping_call["extra_context"]["bank_feedback"] == "corrected"
 
 
@@ -993,6 +1001,11 @@ def test_mapping_assist_endpoint_uses_selected_bank_as_authority():
         "confidence": 0.8,
         "reasons": ["headers matched"],
         "warnings": ["selected bank differs from detected bank"],
+        "subject_context": {
+            "selected_account": "2222222222",
+            "inferred_account": "1111111111",
+            "account_match_status": "selected_conflicts_with_inferred",
+        },
         "validation": {"ok": True, "errors": [], "warnings": [], "amount_mode": "signed", "mapped_fields": ["amount", "date", "description"]},
     }
     with patch("routers.ingestion.suggest_mapping_with_llm", new=AsyncMock(return_value=assist_result)) as assist:
@@ -1004,6 +1017,9 @@ def test_mapping_assist_endpoint_uses_selected_bank_as_authority():
                 "columns": ["วันที่", "รายการ", "จำนวนเงิน"],
                 "sample_rows": [{"วันที่": "2026-01-01", "รายการ": "ฝากเงิน", "จำนวนเงิน": "100.00"}],
                 "current_mapping": {"date": "วันที่", "description": "รายการ"},
+                "subject_account": "222-222-2222",
+                "subject_name": "Known Holder",
+                "identity_guess": {"account": "1111111111", "account_source": "workbook_header"},
             },
         )
 
@@ -1013,6 +1029,9 @@ def test_mapping_assist_endpoint_uses_selected_bank_as_authority():
     assist.assert_awaited_once()
     assert assist.call_args.kwargs["bank"] == "ktb"
     assert assist.call_args.kwargs["detected_bank"] == {"key": "scb", "confidence": 0.91}
+    assert assist.call_args.kwargs["subject_account"] == "222-222-2222"
+    assert assist.call_args.kwargs["subject_name"] == "Known Holder"
+    assert assist.call_args.kwargs["identity_guess"] == {"account": "1111111111", "account_source": "workbook_header"}
 
 
 def test_mapping_vision_assist_endpoint_uses_stored_evidence_file(tmp_path):

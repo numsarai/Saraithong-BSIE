@@ -78,4 +78,23 @@ describe('reviewGate', () => {
     expect(gate.canProceedToConfig).toBe(false)
     expect(gate.blockingReasons[0]).toMatch(/differs from detected bank/i)
   })
+
+  it('blocks when analyst-selected account differs from the inferred account', () => {
+    const gate = evaluateReviewGate({
+      detectedBank: { key: 'scb', confidence: 0.95, ambiguous: false },
+      selectedBankKey: 'scb',
+      selectedAccount: '222-222-2222',
+      inferredAccount: '1111111111',
+      mapping: { date: 'วันที่', description: 'รายละเอียด', amount: 'จำนวนเงิน' },
+      bankReviewed: true,
+      accountReviewed: false,
+      mappingReviewed: true,
+    })
+
+    expect(gate.accountMismatchDetected).toBe(true)
+    expect(gate.accountNeedsReview).toBe(true)
+    expect(gate.isBlockedCase).toBe(true)
+    expect(gate.canProceedToConfig).toBe(false)
+    expect(gate.blockingReasons[0]).toMatch(/selected account/i)
+  })
 })

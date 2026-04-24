@@ -9,11 +9,57 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `358 passed`, frontend `39 passed`, frontend build passed
+- **Baseline:** backend `361 passed`, frontend `41 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Known Bank Override Authority
+## Done (latest session) — Known Account Context in Mapping Review
+
+### What I changed
+- Added Step 2 known-account context controls for subject account and holder name, reusing upload identity guesses as initial values.
+- Added a review gate for account conflicts: if the analyst-selected account differs from the statement-inferred account, Step 2 blocks until the analyst explicitly confirms the known account.
+- Added `subject_context` construction with account normalization, inferred account/name, match status, and sample-row observation.
+- Threaded `subject_context` through text mapping assist, vision mapping assist, and `/api/mapping/confirm` audit context.
+- Updated mapping assist prompts so local LLMs may use the subject account for statement perspective but must not change or invent account values.
+- Added regression tests for review gate behavior, Step 2 blocking, mapping assist prompt/response context, API context forwarding, and account normalization.
+
+### Files changed
+- `frontend/src/lib/reviewGate.ts`
+- `frontend/src/store.ts`
+- `frontend/src/api.ts`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `persistence/schemas.py`
+- `routers/ingestion.py`
+- `services/subject_context_service.py`
+- `services/mapping_assist_service.py`
+- `frontend/src/lib/reviewGate.test.ts`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `tests/test_subject_context_service.py`
+- `tests/test_mapping_assist_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- `.venv/bin/python -m pytest tests/test_subject_context_service.py tests/test_mapping_assist_service.py tests/test_app_api.py::test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_context tests/test_app_api.py::test_mapping_assist_endpoint_uses_selected_bank_as_authority -q` -> `11 passed`
+- `npm test -- --run src/lib/reviewGate.test.ts src/components/steps/Step2Map.test.tsx` in `frontend/` -> `17 passed`
+- `.venv/bin/python -m py_compile services/subject_context_service.py services/mapping_assist_service.py routers/ingestion.py persistence/schemas.py` -> passed
+- `.venv/bin/python -m pytest tests/ -q` -> `361 passed`
+- `npm test -- --run` in `frontend/` -> `41 passed`
+- `npm run build` in `frontend/` -> passed; Vite chunk-size warning only
+
+### Decisions made
+- Added DEC-027: analyst-selected subject account is review-gated mapping context.
+
+### Warnings / Next
+- Account conflict detection currently uses upload identity inference plus sampled rows. It does not yet scan the full workbook body/header on demand for a selected account.
+- Next useful slice: add a deterministic account-presence verification service/endpoint that checks the selected sheet/header and reports where the known account appears before pipeline processing.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Known Bank Override Authority
 
 ### What I changed
 - Made Step 2 treat selected-bank mismatch as an explicit review blocker even when auto-detection confidence is high.

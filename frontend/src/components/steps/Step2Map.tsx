@@ -30,8 +30,9 @@ export function Step2Map() {
     detectedBank, allColumns, suggestedMapping, confirmedMapping,
     setConfirmedMapping, sampleRows, bankKey, setBankKey, setStep, confidenceScores,
     headerRow, sheetName, memoryMatch, bankMemoryMatch, templateVariantMatch, suggestionSource,
-    bankReviewed, mappingReviewed, setBankReviewed, setMappingReviewed,
+    bankReviewed, accountReviewed, mappingReviewed, setBankReviewed, setAccountReviewed, setMappingReviewed,
     isBlockedCase, canProceedToConfig, operatorName, fileId, fileName,
+    account, name, setAccount, setName, identityGuess,
   } = useStore()
   const [saving, setSaving]         = useState(false)
   const [banks, setBanks]           = useState<any[]>([])
@@ -91,6 +92,9 @@ export function Step2Map() {
         columns: allColumns,
         sample_rows: sampleRows,
         current_mapping: confirmedMapping,
+        subject_account: account,
+        subject_name: name,
+        identity_guess: identityGuess,
         sheet_name: sheetName,
         header_row: headerRow,
       })
@@ -121,6 +125,9 @@ export function Step2Map() {
         columns: allColumns,
         sample_rows: sampleRows,
         current_mapping: confirmedMapping,
+        subject_account: account,
+        subject_name: name,
+        identity_guess: identityGuess,
         sheet_name: sheetName,
         header_row: headerRow,
       })
@@ -178,6 +185,9 @@ export function Step2Map() {
           reviewer: normalizeOperatorName(operatorName),
           detected_bank: detectedBank,
           suggested_mapping: suggestedMapping,
+          subject_account: account,
+          subject_name: name,
+          identity_guess: identityGuess,
           sample_rows: sampleRows,
           promote_shared: false,
         },
@@ -242,8 +252,11 @@ export function Step2Map() {
   const reviewGate = evaluateReviewGate({
     detectedBank,
     selectedBankKey: bankKey,
+    selectedAccount: account,
+    inferredAccount: identityGuess?.account,
     mapping: confirmedMapping,
     bankReviewed,
+    accountReviewed,
     mappingReviewed,
   })
   const confidence  = reviewGate.confidencePercent
@@ -261,6 +274,18 @@ export function Step2Map() {
   const detectedBankKey = String(detectedBank?.key || detectedBank?.config_key || '').trim().toLowerCase()
   const detectedBankEntry = banks.find((bank: any) => bank.key === detectedBankKey) || null
   const bankOverrideDetected = reviewGate.bankOverrideDetected
+  const selectedAccount = normalizeAccount(account)
+  const inferredAccount = normalizeAccount(identityGuess?.account)
+  const accountMismatchDetected = reviewGate.accountMismatchDetected
+  const accountContextStatus = accountMismatchDetected
+    ? 'Manual override'
+    : selectedAccount && inferredAccount
+      ? 'Matches statement'
+      : selectedAccount
+        ? 'Analyst provided'
+        : inferredAccount
+          ? 'Detected only'
+          : 'Not provided'
   const rankedCandidates = candidateKeys.map((key: string) => ({
     key,
     name: banks.find((bank: any) => bank.key === key)?.name || key.toUpperCase(),
@@ -361,7 +386,63 @@ export function Step2Map() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className={`mb-4 rounded-xl border p-4 ${accountMismatchDetected ? 'border-warning/30 bg-warning/10' : 'border-border bg-surface2/50'}`}>
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <div className="flex items-center gap-2 text-text2">
+                <Wallet size={15} className={accountMismatchDetected ? 'text-warning' : 'text-accent'} />
+                <span className="text-sm font-semibold">Known Account Context</span>
+              </div>
+              <p className="mt-1 text-xs text-muted leading-relaxed">
+                Use the account from the legal request as analyst context before asking mapping assist or confirming the layout.
+              </p>
+            </div>
+            <Badge variant={accountMismatchDetected ? 'red' : selectedAccount ? 'green' : 'gray'}>{accountContextStatus}</Badge>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11px] uppercase text-muted font-semibold">Known account number</span>
+              <input
+                value={account}
+                onChange={e => {
+                  setServerPreview(null)
+                  setMappingAssist(null)
+                  setAccount(e.target.value.replace(/\D/g, '').slice(0, 12))
+                }}
+                placeholder="10 or 12 digits"
+                maxLength={12}
+                inputMode="numeric"
+                className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11px] uppercase text-muted font-semibold">Known account holder</span>
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Account holder name"
+                className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none"
+              />
+            </label>
+          </div>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div className="rounded-lg border border-border/70 bg-surface px-3 py-2">
+              <span className="text-muted">Statement-inferred account: </span>
+              <span className="font-mono text-text">{inferredAccount || 'not detected'}</span>
+            </div>
+            <div className="rounded-lg border border-border/70 bg-surface px-3 py-2">
+              <span className="text-muted">Inference source: </span>
+              <span className="text-text">{formatEvidenceItem(identityGuess?.account_source || 'none')}</span>
+            </div>
+          </div>
+          {accountMismatchDetected && (
+            <div className="mt-3 text-xs text-muted leading-relaxed">
+              BSIE inferred <span className="font-mono text-text">{inferredAccount}</span>, but this run will use <span className="font-mono text-text">{selectedAccount}</span> after analyst confirmation.
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="rounded-xl border border-border bg-surface2/50 p-4">
             <div className="flex items-center gap-2 mb-3 text-text2">
               <FileSearch size={14} className="text-accent" />
@@ -525,7 +606,7 @@ export function Step2Map() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-border bg-surface2/50 p-4">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div>
@@ -546,6 +627,29 @@ export function Step2Map() {
               }}
             >
               {bankReviewed ? 'Bank Confirmed' : 'Confirm Selected Bank'}
+            </Button>
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface2/50 p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <div className="text-sm font-semibold text-text">Confirm Known Account</div>
+                <div className="text-xs text-muted">Required when analyst account conflicts with statement inference.</div>
+              </div>
+              <Badge variant={accountReviewed ? 'green' : reviewGate.accountNeedsReview ? 'red' : 'gray'}>
+                {accountReviewed ? 'Confirmed' : reviewGate.accountNeedsReview ? 'Required' : 'Auto-cleared'}
+              </Badge>
+            </div>
+            <Button
+              size="sm"
+              variant={accountReviewed ? 'outline' : 'primary'}
+              disabled={!reviewGate.accountNeedsReview || !selectedAccount}
+              onClick={() => {
+                setAccountReviewed(true)
+                toast.success('Known account context confirmed')
+              }}
+            >
+              {accountReviewed ? 'Account Confirmed' : 'Confirm Known Account'}
             </Button>
           </div>
 
@@ -995,6 +1099,11 @@ function formatEvidenceItem(value: string) {
     .replace(/:/g, ': ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function normalizeAccount(value: unknown) {
+  const digits = String(value || '').replace(/\D/g, '')
+  return digits.length === 10 || digits.length === 12 ? digits : ''
 }
 
 function evaluateLocalMapping(mapping: Record<string, string | null>, columns: string[]) {

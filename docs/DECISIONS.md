@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-027: Analyst-selected subject account is review-gated mapping context
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Investigators often know the requested subject account before BSIE can fully interpret an unfamiliar workbook. That account can help mapping assist understand statement perspective, but it must not silently override evidence when upload inference points to a different account.
+- **Decision:** Expose known subject account/name in Step 2, block mapping confirmation when the selected account conflicts with statement-inferred account until the analyst confirms the override, and pass `subject_context` to mapping assist, vision assist, and mapping confirmation audit logs. The selected account remains analyst authority; LLM output may warn about conflicts but may not change account values.
+- **Alternatives:** (1) Keep account collection only in Step 3 — too late to help mapping and conflict review. (2) Always trust inferred account — can ignore legal-request context. (3) Let LLM infer/replace the subject account — unsafe for evidence integrity.
+- **Consequences:** Account conflicts become explicit review events before normalization. Mapping assist can use subject perspective without inventing accounts. Full workbook account-presence verification is still future work beyond the current identity/sample-row context.
+
 ### DEC-026: Analyst-selected bank is authoritative after explicit review
 - **Date:** 2026-04-24
 - **Status:** accepted

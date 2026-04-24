@@ -219,6 +219,9 @@ describe('Step2Map analyst gate', () => {
         debit: null,
         credit: null,
       },
+      subject_account: '',
+      subject_name: '',
+      identity_guess: null,
       sheet_name: 'Sheet1',
       header_row: 1,
     })
@@ -260,6 +263,9 @@ describe('Step2Map analyst gate', () => {
         debit: null,
         credit: null,
       },
+      subject_account: '',
+      subject_name: '',
+      identity_guess: null,
       sheet_name: 'PDF_OCR',
       header_row: 1,
     })
@@ -340,6 +346,49 @@ describe('Step2Map analyst gate', () => {
     )
   })
 
+  it('blocks inferred account overrides until explicitly confirmed', async () => {
+    seedUpload({
+      account_guess: '1111111111',
+      name_guess: 'Detected Name',
+      identity_guess: {
+        account: '1111111111',
+        name: 'Detected Name',
+        account_source: 'workbook_header',
+        name_source: 'workbook_header',
+      },
+    })
+
+    render(<Step2Map />)
+
+    const continueButton = await screen.findByRole('button', { name: /^confirm mapping$/i })
+    expect(continueButton).toBeEnabled()
+
+    fireEvent.change(screen.getByLabelText(/known account number/i), { target: { value: '2222222222' } })
+
+    await waitFor(() => expect(continueButton).toBeDisabled())
+    expect(screen.getByText(/selected account \(2222222222\) differs from inferred account \(1111111111\)/i)).toBeInTheDocument()
+    expect(screen.getByText(/BSIE inferred/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /confirm known account/i }))
+
+    await waitFor(() => expect(continueButton).toBeEnabled())
+    fireEvent.click(continueButton)
+
+    await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
+    expect(confirmMapping).toHaveBeenCalledWith(
+      'scb',
+      expect.any(Object),
+      expect.any(Array),
+      1,
+      'Sheet1',
+      expect.objectContaining({
+        subject_account: '2222222222',
+        subject_name: 'Detected Name',
+        identity_guess: expect.objectContaining({ account: '1111111111' }),
+      }),
+    )
+  })
+
   it('clears mapping review when a critical mapping changes after confirmation', async () => {
     seedUpload({
       detected_bank: {
@@ -414,6 +463,9 @@ describe('Step2Map analyst gate', () => {
             description: 'รายละเอียด',
           amount: 'จำนวนเงิน',
         },
+        subject_account: '',
+        subject_name: '',
+        identity_guess: null,
         sample_rows: [{ วันที่: '2026-01-01', รายละเอียด: 'โอนเงิน', จำนวนเงิน: '100.00' }],
         promote_shared: false,
       },

@@ -179,6 +179,48 @@ def test_mapping_assist_marks_selected_bank_as_authority(monkeypatch):
     assert any("differs from detected bank" in warning for warning in result["warnings"])
 
 
+def test_mapping_assist_includes_selected_account_context(monkeypatch):
+    async def fake_chat(message, *args, **kwargs):
+        assert '"selected_account": "2222222222"' in message
+        assert '"inferred_account": "1111111111"' in message
+        assert '"account_match_status": "selected_conflicts_with_inferred"' in message
+        return {
+            "model": kwargs["model"],
+            "response": """
+            {
+              "mapping": {
+                "date": "วันที่",
+                "description": "รายละเอียด",
+                "amount": "จำนวนเงิน"
+              },
+              "confidence": 0.79,
+              "reasons": ["selected account clarifies statement perspective"],
+              "warnings": []
+            }
+            """,
+        }
+
+    monkeypatch.setattr("services.mapping_assist_service.chat", fake_chat)
+
+    result = asyncio.run(
+        suggest_mapping_with_llm(
+            bank="scb",
+            detected_bank={"key": "scb", "confidence": 0.95},
+            columns=["วันที่", "รายละเอียด", "จำนวนเงิน"],
+            sample_rows=[{"วันที่": "2026-01-10", "รายละเอียด": "TRANSFER", "จำนวนเงิน": "100.00"}],
+            current_mapping={},
+            subject_account="222-222-2222",
+            subject_name="Known Holder",
+            identity_guess={"account": "1111111111", "name": "Detected Holder", "account_source": "workbook_header"},
+        )
+    )
+
+    assert result["subject_context"]["selected_account"] == "2222222222"
+    assert result["subject_context"]["inferred_account"] == "1111111111"
+    assert result["subject_context"]["account_match_status"] == "selected_conflicts_with_inferred"
+    assert any("differs from inferred account" in warning for warning in result["warnings"])
+
+
 def test_mapping_assist_rejects_non_json_llm_response(monkeypatch):
     async def fake_chat(*args, **kwargs):
         return {"model": "qwen2.5:14b", "response": "not json"}

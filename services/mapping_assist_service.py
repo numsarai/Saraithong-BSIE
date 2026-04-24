@@ -8,6 +8,7 @@ from typing import Any
 
 from services.llm_service import chat, chat_with_file, resolve_model
 from services.mapping_validation_service import validate_mapping
+from services.subject_context_service import build_subject_account_context
 from utils.app_helpers import repair_suggested_mapping
 
 ASSIST_FIELDS = (
@@ -124,6 +125,7 @@ def _build_prompt(
     columns: list[str],
     sample_rows: list[dict[str, str]],
     current_mapping: dict[str, str | None],
+    subject_context: dict[str, Any],
     sheet_name: str,
     header_row: int,
 ) -> str:
@@ -142,12 +144,14 @@ def _build_prompt(
         "columns": columns,
         "sample_rows": sample_rows,
         "current_mapping": current_mapping,
+        "subject_context": subject_context,
         "allowed_fields": list(ASSIST_FIELDS),
     }
     return (
         "You are assisting a Thai bank statement mapping review inside BSIE.\n"
         "Use only the provided column names. Do not invent columns, accounts, dates, amounts, banks, or transactions.\n"
         "Treat Context JSON bank as the analyst-selected bank authority for this run. Do not change the bank; if detected_bank conflicts, map under the selected bank and mention the conflict in warnings.\n"
+        "Use subject_context only to understand statement perspective and account-side columns. Do not change the selected account; if it conflicts with inferred_account, mention the conflict in warnings.\n"
         "For unsigned amount columns paired with DR/CR, IN/OUT, or ฝาก/ถอน markers, map the amount column to amount and the marker column to direction_marker.\n"
         "Return JSON only with this exact shape:\n"
         "{\n"
@@ -168,6 +172,7 @@ def _build_vision_prompt(
     columns: list[str],
     sample_rows: list[dict[str, str]],
     current_mapping: dict[str, str | None],
+    subject_context: dict[str, Any],
     sheet_name: str,
     header_row: int,
     file_context: dict[str, Any],
@@ -189,6 +194,7 @@ def _build_vision_prompt(
         "columns": columns,
         "ocr_sample_rows": sample_rows,
         "current_mapping": current_mapping,
+        "subject_context": subject_context,
         "allowed_fields": list(ASSIST_FIELDS),
     }
     return (
@@ -196,6 +202,7 @@ def _build_vision_prompt(
         "Use the visual evidence only to choose among the provided OCR/extracted column names.\n"
         "Do not invent columns, rows, transactions, accounts, names, dates, amounts, banks, or balances.\n"
         "Treat Context JSON bank as the analyst-selected bank authority for this run. Do not change the bank; if detected_bank conflicts, map under the selected bank and mention the conflict in warnings.\n"
+        "Use subject_context only to understand statement perspective and account-side columns. Do not change the selected account; if it conflicts with inferred_account, mention the conflict in warnings.\n"
         "For unsigned amount columns paired with DR/CR, IN/OUT, or ฝาก/ถอน markers, map the amount column to amount and the marker column to direction_marker.\n"
         "Return JSON only with this exact shape:\n"
         "{\n"
@@ -261,6 +268,9 @@ async def suggest_mapping_with_llm(
     columns: list[Any] | None = None,
     sample_rows: list[dict[str, Any]] | None = None,
     current_mapping: dict[str, Any] | None = None,
+    subject_account: str = "",
+    subject_name: str = "",
+    identity_guess: Any = None,
     sheet_name: str = "",
     header_row: int = 0,
     model: str = "",
@@ -268,12 +278,19 @@ async def suggest_mapping_with_llm(
     clean_columns = _clean_columns(columns)
     clean_rows = _clean_sample_rows(sample_rows, clean_columns)
     clean_current = _clean_current_mapping(current_mapping, clean_columns)
+    subject_context = build_subject_account_context(
+        subject_account=subject_account,
+        subject_name=subject_name,
+        identity_guess=identity_guess,
+        sample_rows=sample_rows,
+    )
     prompt = _build_prompt(
         bank=str(bank or "").strip(),
         detected_bank=detected_bank,
         columns=clean_columns,
         sample_rows=clean_rows,
         current_mapping=clean_current,
+        subject_context=subject_context,
         sheet_name=str(sheet_name or "").strip(),
         header_row=int(header_row or 0),
     )
@@ -303,6 +320,10 @@ async def suggest_mapping_with_llm(
     warnings = [*mapping_warnings, *_list_text(raw.get("warnings"))]
     if selected_key and detected_key and selected_key != detected_key:
         warnings.append(f"Selected bank '{selected_key}' differs from detected bank '{detected_key}'; mapping uses selected bank authority.")
+    if subject_context["account_match_status"] == "selected_conflicts_with_inferred":
+        warnings.append(
+            f"Selected account '{subject_context['selected_account']}' differs from inferred account '{subject_context['inferred_account']}'; mapping uses selected account context."
+        )
 
     return {
         "status": "ok",
@@ -316,6 +337,7 @@ async def suggest_mapping_with_llm(
             "bank_override_detected": bool(selected_key and detected_key and selected_key != detected_key),
             "authority": "analyst_selected",
         },
+        "subject_context": subject_context,
         "mapping": merged_mapping,
         "confidence": confidence_float,
         "reasons": _list_text(raw.get("reasons")),
@@ -338,6 +360,9 @@ async def suggest_mapping_with_vision_llm(
     columns: list[Any] | None = None,
     sample_rows: list[dict[str, Any]] | None = None,
     current_mapping: dict[str, Any] | None = None,
+    subject_account: str = "",
+    subject_name: str = "",
+    identity_guess: Any = None,
     sheet_name: str = "",
     header_row: int = 0,
     model: str = "",
@@ -345,6 +370,12 @@ async def suggest_mapping_with_vision_llm(
     clean_columns = _clean_columns(columns)
     clean_rows = _clean_sample_rows(sample_rows, clean_columns)
     clean_current = _clean_current_mapping(current_mapping, clean_columns)
+    subject_context = build_subject_account_context(
+        subject_account=subject_account,
+        subject_name=subject_name,
+        identity_guess=identity_guess,
+        sample_rows=sample_rows,
+    )
     preview_bytes, content_type, file_context = _load_vision_preview(Path(file_path))
     prompt = _build_vision_prompt(
         bank=str(bank or "").strip(),
@@ -352,6 +383,7 @@ async def suggest_mapping_with_vision_llm(
         columns=clean_columns,
         sample_rows=clean_rows,
         current_mapping=clean_current,
+        subject_context=subject_context,
         sheet_name=str(sheet_name or "").strip(),
         header_row=int(header_row or 0),
         file_context=file_context,
@@ -383,6 +415,10 @@ async def suggest_mapping_with_vision_llm(
     warnings = [*mapping_warnings, *_list_text(raw.get("warnings"))]
     if selected_key and detected_key and selected_key != detected_key:
         warnings.append(f"Selected bank '{selected_key}' differs from detected bank '{detected_key}'; mapping uses selected bank authority.")
+    if subject_context["account_match_status"] == "selected_conflicts_with_inferred":
+        warnings.append(
+            f"Selected account '{subject_context['selected_account']}' differs from inferred account '{subject_context['inferred_account']}'; mapping uses selected account context."
+        )
 
     return {
         "status": "ok",
@@ -396,6 +432,7 @@ async def suggest_mapping_with_vision_llm(
             "bank_override_detected": bool(selected_key and detected_key and selected_key != detected_key),
             "authority": "analyst_selected",
         },
+        "subject_context": subject_context,
         "mapping": merged_mapping,
         "confidence": confidence_float,
         "reasons": _list_text(raw.get("reasons")),

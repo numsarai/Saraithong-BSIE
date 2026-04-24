@@ -34,6 +34,7 @@ from services.file_ingestion_service import get_file_record, persist_upload
 from services.mapping_assist_service import suggest_mapping_with_llm, suggest_mapping_with_vision_llm
 from services.mapping_validation_service import validate_and_preview_mapping, validate_mapping
 from services.persistence_pipeline_service import create_parser_run
+from services.subject_context_service import build_subject_account_context
 from services.template_variant_service import (
     find_matching_template_variant,
     list_template_variants,
@@ -512,6 +513,9 @@ async def api_assist_mapping(request: Request):
             columns=body.columns,
             sample_rows=body.sample_rows,
             current_mapping=body.current_mapping,
+            subject_account=body.subject_account,
+            subject_name=body.subject_name,
+            identity_guess=body.identity_guess,
             sheet_name=body.sheet_name,
             header_row=body.header_row,
             model=body.model,
@@ -550,6 +554,9 @@ async def api_assist_mapping_vision(request: Request):
             columns=body.columns,
             sample_rows=body.sample_rows,
             current_mapping=body.current_mapping,
+            subject_account=body.subject_account,
+            subject_name=body.subject_name,
+            identity_guess=body.identity_guess,
             sheet_name=body.sheet_name,
             header_row=body.header_row,
             model=body.model,
@@ -579,6 +586,7 @@ async def api_confirm_mapping(request: Request):
     detected_bank_raw = payload.get("detected_bank") if "detected_bank" in payload else payload.get("detectedBank")
     detected_bank = detected_bank_key(detected_bank_raw)
     suggested_mapping = payload.get("suggested_mapping") or payload.get("suggestedMapping") or {}
+    identity_guess_raw = payload.get("identity_guess") if "identity_guess" in payload else payload.get("identityGuess")
 
     validation = validate_and_preview_mapping(
         bank=bank,
@@ -600,6 +608,12 @@ async def api_confirm_mapping(request: Request):
         "bank_override_detected": bank_override_detected,
         "authority": "analyst_selected" if bank_override_detected else "detected_or_selected",
     }
+    subject_context = build_subject_account_context(
+        subject_account=body.subject_account,
+        subject_name=body.subject_name,
+        identity_guess=identity_guess_raw if identity_guess_raw is not None else body.identity_guess,
+        sample_rows=body.sample_rows,
+    )
     promote_shared = bool(body.promote_shared)
     if promote_shared and not _can_promote_shared_mapping(reviewer):
         raise HTTPException(403, "Shared mapping promotion requires a named reviewer")
@@ -635,6 +649,7 @@ async def api_confirm_mapping(request: Request):
                 extra_context={
                     "bank": bank,
                     "bank_authority": bank_authority_context,
+                    "subject_context": subject_context,
                     "detected_bank": detected_bank_raw if isinstance(detected_bank_raw, dict) else detected_bank,
                     "bank_feedback": bank_feedback,
                     "columns": list(columns or []),
@@ -658,6 +673,7 @@ async def api_confirm_mapping(request: Request):
                 extra_context={
                     "bank": bank,
                     "bank_authority": bank_authority_context,
+                    "subject_context": subject_context,
                     "detected_bank": detected_bank_raw if isinstance(detected_bank_raw, dict) else detected_bank,
                     "bank_feedback": bank_feedback,
                     "columns": list(columns or []),
@@ -674,6 +690,7 @@ async def api_confirm_mapping(request: Request):
         "variant_id": variant["variant_id"] if variant else None,
         "bank_feedback": bank_feedback,
         "bank_authority": bank_authority_context,
+        "subject_context": subject_context,
         "mapping_feedback": mapping_feedback,
         "feedback_mode": feedback_mode,
         "validation": {

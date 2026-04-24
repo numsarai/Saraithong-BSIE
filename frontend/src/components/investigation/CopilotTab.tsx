@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BrainCircuit, FileText, ListChecks, Loader2, ScrollText, Send, ShieldAlert, ShieldCheck, Sparkles, Target } from 'lucide-react'
-import { askCopilot, getCaseTagDetail, listCaseTags, previewClassification, reviewTransaction, searchTransactionRecords, type CaseTagDetail, type CaseTagItem, type CaseTagLinkedObject } from '@/api'
+import { BrainCircuit, FileText, History, ListChecks, Loader2, RotateCcw, ScrollText, Send, ShieldAlert, ShieldCheck, Sparkles, Target } from 'lucide-react'
+import { askCopilot, getAuditLogs, getCaseTagDetail, listCaseTags, previewClassification, reviewTransaction, searchTransactionRecords, type CaseTagDetail, type CaseTagItem, type CaseTagLinkedObject } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -50,9 +50,22 @@ type ScopedTransactionRow = {
   [key: string]: unknown
 }
 
+type ClassificationAuditItem = {
+  id?: string | null
+  object_id?: string | null
+  action_type?: string | null
+  field_name?: string | null
+  old_value_json?: unknown
+  new_value_json?: unknown
+  changed_by?: string | null
+  changed_at?: string | null
+  reason?: string | null
+}
+
 const EMPTY_SCOPE: CopilotScope = { parser_run_id: '', file_id: '', account: '', case_tag_id: '', case_tag: '' }
 const TASK_MODES: CopilotTaskMode[] = ['account_summary', 'alert_explanation', 'review_checklist', 'draft_report_paragraph']
 const TRANSACTION_TYPES = ['IN_TRANSFER', 'OUT_TRANSFER', 'DEPOSIT', 'WITHDRAW', 'FEE', 'SALARY', 'IN_UNKNOWN', 'OUT_UNKNOWN']
+const CLASSIFICATION_REVIEW_FIELDS = new Set(['transaction_type', 'counterparty_name_normalized'])
 const INITIAL_CLASSIFICATION_PREVIEW = {
   transaction_id: 'TXN-PREVIEW-1',
   date: '',
@@ -155,6 +168,31 @@ function classificationSuggestionCanApply(item: any) {
   return Boolean(item?.would_apply && Object.keys(classificationSuggestionChanges(item)).length > 0)
 }
 
+function classificationAuditKey(item: ClassificationAuditItem, index: number) {
+  return textValue(item.id || `${item.object_id || 'audit'}-${item.field_name || 'field'}-${item.changed_at || index}`)
+}
+
+function isClassificationAuditItem(item: any): item is ClassificationAuditItem {
+  return Boolean(
+    item
+    && item.action_type === 'field_update'
+    && CLASSIFICATION_REVIEW_FIELDS.has(textValue(item.field_name))
+    && textValue(item.object_id),
+  )
+}
+
+function formatAuditValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return '—'
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function classificationAuditRevertChanges(item: ClassificationAuditItem) {
+  const field = textValue(item.field_name)
+  if (!CLASSIFICATION_REVIEW_FIELDS.has(field)) return {}
+  return { [field]: item.old_value_json ?? '' }
+}
+
 function caseTagCountLabel(tag: CaseTagItem, linkedLabel: string) {
   const counts = Object.entries(tag.linked_object_counts || {})
     .filter(([, count]) => Number(count) > 0)
@@ -201,6 +239,13 @@ export function CopilotTab({
   const [classificationApplyResult, setClassificationApplyResult] = useState<any>(null)
   const [classificationAppliedHistory, setClassificationAppliedHistory] = useState<Array<{ transaction_id: string; changes: Record<string, string>; reason: string }>>([])
   const [isApplyingClassificationSuggestions, setIsApplyingClassificationSuggestions] = useState(false)
+  const [classificationAuditHistory, setClassificationAuditHistory] = useState<ClassificationAuditItem[]>([])
+  const [classificationAuditError, setClassificationAuditError] = useState('')
+  const [isLoadingClassificationAuditHistory, setIsLoadingClassificationAuditHistory] = useState(false)
+  const [classificationRevertReason, setClassificationRevertReason] = useState('')
+  const [classificationRevertError, setClassificationRevertError] = useState('')
+  const [classificationRevertResult, setClassificationRevertResult] = useState<any>(null)
+  const [revertingClassificationAuditKey, setRevertingClassificationAuditKey] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -306,6 +351,8 @@ export function CopilotTab({
     setSelectedScopedClassificationKeys([])
     setHasLoadedScopedClassificationRows(false)
     setClassificationAppliedHistory([])
+    setClassificationAuditHistory([])
+    setClassificationRevertReason('')
   }, [scope.account, scope.file_id, scope.parser_run_id])
 
   useEffect(() => {
@@ -454,6 +501,59 @@ export function CopilotTab({
     ))
   }
 
+  const loadClassificationAuditHistory = async () => {
+    const transactionIds = Array.from(new Set(
+      scopedClassificationRows.map((row, index) => scopedTransactionKey(row, index)).filter(Boolean),
+    )).slice(0, 25)
+    if (!transactionIds.length) return
+    setIsLoadingClassificationAuditHistory(true)
+    setClassificationAuditError('')
+    setClassificationRevertError('')
+    try {
+      const payloads = await Promise.all(
+        transactionIds.map((transactionId) => getAuditLogs({
+          object_type: 'transaction',
+          object_id: transactionId,
+          limit: 20,
+        })),
+      )
+      const items = payloads
+        .flatMap((payload) => (Array.isArray(payload.items) ? payload.items : []))
+        .filter(isClassificationAuditItem)
+        .sort((left, right) => textValue(right.changed_at).localeCompare(textValue(left.changed_at)))
+      setClassificationAuditHistory(items)
+    } catch (err: any) {
+      setClassificationAuditError(err.message || String(err))
+    } finally {
+      setIsLoadingClassificationAuditHistory(false)
+    }
+  }
+
+  const revertClassificationAuditChange = async (item: ClassificationAuditItem, index: number) => {
+    const reason = classificationRevertReason.trim()
+    const transactionId = textValue(item.object_id)
+    const changes = classificationAuditRevertChanges(item)
+    if (!reason || !transactionId || Object.keys(changes).length === 0) return
+    const auditKey = classificationAuditKey(item, index)
+    setRevertingClassificationAuditKey(auditKey)
+    setClassificationRevertError('')
+    setClassificationRevertResult(null)
+    try {
+      await reviewTransaction(transactionId, {
+        reviewer: operatorName || 'analyst',
+        reason,
+        changes,
+      })
+      setClassificationRevertResult({ status: 'ok', transaction_id: transactionId, field_name: item.field_name })
+      await refreshScopedClassificationRows({ resetPreview: false })
+      await loadClassificationAuditHistory()
+    } catch (err: any) {
+      setClassificationRevertError(err.message || String(err))
+    } finally {
+      setRevertingClassificationAuditKey('')
+    }
+  }
+
   const applySelectedClassificationSuggestions = async () => {
     const reason = classificationApplyReason.trim()
     if (!selectedApplicablePreviewItems.length || !reason) return
@@ -475,6 +575,9 @@ export function CopilotTab({
       setClassificationAppliedHistory((state) => [...applied, ...state].slice(0, 10))
       setSelectedClassificationSuggestionIds([])
       await refreshScopedClassificationRows({ resetPreview: false })
+      if (classificationAuditHistory.length > 0) {
+        await loadClassificationAuditHistory()
+      }
     } catch (err: any) {
       setClassificationApplyError(err.message || String(err))
     } finally {
@@ -853,6 +956,101 @@ export function CopilotTab({
                 </div>
               </div>
             )}
+            <div className="space-y-3 rounded-md border border-border bg-surface p-3">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="text-sm font-semibold text-text">{t('investigation.copilot.classificationAuditHistory')}</div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={loadClassificationAuditHistory}
+                  disabled={isLoadingClassificationAuditHistory || scopedClassificationRows.length === 0}
+                >
+                  {isLoadingClassificationAuditHistory ? <Loader2 size={14} className="animate-spin" /> : <History size={14} />}
+                  {isLoadingClassificationAuditHistory
+                    ? t('investigation.copilot.loadingClassificationAuditHistory')
+                    : t('investigation.copilot.loadClassificationAuditHistory')}
+                </Button>
+              </div>
+              {classificationAuditError && (
+                <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+                  {classificationAuditError}
+                </div>
+              )}
+              {classificationAuditHistory.length === 0 && !isLoadingClassificationAuditHistory ? (
+                <div className="rounded-md border border-border bg-surface2 px-3 py-2 text-sm text-muted">
+                  {t('investigation.copilot.classificationAuditEmpty')}
+                </div>
+              ) : (
+                classificationAuditHistory.length > 0 && (
+                  <div className="space-y-3">
+                    <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                      {t('investigation.copilot.classificationRevertReason')}
+                      <input
+                        value={classificationRevertReason}
+                        onChange={(event) => setClassificationRevertReason(event.target.value)}
+                        placeholder={t('investigation.copilot.classificationRevertReasonPlaceholder')}
+                        className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+                      />
+                    </label>
+                    <div className="space-y-2">
+                      {classificationAuditHistory.map((item, index) => {
+                        const auditKey = classificationAuditKey(item, index)
+                        return (
+                          <div key={auditKey} className="rounded-md border border-border bg-surface2 px-3 py-2">
+                            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                              <div className="min-w-0 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant="blue">{item.object_id || '—'}</Badge>
+                                  <span className="font-mono text-xs text-text">{item.field_name || '—'}</span>
+                                  <span className="font-mono text-xs text-muted">
+                                    {formatAuditValue(item.old_value_json)} -&gt; {formatAuditValue(item.new_value_json)}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-muted">
+                                  {t('investigation.copilot.classificationAuditMeta', {
+                                    reviewer: item.changed_by || 'analyst',
+                                    date: textValue(item.changed_at).slice(0, 10) || '—',
+                                  })}
+                                </div>
+                                {item.reason && (
+                                  <div className="text-xs text-muted">
+                                    {t('investigation.copilot.classificationAppliedReason', { reason: item.reason })}
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => revertClassificationAuditChange(item, index)}
+                                disabled={revertingClassificationAuditKey === auditKey || !classificationRevertReason.trim()}
+                              >
+                                {revertingClassificationAuditKey === auditKey ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                                {revertingClassificationAuditKey === auditKey
+                                  ? t('investigation.copilot.revertingClassificationChange')
+                                  : t('investigation.copilot.revertClassificationChange')}
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              )}
+              {classificationRevertError && (
+                <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+                  {classificationRevertError}
+                </div>
+              )}
+              {classificationRevertResult && (
+                <div className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
+                  {t('investigation.copilot.classificationRevertDone', {
+                    id: classificationRevertResult.transaction_id,
+                    field: classificationRevertResult.field_name,
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
         {classificationPreviewError && (

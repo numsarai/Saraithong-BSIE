@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-049: Classification audit history drives audited reverts
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** DEC-048 added a compact in-session apply history, but that history is not durable and cannot prove what changed across sessions. For evidence-sensitive classification review, analysts need a way to inspect the durable audit trail for scoped transactions and revert an accepted classification change without bypassing review logging.
+- **Decision:** The Evidence UI can load `field_update` audit log rows for the currently scoped transaction picker rows, limited to classification review fields (`transaction_type` and `counterparty_name_normalized`). Reverting a row requires an analyst reason and calls the existing audited transaction review endpoint with the audit row's previous value; no direct mutation or new unaudited update path is introduced.
+- **Alternatives:** (1) Extend the local session history into a browser-persisted undo stack -- convenient, but not authoritative across analysts or sessions. (2) Add a dedicated undo endpoint -- clearer in the UI, but risks duplicating review/audit semantics. (3) Leave revert to manual transaction review only -- safe, but makes audit-driven correction slower and easier to mistype.
+- **Consequences:** Classification undo is represented as another audited review action, preserving lineage and reviewer reasoning. The first UI slice supports only the two allowlisted classification fields and the visible scoped picker rows; broader batch history can build on the same audit-backed contract.
+
 ### DEC-048: Classification apply refreshes scoped rows and keeps session history
 - **Date:** 2026-04-24
 - **Status:** accepted

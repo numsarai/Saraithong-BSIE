@@ -617,4 +617,80 @@ describe('InvestigationDesk date formatting', () => {
     expect(await screen.findByText('Applied History')).toBeInTheDocument()
     expect(await screen.findByText('transaction_type: WITHDRAW · counterparty_name_normalized: ATM Withdrawal')).toBeInTheDocument()
   })
+
+  it('loads classification audit history and reverts changes through review', async () => {
+    vi.mocked(searchTransactionRecords)
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'TXN-SCOPE-1',
+            parser_run_id: 'RUN-1',
+            transaction_datetime: '2026-01-01T08:00:00Z',
+            amount: -900,
+            direction: 'OUT',
+            description_normalized: 'ATM WDL 1234567890',
+            transaction_type: 'WITHDRAW',
+            counterparty_name_normalized: 'ATM Withdrawal',
+            confidence: 0.76,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'TXN-SCOPE-1',
+            parser_run_id: 'RUN-1',
+            transaction_datetime: '2026-01-01T08:00:00Z',
+            amount: -900,
+            direction: 'OUT',
+            description_normalized: 'ATM WDL 1234567890',
+            transaction_type: 'OUT_TRANSFER',
+            confidence: 0.76,
+          },
+        ],
+      })
+    vi.mocked(getAuditLogs).mockResolvedValue({
+      items: [
+        {
+          id: 'AUD-CLASS-1',
+          object_type: 'transaction',
+          object_id: 'TXN-SCOPE-1',
+          action_type: 'field_update',
+          field_name: 'transaction_type',
+          old_value_json: 'OUT_TRANSFER',
+          new_value_json: 'WITHDRAW',
+          changed_by: 'Case Reviewer',
+          changed_at: '2026-01-01T09:00:00Z',
+          reason: 'Accepted ATM classification after analyst review',
+        },
+      ],
+    })
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'AI Copilot' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Evidence' }))
+    fireEvent.change(screen.getByLabelText('Parser Run ID'), { target: { value: 'RUN-1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Load Scoped Transactions' }))
+    expect(await screen.findByText('TXN-SCOPE-1')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Load Audit History' }))
+
+    await waitFor(() => expect(getAuditLogs).toHaveBeenCalledWith({
+      object_type: 'transaction',
+      object_id: 'TXN-SCOPE-1',
+      limit: 20,
+    }))
+    expect(await screen.findByText('OUT_TRANSFER -> WITHDRAW')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Revert Reason'), { target: { value: 'Undo after audit review' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Revert Change' }))
+
+    await waitFor(() => expect(reviewTransaction).toHaveBeenCalledWith('TXN-SCOPE-1', {
+      reviewer: 'Case Reviewer',
+      reason: 'Undo after audit review',
+      changes: {
+        transaction_type: 'OUT_TRANSFER',
+      },
+    }))
+    await waitFor(() => expect(searchTransactionRecords).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('Reverted transaction_type on TXN-SCOPE-1 with audit trail.')).toBeInTheDocument()
+  })
 })

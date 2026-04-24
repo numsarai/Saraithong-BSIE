@@ -9,11 +9,58 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `391 passed`, frontend `51 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `391 passed`, frontend `52 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Post-apply Refresh and History
+## Done (latest session) — Audit-backed Classification History/Revert
+
+### What I changed
+- Added an Audit History panel under AI Copilot Evidence classification review for the currently scoped transaction picker rows.
+- The panel loads durable `field_update` audit logs through `getAuditLogs`, filtered to classification review fields only: `transaction_type` and `counterparty_name_normalized`.
+- Added a guarded revert action that requires a reviewer reason and writes the previous audit value back through the existing audited transaction review endpoint.
+- After a revert, the UI refreshes scoped transaction rows and reloads audit history so persisted row state stays visible.
+- Added English/Thai labels, DEC-049, roadmap status, and regression coverage for loading audit history and reverting through `reviewTransaction`.
+
+### Files changed
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `391 passed`
+  - `npm test -- --run` in `frontend/` -> `51 passed`
+- Focused:
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `9 passed`
+  - `npm run build` in `frontend/` -> passed
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `391 passed`
+  - `npm test -- --run` in `frontend/` -> `52 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-049: classification audit history drives audited reverts.
+- Undo/revert stays represented as another reviewed field update; there is no direct mutation or standalone undo endpoint.
+
+### Warnings / Next
+- Audit History currently loads audit rows for the visible scoped picker rows only, capped to 25 transaction ids and 20 audit logs per transaction.
+- Revert is intentionally limited to `transaction_type` and `counterparty_name_normalized`.
+- Next useful slice: decide whether Phase 5 should start with cautious metrics/rollback gates or whether classification audit history needs batch filtering/search first.
+
+### Failed attempts
+- Running frontend `npm test` / `npm run build` from the project root failed because npm scripts live in `frontend/`; reran from `frontend/` successfully.
+
+### Environment changes
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but generated dist files remain untracked.
+
+## Done (previous session) — Post-apply Refresh and History
 
 ### What I changed
 - After applying selected classification suggestions, the Evidence UI now refreshes scoped transaction rows through the same `/api/transactions/search` path.

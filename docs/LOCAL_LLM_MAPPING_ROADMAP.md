@@ -294,7 +294,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 4 — AI Copilot / Investigation Copilot
 
-สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036, unified AI Copilot workspace implemented ตาม DEC-038, Evidence task modes implemented ตาม DEC-039, scoped review/audit history implemented ตาม DEC-040, scoped graph metrics implemented ตาม DEC-041, case tag scope implemented ตาม DEC-042, optional AI classification enrichment moved to local-first ตาม DEC-043, read-only classification preview implemented ตาม DEC-044, scoped persisted transaction preview implemented ตาม DEC-045, scoped classification picker implemented ตาม DEC-046, audited classification apply implemented ตาม DEC-047, และ post-apply refresh/history implemented ตาม DEC-048
+สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036, unified AI Copilot workspace implemented ตาม DEC-038, Evidence task modes implemented ตาม DEC-039, scoped review/audit history implemented ตาม DEC-040, scoped graph metrics implemented ตาม DEC-041, case tag scope implemented ตาม DEC-042, optional AI classification enrichment moved to local-first ตาม DEC-043, read-only classification preview implemented ตาม DEC-044, scoped persisted transaction preview implemented ตาม DEC-045, scoped classification picker implemented ตาม DEC-046, audited classification apply implemented ตาม DEC-047, post-apply refresh/history implemented ตาม DEC-048, และ audit-backed classification history/revert implemented ตาม DEC-049
 
 เป้าหมาย:
 
@@ -334,6 +334,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] เพิ่ม transaction picker ใน Evidence UI ให้โหลดรายการจาก scope ก่อน เลือกแถวที่ต้องการ แล้วส่งเฉพาะรายการที่เลือกเข้า local classification preview
 - [x] เพิ่ม apply workflow สำหรับ classification suggestions โดยต้องเลือกข้อเสนอ กรอกเหตุผล และบันทึกผ่าน audited transaction review endpoint เท่านั้น
 - [x] หลัง apply ให้ refresh transaction rows จาก scope และแสดง applied history แบบ compact ใน session ปัจจุบัน
+- [x] เพิ่ม audit-backed classification history/revert โดยโหลด `field_update` audit logs ของรายการใน scope และย้อนกลับผ่าน audited transaction review endpoint พร้อมเหตุผล
 
 ### Phase 5 — Auto-pass Rollout
 

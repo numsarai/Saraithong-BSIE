@@ -15,6 +15,7 @@ def build_subject_account_context(
     subject_account: Any = "",
     subject_name: Any = "",
     identity_guess: Any = None,
+    account_presence: Any = None,
     sample_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     selected_raw = str(subject_account or "").strip()[:80]
@@ -24,6 +25,9 @@ def build_subject_account_context(
     inferred_account = normalize_subject_account(guess.get("account"))
     inferred_name = str(guess.get("name") or "").strip()[:160]
     account_seen_in_sample_rows = bool(selected_account and _sample_rows_contain_account(selected_account, sample_rows))
+    presence = account_presence if isinstance(account_presence, dict) else {}
+    presence_status = str(presence.get("match_status") or "").strip()[:80]
+    account_seen_in_workbook = bool(presence.get("found") or presence.get("possible_match"))
 
     if not selected_account:
         match_status = "no_selected_account"
@@ -31,6 +35,10 @@ def build_subject_account_context(
         match_status = "selected_matches_inferred"
     elif inferred_account and selected_account != inferred_account:
         match_status = "selected_conflicts_with_inferred"
+    elif presence.get("found"):
+        match_status = "selected_verified_in_workbook"
+    elif presence.get("possible_match"):
+        match_status = "selected_possible_in_workbook"
     elif account_seen_in_sample_rows:
         match_status = "selected_seen_in_sample_rows"
     else:
@@ -45,6 +53,9 @@ def build_subject_account_context(
         "account_source": str(guess.get("account_source") or "").strip()[:80],
         "name_source": str(guess.get("name_source") or "").strip()[:80],
         "account_seen_in_sample_rows": account_seen_in_sample_rows,
+        "account_seen_in_workbook": account_seen_in_workbook,
+        "account_presence_status": presence_status,
+        "account_presence_summary": presence.get("summary") if isinstance(presence.get("summary"), dict) else {},
         "account_match_status": match_status,
         "authority": "analyst_selected" if selected_account else "not_provided",
     }

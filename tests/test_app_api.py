@@ -948,6 +948,38 @@ def test_mapping_preview_reports_duplicate_assignments():
     assert payload["dry_run_preview"]["summary"]["preview_row_count"] == 1
 
 
+def test_account_presence_endpoint_scans_stored_excel_file(tmp_path):
+    workbook = tmp_path / "original.xlsx"
+    pd.DataFrame(
+        [
+            ["Statement account 123-456-7890", ""],
+            ["วันที่", "รายการ"],
+            ["2026-01-01", "ฝากเงิน"],
+        ]
+    ).to_excel(workbook, header=False, index=False)
+
+    with (
+        patch("paths.EVIDENCE_DIR", tmp_path),
+        patch("routers.ingestion.get_file_record", return_value=SimpleNamespace(stored_path=str(workbook))),
+    ):
+        response = client.post(
+            "/api/mapping/account-presence",
+            json={
+                "file_id": "FILE-1",
+                "subject_account": "1234567890",
+                "sheet_name": "Sheet1",
+                "header_row": 1,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "deterministic_account_presence"
+    assert payload["found"] is True
+    assert payload["match_status"] == "exact_found"
+    assert payload["locations"][0]["row_zone"] == "pre_header"
+
+
 def test_mapping_assist_endpoint_returns_suggestion_only_payload():
     assist_result = {
         "status": "ok",

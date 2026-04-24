@@ -20,6 +20,7 @@ class MappingConfirmRequest(BaseModel):
     subject_account: str = ""
     subject_name: str = ""
     identity_guess: Any | None = None
+    account_presence: Any | None = None
     promote_shared: bool = False
 
 
@@ -28,6 +29,14 @@ class MappingPreviewRequest(BaseModel):
     mapping: dict[str, str | None]
     columns: list[str] = Field(default_factory=list)
     sample_rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AccountPresenceRequest(BaseModel):
+    file_id: str = ""
+    subject_account: str
+    sheet_name: str = ""
+    header_row: int = 0
+    max_matches: int = 25
 
 
 class MappingAssistRequest(BaseModel):
@@ -39,6 +48,7 @@ class MappingAssistRequest(BaseModel):
     subject_account: str = ""
     subject_name: str = ""
     identity_guess: Any | None = None
+    account_presence: Any | None = None
     sheet_name: str = ""
     header_row: int = 0
     model: str = ""

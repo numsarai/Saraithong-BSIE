@@ -53,6 +53,20 @@ vi.mock('@/api', () => ({
       rows: [{ row_index: 1, date: '2026-01-01', amount: 100, direction: 'IN', status: 'ok' }],
     },
   })),
+  verifyAccountPresence: vi.fn(async () => ({
+    status: 'ok',
+    source: 'deterministic_account_presence',
+    file_type: 'excel',
+    subject_account_raw: '1234567890',
+    normalized_account: '1234567890',
+    found: true,
+    possible_match: false,
+    match_status: 'exact_found',
+    locations: [{ sheet_name: 'Sheet1', row_number: 2, column_number: 2, column_label: 'บัญชี', match_type: 'exact_digits' }],
+    possible_locations: [],
+    summary: { exact_match_count: 1, possible_match_count: 0, sheets_scanned: 1, cells_scanned: 10, locations_returned: 1 },
+    warnings: [],
+  })),
   getBanks: vi.fn(async () => ([
     { key: 'scb', name: 'SCB', logo_url: '/api/bank-logos/scb.svg' },
     { key: 'ktb', name: 'KTB', logo_url: '/api/bank-logos/ktb.svg' },
@@ -68,7 +82,7 @@ vi.mock('sonner', () => ({
   },
 }))
 
-const { assistMapping, assistVisionMapping, confirmMapping, previewMapping } = await import('@/api')
+const { assistMapping, assistVisionMapping, confirmMapping, previewMapping, verifyAccountPresence } = await import('@/api')
 
 function seedUpload(data: Record<string, unknown> = {}, filename = 'example.xlsx') {
   useStore.getState().setUploadResult({
@@ -222,6 +236,7 @@ describe('Step2Map analyst gate', () => {
       subject_account: '',
       subject_name: '',
       identity_guess: null,
+      account_presence: null,
       sheet_name: 'Sheet1',
       header_row: 1,
     })
@@ -266,6 +281,7 @@ describe('Step2Map analyst gate', () => {
       subject_account: '',
       subject_name: '',
       identity_guess: null,
+      account_presence: null,
       sheet_name: 'PDF_OCR',
       header_row: 1,
     })
@@ -389,6 +405,44 @@ describe('Step2Map analyst gate', () => {
     )
   })
 
+  it('verifies the known account against the stored workbook evidence', async () => {
+    seedUpload({
+      account_guess: '1234567890',
+      identity_guess: {
+        account: '1234567890',
+        name: 'Detected Name',
+        account_source: 'workbook_header',
+      },
+    })
+
+    render(<Step2Map />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /verify in workbook/i }))
+
+    await waitFor(() => expect(verifyAccountPresence).toHaveBeenCalledWith({
+      file_id: 'file-1',
+      subject_account: '1234567890',
+      sheet_name: 'Sheet1',
+      header_row: 1,
+      max_matches: 25,
+    }))
+    expect(await screen.findByText(/exact found/i)).toBeInTheDocument()
+    expect(screen.getByText(/Sheet1 R2C2/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^confirm mapping$/i }))
+    await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
+    expect(confirmMapping).toHaveBeenCalledWith(
+      'scb',
+      expect.any(Object),
+      expect.any(Array),
+      1,
+      'Sheet1',
+      expect.objectContaining({
+        account_presence: expect.objectContaining({ match_status: 'exact_found' }),
+      }),
+    )
+  })
+
   it('clears mapping review when a critical mapping changes after confirmation', async () => {
     seedUpload({
       detected_bank: {
@@ -466,6 +520,7 @@ describe('Step2Map analyst gate', () => {
         subject_account: '',
         subject_name: '',
         identity_guess: null,
+        account_presence: null,
         sample_rows: [{ วันที่: '2026-01-01', รายละเอียด: 'โอนเงิน', จำนวนเงิน: '100.00' }],
         promote_shared: false,
       },

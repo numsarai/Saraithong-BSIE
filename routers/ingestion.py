@@ -28,8 +28,9 @@ from core.pdf_loader import parse_pdf_file
 from core.subject_inference import infer_subject_identity_from_frames
 from database import db_create_job
 from persistence.base import get_db_session
-from persistence.schemas import MappingAssistRequest, MappingConfirmRequest, MappingPreviewRequest, MappingVisionAssistRequest, ProcessRequest, TemplateVariantPromotionRequest
+from persistence.schemas import AccountPresenceRequest, MappingAssistRequest, MappingConfirmRequest, MappingPreviewRequest, MappingVisionAssistRequest, ProcessRequest, TemplateVariantPromotionRequest
 from services.audit_service import record_learning_feedback
+from services.account_presence_service import verify_account_presence
 from services.file_ingestion_service import get_file_record, persist_upload
 from services.mapping_assist_service import suggest_mapping_with_llm, suggest_mapping_with_vision_llm
 from services.mapping_validation_service import validate_and_preview_mapping, validate_mapping
@@ -501,6 +502,33 @@ async def api_preview_mapping(request: Request):
     })
 
 
+@router.post("/mapping/account-presence")
+async def api_verify_account_presence(body: AccountPresenceRequest):
+    """Deterministically scan stored evidence for a selected subject account."""
+    file_id = str(body.file_id or "").strip()
+    if not file_id:
+        raise HTTPException(400, "file_id is required for account presence verification")
+    file_record = get_file_record(file_id)
+    if not file_record:
+        raise HTTPException(404, "File not found")
+
+    file_path = Path(file_record.stored_path)
+    from paths import EVIDENCE_DIR
+    evidence_root = EVIDENCE_DIR.resolve()
+    resolved_path = file_path.resolve()
+    if resolved_path != evidence_root and evidence_root not in resolved_path.parents:
+        raise HTTPException(400, "Source file is outside evidence storage")
+
+    result = verify_account_presence(
+        file_path=resolved_path,
+        subject_account=body.subject_account,
+        sheet_name=body.sheet_name,
+        header_row=body.header_row,
+        max_matches=body.max_matches,
+    )
+    return JSONResponse(result)
+
+
 @router.post("/mapping/assist")
 async def api_assist_mapping(request: Request):
     """Return a local-LLM mapping suggestion for analyst review only."""
@@ -516,6 +544,7 @@ async def api_assist_mapping(request: Request):
             subject_account=body.subject_account,
             subject_name=body.subject_name,
             identity_guess=body.identity_guess,
+            account_presence=body.account_presence,
             sheet_name=body.sheet_name,
             header_row=body.header_row,
             model=body.model,
@@ -557,6 +586,7 @@ async def api_assist_mapping_vision(request: Request):
             subject_account=body.subject_account,
             subject_name=body.subject_name,
             identity_guess=body.identity_guess,
+            account_presence=body.account_presence,
             sheet_name=body.sheet_name,
             header_row=body.header_row,
             model=body.model,
@@ -587,6 +617,7 @@ async def api_confirm_mapping(request: Request):
     detected_bank = detected_bank_key(detected_bank_raw)
     suggested_mapping = payload.get("suggested_mapping") or payload.get("suggestedMapping") or {}
     identity_guess_raw = payload.get("identity_guess") if "identity_guess" in payload else payload.get("identityGuess")
+    account_presence_raw = payload.get("account_presence") if "account_presence" in payload else payload.get("accountPresence")
 
     validation = validate_and_preview_mapping(
         bank=bank,
@@ -612,6 +643,7 @@ async def api_confirm_mapping(request: Request):
         subject_account=body.subject_account,
         subject_name=body.subject_name,
         identity_guess=identity_guess_raw if identity_guess_raw is not None else body.identity_guess,
+        account_presence=account_presence_raw if account_presence_raw is not None else body.account_presence,
         sample_rows=body.sample_rows,
     )
     promote_shared = bool(body.promote_shared)
@@ -650,6 +682,7 @@ async def api_confirm_mapping(request: Request):
                     "bank": bank,
                     "bank_authority": bank_authority_context,
                     "subject_context": subject_context,
+                    "account_presence": account_presence_raw if isinstance(account_presence_raw, dict) else body.account_presence,
                     "detected_bank": detected_bank_raw if isinstance(detected_bank_raw, dict) else detected_bank,
                     "bank_feedback": bank_feedback,
                     "columns": list(columns or []),
@@ -674,6 +707,7 @@ async def api_confirm_mapping(request: Request):
                     "bank": bank,
                     "bank_authority": bank_authority_context,
                     "subject_context": subject_context,
+                    "account_presence": account_presence_raw if isinstance(account_presence_raw, dict) else body.account_presence,
                     "detected_bank": detected_bank_raw if isinstance(detected_bank_raw, dict) else detected_bank,
                     "bank_feedback": bank_feedback,
                     "columns": list(columns or []),

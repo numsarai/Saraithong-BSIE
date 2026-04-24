@@ -19,6 +19,7 @@ vi.mock('@/api', () => ({
       rows: [{ row_index: 1, date: '2026-01-01', amount: 100, direction: 'IN', status: 'ok' }],
     },
   })),
+  verifyAccountPresence: vi.fn(async () => ({ status: 'ok', found: true, match_status: 'exact_found', summary: {} })),
   getBanks: vi.fn(async () => ([
     { key: 'scb', name: 'SCB' },
     { key: 'ktb', name: 'KTB' },

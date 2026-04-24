@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-028: Account presence verification scans stored workbook evidence deterministically
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** After moving known subject account context into Step 2, BSIE still needed a deterministic way to check whether that account appears in the stored workbook evidence before processing. Relying only on identity inference or sample rows can miss accounts in pre-header text, other columns, or later rows.
+- **Decision:** Add a local-only `/api/mapping/account-presence` endpoint backed by deterministic Excel workbook scanning. The endpoint resolves evidence by `file_id`, confines reads to evidence storage, scans raw worksheet cells with `header=None`, reports exact locations and possible leading-zero-loss candidates, and returns structured unsupported status for non-Excel sources. Step 2 exposes this as an explicit analyst action and passes the result into mapping assist and confirmation audit context.
+- **Alternatives:** (1) Fold the check into the LLM prompt — unsafe and non-reproducible. (2) Trust the upload identity guess only — misses full-workbook evidence. (3) Block all non-verified accounts automatically — too strict until PDF/image OCR verification has an equivalent deterministic policy.
+- **Consequences:** Analysts can verify known accounts against workbook evidence before normalization, and audit logs can retain the verification summary. Current deterministic scanning is Excel-only; PDF/image support remains future work.
+
 ### DEC-027: Analyst-selected subject account is review-gated mapping context
 - **Date:** 2026-04-24
 - **Status:** accepted

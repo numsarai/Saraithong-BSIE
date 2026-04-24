@@ -271,6 +271,7 @@ async def suggest_mapping_with_llm(
     subject_account: str = "",
     subject_name: str = "",
     identity_guess: Any = None,
+    account_presence: Any = None,
     sheet_name: str = "",
     header_row: int = 0,
     model: str = "",
@@ -282,6 +283,7 @@ async def suggest_mapping_with_llm(
         subject_account=subject_account,
         subject_name=subject_name,
         identity_guess=identity_guess,
+        account_presence=account_presence,
         sample_rows=sample_rows,
     )
     prompt = _build_prompt(
@@ -363,6 +365,7 @@ async def suggest_mapping_with_vision_llm(
     subject_account: str = "",
     subject_name: str = "",
     identity_guess: Any = None,
+    account_presence: Any = None,
     sheet_name: str = "",
     header_row: int = 0,
     model: str = "",
@@ -374,6 +377,7 @@ async def suggest_mapping_with_vision_llm(
         subject_account=subject_account,
         subject_name=subject_name,
         identity_guess=identity_guess,
+        account_presence=account_presence,
         sample_rows=sample_rows,
     )
     preview_bytes, content_type, file_context = _load_vision_preview(Path(file_path))

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { normalizeOperatorName, useStore } from '@/store'
-import { assistMapping, assistVisionMapping, confirmMapping, getBanks, learnBank, previewMapping } from '@/api'
+import { assistMapping, assistVisionMapping, confirmMapping, getBanks, learnBank, previewMapping, verifyAccountPresence } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -44,6 +44,8 @@ export function Step2Map() {
   const [serverPreview, setServerPreview] = useState<any | null>(null)
   const [assistLoading, setAssistLoading] = useState(false)
   const [mappingAssist, setMappingAssist] = useState<any | null>(null)
+  const [presenceLoading, setPresenceLoading] = useState(false)
+  const [accountPresence, setAccountPresence] = useState<any | null>(null)
 
   useEffect(() => {
     getBanks().then(setBanks).catch((e) => toast.error(`Could not load banks: ${e.message}`))
@@ -95,6 +97,7 @@ export function Step2Map() {
         subject_account: account,
         subject_name: name,
         identity_guess: identityGuess,
+        account_presence: accountPresence,
         sheet_name: sheetName,
         header_row: headerRow,
       })
@@ -128,6 +131,7 @@ export function Step2Map() {
         subject_account: account,
         subject_name: name,
         identity_guess: identityGuess,
+        account_presence: accountPresence,
         sheet_name: sheetName,
         header_row: headerRow,
       })
@@ -148,6 +152,40 @@ export function Step2Map() {
     setServerPreview(null)
     setConfirmedMapping(mappingAssist.mapping)
     toast.success(t('step2.assist.applied'))
+  }
+
+  const handleVerifyAccountPresence = async () => {
+    const safeAccount = account.replace(/\D/g, '')
+    if (!safeAccount.match(/^\d{10}$|^\d{12}$/)) {
+      toast.error('Account number must be exactly 10 or 12 digits')
+      return
+    }
+    if (!fileId) {
+      toast.error('No stored evidence file is available for account verification')
+      return
+    }
+    setPresenceLoading(true)
+    try {
+      const result = await verifyAccountPresence({
+        file_id: fileId,
+        subject_account: safeAccount,
+        sheet_name: sheetName,
+        header_row: headerRow,
+        max_matches: 25,
+      })
+      setAccountPresence(result)
+      if (result?.found) {
+        toast.success('Account found in workbook evidence')
+      } else if (result?.possible_match) {
+        toast.success('Possible account match found; review leading-zero warning')
+      } else {
+        toast.error(result?.warnings?.[0] || 'Account was not found in workbook evidence')
+      }
+    } catch (e: any) {
+      toast.error(`Account verification failed: ${e.message}`)
+    } finally {
+      setPresenceLoading(false)
+    }
   }
 
   const handleConfirm = async () => {
@@ -188,6 +226,7 @@ export function Step2Map() {
           subject_account: account,
           subject_name: name,
           identity_guess: identityGuess,
+          account_presence: accountPresence,
           sample_rows: sampleRows,
           promote_shared: false,
         },
@@ -286,6 +325,8 @@ export function Step2Map() {
         : inferredAccount
           ? 'Detected only'
           : 'Not provided'
+  const presenceStatus = String(accountPresence?.match_status || '').replace(/_/g, ' ')
+  const presenceBadgeVariant: 'blue' | 'green' | 'red' | 'gray' = accountPresence?.found ? 'green' : accountPresence?.possible_match ? 'blue' : accountPresence ? 'red' : 'gray'
   const rankedCandidates = candidateKeys.map((key: string) => ({
     key,
     name: banks.find((bank: any) => bank.key === key)?.name || key.toUpperCase(),
@@ -407,6 +448,7 @@ export function Step2Map() {
                 onChange={e => {
                   setServerPreview(null)
                   setMappingAssist(null)
+                  setAccountPresence(null)
                   setAccount(e.target.value.replace(/\D/g, '').slice(0, 12))
                 }}
                 placeholder="10 or 12 digits"
@@ -434,6 +476,41 @@ export function Step2Map() {
               <span className="text-muted">Inference source: </span>
               <span className="text-text">{formatEvidenceItem(identityGuess?.account_source || 'none')}</span>
             </div>
+          </div>
+          <div className="mt-3 rounded-lg border border-border/70 bg-surface px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Badge variant={presenceBadgeVariant}>
+                  {accountPresence ? presenceStatus || 'checked' : 'Not checked'}
+                </Badge>
+                <span className="text-xs text-muted">
+                  {accountPresence
+                    ? `${accountPresence.summary?.exact_match_count || 0} exact, ${accountPresence.summary?.possible_match_count || 0} possible`
+                    : 'Scan the selected workbook sheet before pipeline processing.'}
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={presenceLoading || !selectedAccount || !fileId}
+                onClick={handleVerifyAccountPresence}
+              >
+                {presenceLoading ? <Loader2 size={13} className="animate-spin" /> : <FileSearch size={13} />}
+                {presenceLoading ? 'Verifying' : 'Verify in Workbook'}
+              </Button>
+            </div>
+            {accountPresence?.locations?.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {accountPresence.locations.slice(0, 4).map((location: any) => (
+                  <span key={`${location.sheet_name}:${location.row_number}:${location.column_number}`} className="rounded-full border border-success/20 bg-success/10 px-2 py-1 text-[11px] text-success">
+                    {location.sheet_name} R{location.row_number}C{location.column_number} {location.column_label ? `(${location.column_label})` : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+            {accountPresence?.warnings?.length > 0 && (
+              <div className="mt-2 text-xs text-muted leading-relaxed">{accountPresence.warnings[0]}</div>
+            )}
           </div>
           {accountMismatchDetected && (
             <div className="mt-3 text-xs text-muted leading-relaxed">

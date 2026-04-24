@@ -9,11 +9,56 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `361 passed`, frontend `41 passed`, frontend build passed
+- **Baseline:** backend `364 passed`, frontend `42 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Known Account Context in Mapping Review
+## Done (latest session) — Deterministic Account Presence Verification
+
+### What I changed
+- Added `services/account_presence_service.py` to scan Excel workbook cells deterministically for a selected subject account.
+- Added `/api/mapping/account-presence`, resolving evidence by `file_id` and confining reads to `EVIDENCE_DIR`.
+- The verifier scans raw worksheet cells with `header=None`, reports sheet/row/column locations, row zone (`pre_header`, `header`, `body`), exact matches, and possible leading-zero-loss candidates.
+- Step 2 now has a `Verify in Workbook` action in Known Account Context and displays verification status plus first match locations.
+- Mapping assist, vision assist, and mapping confirmation can now receive `account_presence`; `subject_context` includes workbook presence status/summary.
+- Added backend/frontend regression tests for service behavior, API path confinement/use, and Step 2 verification handoff into confirm audit context.
+
+### Files changed
+- `services/account_presence_service.py`
+- `services/subject_context_service.py`
+- `services/mapping_assist_service.py`
+- `routers/ingestion.py`
+- `persistence/schemas.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `frontend/src/App.workflow.test.tsx`
+- `tests/test_account_presence_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- `.venv/bin/python -m pytest tests/test_account_presence_service.py tests/test_subject_context_service.py tests/test_mapping_assist_service.py tests/test_app_api.py::test_account_presence_endpoint_scans_stored_excel_file tests/test_app_api.py::test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_context tests/test_app_api.py::test_mapping_assist_endpoint_uses_selected_bank_as_authority -q` -> `14 passed`
+- `npm test -- --run src/components/steps/Step2Map.test.tsx src/App.workflow.test.tsx` in `frontend/` -> `13 passed`
+- `.venv/bin/python -m py_compile services/account_presence_service.py services/subject_context_service.py services/mapping_assist_service.py routers/ingestion.py persistence/schemas.py` -> passed
+- `.venv/bin/python -m pytest tests/ -q` -> `364 passed`
+- `npm test -- --run` in `frontend/` -> `42 passed`
+- `npm run build` in `frontend/` -> passed; Vite chunk-size warning only
+
+### Decisions made
+- Added DEC-028: account presence verification scans stored workbook evidence deterministically.
+
+### Warnings / Next
+- Account presence verification is deterministic for Excel only. PDF/image/OCR sources currently return structured unsupported/not-found style feedback rather than claiming full scan coverage.
+- The verification result is visible and audited, but it does not yet add a separate mandatory block when an otherwise valid account is not found.
+- Next useful slice: decide policy for whether `not_found` or `possible_leading_zero_loss` should require explicit analyst confirmation, and design an OCR/PDF equivalent if needed.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Known Account Context in Mapping Review
 
 ### What I changed
 - Added Step 2 known-account context controls for subject account and holder name, reusing upload identity guesses as initial values.

@@ -9,11 +9,57 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `377 passed`, frontend `46 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `377 passed`, frontend `47 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 4 Copilot Scope/Context/Audit Backend Slice
+## Done (latest session) — Phase 4 Investigation Copilot UI Panel
+
+### What I changed
+- Added `askCopilot(...)` to `frontend/src/api.ts` for `POST /api/llm/copilot`.
+- Added `frontend/src/components/investigation/CopilotTab.tsx`.
+- Added a dedicated `Copilot` tab in `InvestigationDesk`, separate from the generic `AI Analysis` tab.
+- The panel exposes explicit scope fields for `parser_run_id`, `file_id`, and `account`.
+- Added quick scope-fill buttons from selected parser run, selected file, selected account, transaction filters, and cross-account selection.
+- Added quick prompts for account summary, alert explanation, review checklist, and report draft.
+- Copilot answers show response status, citation policy status, model, context hash, audit id, citations, warnings, and answer text.
+- Hid the generic record table for non-table tabs so Copilot/LLM/graph/timeline views no longer get an empty table below them.
+
+### Files changed
+- `frontend/src/api.ts`
+- `frontend/src/components/InvestigationDesk.tsx`
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/App.workflow.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `377 passed`
+  - `npm test -- --run` in `frontend/` -> `46 passed`
+- Focused:
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `4 passed`
+  - `npm run build` in `frontend/` -> passed
+- Full verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `377 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+
+### Decisions made
+- Added DEC-037: Investigation copilot UI remains scoped and separate from generic AI chat.
+
+### Warnings / Next
+- The Copilot tab still uses free-form questions plus prompt presets; explicit backend task modes are not implemented yet.
+- Case tag scope is still pending.
+- Next useful slice: add backend task-mode presets or enrich context packs with graph metrics/review history while preserving citations.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Phase 4 Copilot Scope/Context/Audit Backend Slice
 
 ### What I changed
 - Added `services/copilot_service.py` for deterministic, read-only investigation copilot context packs.

@@ -191,6 +191,22 @@ vi.mock('@/api', () => ({
   restoreDatabase: vi.fn(async () => ({ restored_backup: 'backup.json' })),
   syncGraphToNeo4j: vi.fn(async () => ({ status: 'ok', node_count: 2, edge_count: 1, derived_edge_count: 0 })),
   updateDatabaseBackupSettings: vi.fn(async () => ({ enabled: false, interval_hours: 24, backup_format: 'json', effective_backup_format: 'json', retention_enabled: false, retain_count: 20, source: 'database' })),
+  askCopilot: vi.fn(async () => ({
+    status: 'ok',
+    source: 'local_llm_investigation_copilot',
+    read_only: true,
+    mutations_allowed: false,
+    model: 'qwen3.5:9b',
+    answer: 'พบรายการออกสำคัญ [txn:TX-1]',
+    scope: { parser_run_id: 'RUN-1', file_id: '', account: '', account_digits: '' },
+    context_hash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    prompt_hash: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    citation_policy: { status: 'ok', requires_review: false, warning: '' },
+    citations: [{ id: 'txn:TX-1', type: 'txn', object_id: 'TX-1', label: 'OUT 1,000.00 THB' }],
+    warnings: [],
+    audit_id: 'AUDIT-COPILOT-1',
+    usage: { prompt_tokens: 10, completion_tokens: 5 },
+  })),
   reviewAccount: vi.fn(async () => ({ status: 'ok' })),
   reviewDuplicate: vi.fn(async () => ({ status: 'ok' })),
   reviewMatch: vi.fn(async () => ({ status: 'ok' })),
@@ -198,7 +214,7 @@ vi.mock('@/api', () => ({
   searchTransactionRecords: vi.fn(async () => ({ items: [] })),
 }))
 
-const { createExportJob, getAuditLogs, getLearningFeedbackLogs } = await import('@/api')
+const { askCopilot, createExportJob, getAuditLogs, getLearningFeedbackLogs } = await import('@/api')
 const { useStore } = await import('@/store')
 
 vi.mock('sonner', () => ({
@@ -301,5 +317,24 @@ describe('InvestigationDesk date formatting', () => {
       filters: {},
       created_by: 'Case Reviewer',
     }))
+  })
+
+  it('asks the investigation copilot with a scoped parser run and shows citations', async () => {
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Copilot' }))
+    fireEvent.change(screen.getByLabelText('Parser Run ID'), { target: { value: 'RUN-1' } })
+    fireEvent.change(screen.getByLabelText('Question'), { target: { value: 'Summarize this scope' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Copilot' }))
+
+    await waitFor(() => expect(askCopilot).toHaveBeenCalledWith({
+      question: 'Summarize this scope',
+      scope: { parser_run_id: 'RUN-1', file_id: '', account: '' },
+      operator: 'Case Reviewer',
+      max_transactions: 20,
+    }))
+    expect(await screen.findByText('พบรายการออกสำคัญ [txn:TX-1]')).toBeInTheDocument()
+    expect(await screen.findByText('txn:TX-1')).toBeInTheDocument()
+    expect(await screen.findByText('AUDIT-COPILOT-1')).toBeInTheDocument()
   })
 })

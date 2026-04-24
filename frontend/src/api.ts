@@ -430,6 +430,26 @@ export async function llmChat(message: string, opts?: { account?: string; transa
   return r.json()
 }
 
+export async function askCopilot(payload: {
+  question: string
+  scope: {
+    parser_run_id?: string
+    file_id?: string
+    account?: string
+  }
+  operator?: string
+  model?: string
+  max_transactions?: number
+}) {
+  const r = await apiFetch('/api/llm/copilot', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function benchmarkLlm(opts?: {
   roles?: string[]
   iterations?: number

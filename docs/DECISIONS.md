@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-037: Investigation copilot UI remains scoped and separate from generic AI chat
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** BSIE already has a generic local AI analysis tab, but Phase 4 investigation copilot has stronger evidence requirements: explicit scope, read-only behavior, citations, and audit continuity. Mixing those flows in one chat surface would make it easy to ask unscoped questions by accident.
+- **Decision:** Add a dedicated Copilot tab inside Investigation Desk that calls only `POST /api/llm/copilot`. The panel exposes `parser_run_id`, `file_id`, and `account` scope fields, quick scope-fill buttons from selected investigation context, bounded transaction count, and answer metadata including status, citation policy, context hash, audit id, and citations.
+- **Alternatives:** (1) Reuse `LlmChat` for copilot prompts -- faster but preserves auto-context/general-chat mental model. (2) Put copilot inside Link Chart first -- too narrow for file/run/account review workflows. (3) Hide scope fields and infer everything from current UI state -- convenient but weaker for auditability.
+- **Consequences:** The generic AI tab remains available for broad local LLM use, while investigation copilot is visibly scoped and evidence-cited. Future task modes should build on this panel without bypassing the backend scope/citation/audit contract.
+
 ### DEC-036: Investigation copilot starts with read-only scoped context packs
 - **Date:** 2026-04-24
 - **Status:** accepted

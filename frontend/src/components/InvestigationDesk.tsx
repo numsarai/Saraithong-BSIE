@@ -49,8 +49,10 @@ import { normalizeOperatorName, useStore } from '@/store'
 import { DatabaseTab } from '@/components/investigation/DatabaseTab'
 import { AlertsTab } from '@/components/investigation/AlertsTab'
 import { CrossAccountTab } from '@/components/investigation/CrossAccountTab'
+import { CopilotTab } from '@/components/investigation/CopilotTab'
 
-const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'link-chart', 'timeline', 'duplicates', 'matches', 'audit', 'exports', 'llm'] as const
+const TAB_IDS = ['database', 'files', 'runs', 'accounts', 'search', 'alerts', 'cross-account', 'link-chart', 'timeline', 'duplicates', 'matches', 'audit', 'exports', 'copilot', 'llm'] as const
+const TABLE_TAB_IDS = ['files', 'runs', 'accounts', 'search', 'duplicates', 'matches', 'audit', 'exports'] as const
 
 type TabId = (typeof TAB_IDS)[number]
 
@@ -167,6 +169,7 @@ export function InvestigationDesk() {
     { id: 'matches' as const, label: t('investigation.tabs.matches') },
     { id: 'audit' as const, label: t('investigation.tabs.audit') },
     { id: 'exports' as const, label: t('investigation.tabs.exports') },
+    { id: 'copilot' as const, label: t('investigation.tabs.copilot') },
     { id: 'llm' as const, label: t('investigation.tabs.llm') },
   ]
 
@@ -599,6 +602,12 @@ export function InvestigationDesk() {
     () => backups.find((item: any) => item.filename === selectedBackupFilename),
     [backups, selectedBackupFilename],
   )
+  const selectedCopilotAccount = String(
+    accountDetail?.normalized_account_number
+      || accountDetail?.display_account_number
+      || crossAccountSelected
+      || '',
+  )
 
   useEffect(() => {
     if (!backupSettingsQuery.data) return
@@ -830,6 +839,18 @@ export function InvestigationDesk() {
         <LlmChat />
       )}
 
+      {tab === 'copilot' && (
+        <CopilotTab
+          operatorName={resolvedOperatorName}
+          selectedRunId={selectedRunId}
+          selectedFileId={selectedFileId}
+          selectedAccountNumber={selectedCopilotAccount}
+          filterRunId={transactionFilters.parser_run_id}
+          filterFileId={transactionFilters.file_id}
+          crossAccountNumber={crossAccountSelected}
+        />
+      )}
+
       {tab === 'timeline' && (
         <div className="space-y-4">
           {timelineAggItems.length > 0 ? (
@@ -845,7 +866,7 @@ export function InvestigationDesk() {
         </div>
       )}
 
-      {tab !== 'database' && (
+      {(TABLE_TAB_IDS as readonly string[]).includes(tab) && (
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

@@ -294,7 +294,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 4 — Investigation Copilot
 
-สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036
+สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036 และ frontend Copilot tab implemented ตาม DEC-037
 
 เป้าหมาย:
 
@@ -314,8 +314,9 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] บังคับคำตอบให้มี evidence citations / record ids หรือบอกว่า evidence insufficient ผ่าน prompt + citation policy status
 - [x] audit model, context hash, prompt hash, operator, และ response status ทุกครั้งที่ endpoint สำเร็จ
 - [x] เริ่ม backend read-only endpoint: `POST /api/llm/copilot`
+- [x] เพิ่ม frontend investigation copilot panel ใน Investigation Desk
+- [x] เพิ่ม quick prompts สำหรับ account summary, alert explanation, review checklist, report draft
 - [ ] เพิ่ม case filters / case tag scope
-- [ ] เพิ่ม frontend investigation copilot panel
 - [ ] แตก read-only tool modes: account summary, alert explanation, review checklist, และ draft report paragraph
 - [ ] ห้าม mutate evidence, override, classify, promote, หรือ auto-generate findings โดยไม่มี analyst action
 - [ ] ภายหลังย้าย classification path ให้ local-first หลัง scope/citation/audit stable

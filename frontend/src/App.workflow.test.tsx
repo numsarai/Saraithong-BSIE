@@ -36,6 +36,7 @@ vi.mock('@/api', () => ({
   learnBankDetection: vi.fn(async () => ({ status: 'ok' })),
   saveOverride: vi.fn(async () => ({ status: 'ok' })),
   llmChat: vi.fn(async () => ({ response: 'ok' })),
+  askCopilot: vi.fn(async () => ({ status: 'ok', answer: 'ok', citations: [] })),
   getLlmStatus: vi.fn(async () => ({ status: 'ok', models: [] })),
 }))
 

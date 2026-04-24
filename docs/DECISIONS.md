@@ -17,6 +17,46 @@
 
 ---
 
+### DEC-011: Bank template variants are persisted separately from legacy mapping profiles
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Phase 2 of the mapping roadmap needs shared learning without letting a single confirmation overwrite the deterministic legacy mapping profile path. Template memory needs signatures, lifecycle state, reviewer diversity, and correction tracking before it can influence future auto-pass behavior.
+- **Decision:** Store shared mapping learning in `bank_template_variants` with ordered/set signatures, source type, sheet/header metadata, confirmed mapping, usage/confirmation/correction counts, reviewer list, and trust state (`candidate`, `verified`, `trusted`). `promote_shared=true` records or updates a variant, not the legacy `mapping_profile` / `bank_fingerprint` tables.
+- **Alternatives:** (1) Extend the legacy `mapping_profile` table directly — faster but lacks lifecycle/audit dimensions and keeps contamination risk. (2) Delay persistence until LLM assist — blocks deterministic learning work that does not require LLM.
+- **Consequences:** Existing callers must look at `variant_id` / `shared_learning` for shared mapping learning; legacy mapping profiles remain available for existing detection behavior but are no longer written by mapping confirmation promotion.
+
+### DEC-010: Mapping confirmation no longer promotes shared memory by default
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** `/api/mapping/confirm` previously validated lightly and immediately wrote confirmed mappings into shared mapping/bank memory. That conflicted with the guarded variant direction in DEC-009 because a single analyst confirmation could contaminate future suggestions.
+- **Decision:** Mapping confirmation now validates and audits the mapping for the current run by default, runs a dry-run sample preview, and only promotes shared mapping/bank memory when `promote_shared=true` and a named reviewer is supplied. Invalid mappings are rejected before any learning write.
+- **Alternatives:** (1) Keep automatic profile writes and add variants later — leaves the contamination risk active during Phase 1. (2) Disable all audit/feedback for confirmation — safer for shared memory but loses evidentiary review trail.
+- **Consequences:** Frontend confirm flow must call preview/confirm with sample rows; shared profile promotion is opt-in until template variants are implemented; existing callers expecting `profile_id` on every confirmation must handle `null`.
+
+### DEC-009: Mapping and template learning will use guarded shared variants
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** BSIE ต้องรองรับ Excel bank statements หลายรูปแบบ รวมถึงธนาคารเดิมที่เปลี่ยน header, sheet, หรือ layout บ่อย การให้ผู้ใช้ยืนยัน mapping ได้เป็นสิ่งจำเป็น แต่ถ้า save เป็น shared template ทันทีจะเสี่ยงทำให้ระบบเรียนรู้ผิดและกระทบทุกคน
+- **Decision:** ผู้ใช้ทุกคนยืนยัน mapping สำหรับรอบงานปัจจุบันได้ แต่การเรียนรู้แบบ shared ต้องผ่านแนวคิด `bank template variants` และ state การโปรโมต (`candidate` → `verified` → `trusted`) โดย template ใหม่จะไม่ auto-pass และ auto-pass เปิดได้เฉพาะ trusted Excel variants เท่านั้น
+- **Alternatives:** (1) ให้ทุก confirmation เขียนทับ shared template ตรง ๆ — เสี่ยง contamination สูง (2) ปิด shared learning ไปเลย — ลดความเสี่ยงแต่ทำให้ระบบไม่พัฒนาและเพิ่มงาน manual ซ้ำ
+- **Consequences:** ระบบยังเรียนรู้ข้ามผู้ใช้ได้ แต่มี guardrail; ingestion flow, persistence, review gate, และ promotion logic ต้องรองรับ variant lifecycle อย่างชัดเจน
+
+### DEC-008: Local LLM baseline on the current Mac should separate text and vision roles
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** BSIE ต้องใช้ Local LLM กับทั้งงานข้อความ/JSON/mapping reasoning และงานเอกสาร/ภาพ การใช้โมเดลเดียวครอบทุกอย่างบน MacBook Pro 16" M2 Max RAM 32GB จะไม่คุ้มที่สุดทั้งด้าน latency และคุณภาพ
+- **Decision:** ใช้ baseline model แยกบทบาท: `qwen2.5:14b` สำหรับ text reasoning / Thai + JSON / mapping assist, `qwen2.5vl:7b` สำหรับ PDF/image/document understanding, และ `gemma4:e4b` เป็น fast fallback; หลีกเลี่ยง `:latest` ใน production-like flows เพื่อคง reproducibility
+- **Alternatives:** (1) ใช้โมเดลเดียวกับทุก use case — ง่ายแต่ไม่ optimize (2) ใช้ reasoning model ใหม่กว่าอย่างเดียว — อาจแรงขึ้นบางงานแต่ context/tooling fit ไม่ดีเท่าในงาน Excel + structured outputs
+- **Consequences:** runtime config ควรแยก text/vision models, LLM service ควรรับ env ใหม่, และ benchmark บนเครื่องจริงควรทำก่อนเปิดใช้กว้าง
+
+### DEC-007: Runtime defaults back to local-only development
+- **Date:** 2026-04-23
+- **Status:** accepted
+- **Context:** มี cloud demo integration แบบ Vercel + Fly.io + Supabase ค้างอยู่ใน working tree แต่รอบงานปัจจุบันต้องกลับไปพัฒนาและทดสอบแบบ local-only ก่อน เพื่อลด dependency ภายนอกและไม่ให้ runtime เผลอชี้ไปที่บริการจริง
+- **Decision:** ถอด Supabase auth / external Postgres / Vercel-Fly deployment configs ออกจาก repo worktree และคืน runtime ไปเป็น local SQLite + local JWT auth ตามค่าเริ่มต้น
+- **Alternatives:** (1) เก็บ cloud code ไว้หลัง env flag ต่อไป — ยังเสี่ยงเผลอผูกกับ service ภายนอกและทำให้ handoff สับสน (2) commit cloud demo แยกไว้ก่อนแล้วค่อยถอด — ไม่ตรงกับเป้าหมาย local-first ของรอบนี้
+- **Consequences:** เส้นทาง dev กลับมาง่ายและ reproducible บนเครื่อง local; ถ้าจะกลับไป deploy cloud อีกครั้งควรทำเป็นงานใหม่บน branch/plan ที่ชัดเจน
+
 ### DEC-006: Reports and SPNI exports must scope metadata to the selected evidence set
 - **Date:** 2026-04-16
 - **Status:** accepted

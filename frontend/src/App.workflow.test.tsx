@@ -7,6 +7,16 @@ import { useStore } from '@/store'
 vi.mock('@/api', () => ({
   uploadFile: vi.fn(),
   confirmMapping: vi.fn(async () => ({ status: 'ok' })),
+  previewMapping: vi.fn(async () => ({
+    status: 'ok',
+    ok: true,
+    errors: [],
+    warnings: [],
+    dry_run_preview: {
+      summary: { valid_transaction_rows: 1, preview_row_count: 1 },
+      rows: [{ row_index: 1, date: '2026-01-01', amount: 100, direction: 'IN', status: 'ok' }],
+    },
+  })),
   getBanks: vi.fn(async () => ([
     { key: 'scb', name: 'SCB' },
     { key: 'ktb', name: 'KTB' },
@@ -38,7 +48,7 @@ vi.mock('@/components/LlmChat', () => ({
   LlmChat: () => null,
 }))
 
-const { uploadFile, confirmMapping, getBanks } = await import('@/api')
+const { uploadFile, confirmMapping, getBanks, previewMapping } = await import('@/api')
 
 async function flushAsyncWork() {
   await Promise.resolve()
@@ -149,6 +159,7 @@ describe('App workflow', () => {
     })
 
     await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
+    expect(previewMapping).toHaveBeenCalledTimes(1)
     expect(screen.getByText(/configure pipeline/i)).toBeInTheDocument()
   })
 
@@ -169,6 +180,7 @@ describe('App workflow', () => {
     })
 
     await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
+    expect(previewMapping).toHaveBeenCalledTimes(1)
     expect(screen.getByText(/configure pipeline/i)).toBeInTheDocument()
   })
 })

@@ -18,7 +18,7 @@ from slowapi.util import get_remote_address
 _limiter = Limiter(key_func=get_remote_address)
 
 from core.bank_detector import detect_bank
-from core.bank_memory import find_matching_bank_fingerprint, save_bank_fingerprint
+from core.bank_memory import find_matching_bank_fingerprint
 from core.column_detector import detect_columns
 from core.image_loader import parse_image_file
 from core.loader import find_best_sheet_and_header
@@ -28,10 +28,16 @@ from core.pdf_loader import parse_pdf_file
 from core.subject_inference import infer_subject_identity_from_frames
 from database import db_create_job
 from persistence.base import get_db_session
-from persistence.schemas import MappingConfirmRequest, ProcessRequest
+from persistence.schemas import MappingConfirmRequest, MappingPreviewRequest, ProcessRequest, TemplateVariantPromotionRequest
 from services.audit_service import record_learning_feedback
 from services.file_ingestion_service import get_file_record, persist_upload
+from services.mapping_validation_service import validate_and_preview_mapping
 from services.persistence_pipeline_service import create_parser_run
+from services.template_variant_service import (
+    list_template_variants,
+    promote_template_variant,
+    upsert_template_variant,
+)
 from utils.app_helpers import (
     bank_feedback_status,
     detected_bank_key,
@@ -41,7 +47,6 @@ from utils.app_helpers import (
     get_banks,
     mapping_feedback_status,
     repair_suggested_mapping,
-    usage_increment_for_feedback,
 )
 
 logger = logging.getLogger("bsie.api")
@@ -363,6 +368,46 @@ async def api_upload(request: Request, file: UploadFile = File(...), uploaded_by
 # Step 2 -- Confirm mapping
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _mapping_validation_error(validation: dict) -> dict:
+    return {
+        "message": "Mapping validation failed",
+        "errors": validation.get("errors", []),
+        "warnings": validation.get("warnings", []),
+        "dry_run_preview": validation.get("dry_run_preview", {}),
+    }
+
+
+def _can_promote_shared_mapping(reviewer: str) -> bool:
+    return str(reviewer or "").strip().lower() not in {"", "analyst", "unknown"}
+
+
+def _template_variant_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, LookupError):
+        return HTTPException(404, str(exc))
+    if isinstance(exc, PermissionError):
+        return HTTPException(403, str(exc))
+    if isinstance(exc, ValueError):
+        return HTTPException(400, str(exc))
+    return HTTPException(500, "Template variant operation failed")
+
+
+@router.post("/mapping/preview")
+async def api_preview_mapping(request: Request):
+    """Validate a proposed mapping and return a sample normalization preview."""
+    payload = await request.json()
+    body = MappingPreviewRequest.model_validate(payload)
+    validation = validate_and_preview_mapping(
+        bank=body.bank or "UNKNOWN",
+        mapping=body.mapping,
+        columns=body.columns,
+        sample_rows=body.sample_rows,
+    )
+    return JSONResponse({
+        "status": "ok" if validation["ok"] else "invalid",
+        **validation,
+    })
+
+
 @router.post("/mapping/confirm")
 async def api_confirm_mapping(request: Request):
     """Validate and store confirmed column mapping."""
@@ -381,77 +426,146 @@ async def api_confirm_mapping(request: Request):
     )
     suggested_mapping = payload.get("suggested_mapping") or payload.get("suggestedMapping") or {}
 
-    if not mapping:
-        raise HTTPException(400, "mapping is required")
+    validation = validate_and_preview_mapping(
+        bank=bank,
+        mapping=mapping,
+        columns=columns,
+        sample_rows=body.sample_rows,
+    )
+    if not validation["ok"]:
+        raise HTTPException(400, detail=_mapping_validation_error(validation))
 
-    from core.mapping_memory import save_profile
+    mapping = validation["mapping"]
+    columns = validation["columns"]
     bank_feedback = bank_feedback_status(bank, detected_bank)
     mapping_feedback = mapping_feedback_status(mapping, suggested_mapping)
-    profile = save_profile(
-        bank,
-        columns,
-        mapping,
-        usage_increment=usage_increment_for_feedback(mapping_feedback),
-    )
-    fingerprint = None
-    if bank and str(bank).strip().lower() not in {"", "unknown", "generic"}:
-        fingerprint = save_bank_fingerprint(
-            str(bank).strip(),
-            columns,
-            header_row=header_row,
-            sheet_name=sheet_name,
-            usage_increment=usage_increment_for_feedback(bank_feedback),
-        )
+    promote_shared = bool(body.promote_shared)
+    if promote_shared and not _can_promote_shared_mapping(reviewer):
+        raise HTTPException(403, "Shared mapping promotion requires a named reviewer")
 
+    variant = None
     feedback_mode = compute_feedback_mode(bank_feedback, mapping_feedback)
     learning_feedback_count = 0
     with get_db_session() as session:
-        record_learning_feedback(
-            session,
-            learning_domain="mapping_memory",
-            action_type="mapping_confirmation",
-            source_object_type="mapping_profile",
-            source_object_id=profile["profile_id"],
-            feedback_status=mapping_feedback,
-            changed_by=reviewer,
-            old_value=suggested_mapping or None,
-            new_value=mapping,
-            extra_context={
-                "bank": bank,
-                "columns": list(columns or []),
-                "usage_increment": usage_increment_for_feedback(mapping_feedback),
-            },
-        )
-        learning_feedback_count += 1
-        if fingerprint:
+        if promote_shared:
+            variant = upsert_template_variant(
+                session,
+                bank_key=bank,
+                columns=columns,
+                mapping=mapping,
+                source_type=body.source_type,
+                sheet_name=sheet_name,
+                header_row=header_row,
+                layout_type=body.layout_type,
+                reviewer=reviewer,
+                feedback_status=mapping_feedback,
+                dry_run_summary=validation["dry_run_preview"]["summary"],
+            )
             record_learning_feedback(
                 session,
-                learning_domain="bank_memory",
-                action_type="bank_confirmation",
-                source_object_type="bank_fingerprint",
-                source_object_id=fingerprint["fingerprint_id"],
-                feedback_status=bank_feedback,
+                learning_domain="bank_template_variant",
+                action_type="template_variant_confirmation",
+                source_object_type="bank_template_variant",
+                source_object_id=variant["variant_id"],
+                feedback_status=mapping_feedback,
                 changed_by=reviewer,
-                old_value={"detected_bank": detected_bank or None},
-                new_value={"selected_bank": bank},
+                old_value=suggested_mapping or None,
+                new_value=mapping,
                 extra_context={
-                    "header_row": header_row,
-                    "sheet_name": sheet_name,
-                    "usage_increment": usage_increment_for_feedback(bank_feedback),
+                    "bank": bank,
+                    "columns": list(columns or []),
+                    "variant_action": variant["action"],
+                    "trust_state": variant["trust_state"],
+                    "dry_run_summary": validation["dry_run_preview"]["summary"],
+                },
+            )
+            learning_feedback_count += 1
+        else:
+            record_learning_feedback(
+                session,
+                learning_domain="mapping_confirmation",
+                action_type="mapping_confirmation",
+                source_object_type="mapping_confirmation",
+                source_object_id=str(uuid.uuid4()),
+                feedback_status=mapping_feedback,
+                changed_by=reviewer,
+                old_value=suggested_mapping or None,
+                new_value=mapping,
+                extra_context={
+                    "bank": bank,
+                    "columns": list(columns or []),
+                    "promotion_requested": False,
+                    "dry_run_summary": validation["dry_run_preview"]["summary"],
                 },
             )
             learning_feedback_count += 1
         session.commit()
     return JSONResponse({
         "status": "ok",
-        "profile_id": profile["profile_id"],
-        "fingerprint_id": fingerprint["fingerprint_id"] if fingerprint else None,
+        "profile_id": None,
+        "fingerprint_id": None,
+        "variant_id": variant["variant_id"] if variant else None,
         "bank_feedback": bank_feedback,
         "mapping_feedback": mapping_feedback,
         "feedback_mode": feedback_mode,
+        "validation": {
+            "warnings": validation.get("warnings", []),
+            "amount_mode": validation.get("amount_mode"),
+            "mapped_fields": validation.get("mapped_fields", []),
+        },
+        "dry_run_preview": validation["dry_run_preview"],
+        "shared_learning": {
+            "requested": promote_shared,
+            "status": "variant_recorded" if variant else "skipped",
+            "trust_state": variant["trust_state"] if variant else "",
+            "reason": "" if variant else "Mapping was confirmed for this run only; shared promotion is opt-in.",
+        },
         "message": feedback_message(bank_feedback, mapping_feedback),
         "learning_feedback_count": learning_feedback_count,
     })
+
+
+@router.get("/mapping/variants")
+async def api_list_mapping_variants(bank: str = "", trust_state: str = "", limit: int = 100):
+    with get_db_session() as session:
+        items = list_template_variants(session, bank_key=bank, trust_state=trust_state, limit=limit)
+    return JSONResponse({"items": items, "count": len(items)})
+
+
+@router.post("/mapping/variants/{variant_id}/promote")
+async def api_promote_mapping_variant(variant_id: str, body: TemplateVariantPromotionRequest):
+    try:
+        with get_db_session() as session:
+            before = next((item for item in list_template_variants(session, limit=500) if item["variant_id"] == variant_id), None)
+            variant = promote_template_variant(
+                session,
+                variant_id=variant_id,
+                target_state=body.trust_state,
+                reviewer=body.reviewer,
+                note=body.note,
+            )
+            record_learning_feedback(
+                session,
+                learning_domain="bank_template_variant",
+                action_type="template_variant_promotion",
+                source_object_type="bank_template_variant",
+                source_object_id=variant_id,
+                feedback_status=variant["trust_state"],
+                changed_by=body.reviewer,
+                old_value={"trust_state": before["trust_state"]} if before else None,
+                new_value={"trust_state": variant["trust_state"]},
+                reason=body.note,
+                extra_context={
+                    "bank": variant["bank_key"],
+                    "confirmation_count": variant["confirmation_count"],
+                    "correction_count": variant["correction_count"],
+                    "reviewer_count": variant["reviewer_count"],
+                },
+            )
+            session.commit()
+        return JSONResponse({"status": "ok", "variant": variant})
+    except Exception as exc:
+        raise _template_variant_error(exc) from exc
 
 
 # ═══════════════════════════════════════════════════════════════════════════

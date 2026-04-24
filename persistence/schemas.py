@@ -9,11 +9,28 @@ class MappingConfirmRequest(BaseModel):
     bank: str = "UNKNOWN"
     mapping: dict[str, str | None]
     columns: list[str] = Field(default_factory=list)
+    sample_rows: list[dict[str, Any]] = Field(default_factory=list)
+    source_type: str = "excel"
+    layout_type: str = ""
     header_row: int = 0
     sheet_name: str = ""
     reviewer: str = "analyst"
     detected_bank: Any | None = None
     suggested_mapping: dict[str, str | None] = Field(default_factory=dict)
+    promote_shared: bool = False
+
+
+class MappingPreviewRequest(BaseModel):
+    bank: str = "UNKNOWN"
+    mapping: dict[str, str | None]
+    columns: list[str] = Field(default_factory=list)
+    sample_rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class TemplateVariantPromotionRequest(BaseModel):
+    trust_state: str
+    reviewer: str = "analyst"
+    note: str = ""
 
 
 class ProcessRequest(BaseModel):

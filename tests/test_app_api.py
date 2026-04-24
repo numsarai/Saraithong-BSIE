@@ -2,7 +2,7 @@
 from contextlib import contextmanager
 from io import BytesIO
 import json
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import pandas as pd
 from fastapi.testclient import TestClient
@@ -732,8 +732,10 @@ def test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_conte
         "mapping": {
             "date": "วันที่",
             "description": "รายละเอียดใหม่",
+            "amount": "จำนวนเงิน",
         },
-        "columns": ["วันที่", "รายละเอียด", "รายละเอียดใหม่"],
+        "columns": ["วันที่", "รายละเอียด", "รายละเอียดใหม่", "จำนวนเงิน"],
+        "sample_rows": [{"วันที่": "2026-01-01", "รายละเอียดใหม่": "โอนเงิน", "จำนวนเงิน": "100.00"}],
         "header_row": 1,
         "sheet_name": "Sheet1",
         "reviewer": "reviewer.one",
@@ -741,12 +743,20 @@ def test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_conte
         "suggested_mapping": {
             "date": "วันที่",
             "description": "รายละเอียด",
+            "amount": "จำนวนเงิน",
         },
+        "promote_shared": True,
     }
 
     with (
-        patch("core.mapping_memory.save_profile", return_value={"profile_id": "PROFILE-1"}) as save_profile,
-        patch("routers.ingestion.save_bank_fingerprint", return_value={"fingerprint_id": "FINGERPRINT-1"}) as save_bank_fingerprint,
+        patch(
+            "routers.ingestion.upsert_template_variant",
+            return_value={
+                "variant_id": "VARIANT-1",
+                "trust_state": "candidate",
+                "action": "created",
+            },
+        ) as upsert_template_variant,
         patch("routers.ingestion.record_learning_feedback") as record_learning_feedback,
         patch("routers.ingestion.get_db_session", side_effect=_fake_db_session),
     ):
@@ -757,29 +767,27 @@ def test_mapping_confirm_endpoint_weights_corrected_feedback_from_override_conte
     assert response.json()["mapping_feedback"] == "corrected"
     assert response.json()["feedback_mode"] == "corrected"
     assert "correction" in response.json()["message"].lower()
-    assert response.json()["learning_feedback_count"] == 2
-    save_profile.assert_called_once_with(
-        "ktb",
-        ["วันที่", "รายละเอียด", "รายละเอียดใหม่"],
-        {"date": "วันที่", "description": "รายละเอียดใหม่"},
-        usage_increment=2,
-    )
-    save_bank_fingerprint.assert_called_once_with(
-        "ktb",
-        ["วันที่", "รายละเอียด", "รายละเอียดใหม่"],
-        header_row=1,
+    assert response.json()["learning_feedback_count"] == 1
+    assert response.json()["variant_id"] == "VARIANT-1"
+    assert response.json()["shared_learning"]["status"] == "variant_recorded"
+    upsert_template_variant.assert_called_once_with(
+        ANY,
+        bank_key="ktb",
+        columns=["วันที่", "รายละเอียด", "รายละเอียดใหม่", "จำนวนเงิน"],
+        mapping={"date": "วันที่", "description": "รายละเอียดใหม่", "amount": "จำนวนเงิน"},
+        source_type="excel",
         sheet_name="Sheet1",
-        usage_increment=2,
+        header_row=1,
+        layout_type="",
+        reviewer="reviewer.one",
+        feedback_status="corrected",
+        dry_run_summary={"sample_row_count": 1, "preview_row_count": 1, "valid_transaction_rows": 1, "invalid_date_rows": 0, "missing_amount_rows": 0},
     )
-    assert record_learning_feedback.call_count == 2
+    assert record_learning_feedback.call_count == 1
     mapping_call = record_learning_feedback.call_args_list[0].kwargs
-    bank_call = record_learning_feedback.call_args_list[1].kwargs
-    assert mapping_call["learning_domain"] == "mapping_memory"
+    assert mapping_call["learning_domain"] == "bank_template_variant"
     assert mapping_call["feedback_status"] == "corrected"
     assert mapping_call["changed_by"] == "reviewer.one"
-    assert bank_call["learning_domain"] == "bank_memory"
-    assert bank_call["feedback_status"] == "corrected"
-    assert bank_call["changed_by"] == "reviewer.one"
 
 
 def test_mapping_confirm_endpoint_keeps_confirmed_feedback_at_normal_weight():
@@ -788,18 +796,29 @@ def test_mapping_confirm_endpoint_keeps_confirmed_feedback_at_normal_weight():
         "mapping": {
             "date": "วันที่",
             "description": "รายละเอียด",
+            "amount": "จำนวนเงิน",
         },
-        "columns": ["วันที่", "รายละเอียด"],
+        "columns": ["วันที่", "รายละเอียด", "จำนวนเงิน"],
+        "sample_rows": [{"วันที่": "2026-01-01", "รายละเอียด": "ฝากเงิน", "จำนวนเงิน": "250.00"}],
+        "reviewer": "reviewer.two",
         "detected_bank": {"config_key": "scb", "bank": "SCB"},
         "suggested_mapping": {
             "date": "วันที่",
             "description": "รายละเอียด",
+            "amount": "จำนวนเงิน",
         },
+        "promote_shared": True,
     }
 
     with (
-        patch("core.mapping_memory.save_profile", return_value={"profile_id": "PROFILE-2"}) as save_profile,
-        patch("routers.ingestion.save_bank_fingerprint", return_value={"fingerprint_id": "FINGERPRINT-2"}) as save_bank_fingerprint,
+        patch(
+            "routers.ingestion.upsert_template_variant",
+            return_value={
+                "variant_id": "VARIANT-2",
+                "trust_state": "candidate",
+                "action": "updated",
+            },
+        ) as upsert_template_variant,
         patch("routers.ingestion.record_learning_feedback") as record_learning_feedback,
         patch("routers.ingestion.get_db_session", side_effect=_fake_db_session),
     ):
@@ -809,21 +828,137 @@ def test_mapping_confirm_endpoint_keeps_confirmed_feedback_at_normal_weight():
     assert response.json()["bank_feedback"] == "confirmed"
     assert response.json()["mapping_feedback"] == "confirmed"
     assert response.json()["feedback_mode"] == "confirmed"
-    assert response.json()["learning_feedback_count"] == 2
-    save_profile.assert_called_once_with(
-        "scb",
-        ["วันที่", "รายละเอียด"],
-        {"date": "วันที่", "description": "รายละเอียด"},
-        usage_increment=1,
+    assert response.json()["learning_feedback_count"] == 1
+    assert response.json()["variant_id"] == "VARIANT-2"
+    upsert_template_variant.assert_called_once()
+    assert record_learning_feedback.call_count == 1
+
+
+def test_mapping_preview_reports_duplicate_assignments():
+    response = client.post(
+        "/api/mapping/preview",
+        json={
+            "bank": "scb",
+            "mapping": {
+                "date": "วันที่",
+                "description": "รายละเอียด",
+                "amount": "จำนวนเงิน",
+                "balance": "จำนวนเงิน",
+            },
+            "columns": ["วันที่", "รายละเอียด", "จำนวนเงิน"],
+            "sample_rows": [{"วันที่": "2026-01-01", "รายละเอียด": "ฝากเงิน", "จำนวนเงิน": "100.00"}],
+        },
     )
-    save_bank_fingerprint.assert_called_once_with(
-        "scb",
-        ["วันที่", "รายละเอียด"],
-        header_row=0,
-        sheet_name="",
-        usage_increment=1,
-    )
-    assert record_learning_feedback.call_count == 2
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "invalid"
+    assert payload["ok"] is False
+    assert payload["errors"][0]["code"] == "duplicate_column_assignment"
+    assert payload["dry_run_preview"]["summary"]["preview_row_count"] == 1
+
+
+def test_mapping_confirm_defaults_to_run_confirmation_without_shared_promotion():
+    payload = {
+        "bank": "scb",
+        "mapping": {
+            "date": "วันที่",
+            "description": "รายละเอียด",
+            "amount": "จำนวนเงิน",
+        },
+        "columns": ["วันที่", "รายละเอียด", "จำนวนเงิน"],
+        "sample_rows": [{"วันที่": "2026-01-01", "รายละเอียด": "ฝากเงิน", "จำนวนเงิน": "100.00"}],
+        "reviewer": "Case Reviewer",
+        "detected_bank": {"config_key": "scb", "bank": "SCB"},
+        "suggested_mapping": {
+            "date": "วันที่",
+            "description": "รายละเอียด",
+            "amount": "จำนวนเงิน",
+        },
+    }
+
+    with (
+        patch("core.mapping_memory.save_profile") as save_profile,
+        patch("routers.ingestion.record_learning_feedback") as record_learning_feedback,
+        patch("routers.ingestion.get_db_session", side_effect=_fake_db_session),
+    ):
+        response = client.post("/api/mapping/confirm", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["profile_id"] is None
+    assert body["fingerprint_id"] is None
+    assert body["shared_learning"]["status"] == "skipped"
+    assert body["learning_feedback_count"] == 1
+    save_profile.assert_not_called()
+    assert record_learning_feedback.call_count == 1
+    feedback_call = record_learning_feedback.call_args.kwargs
+    assert feedback_call["learning_domain"] == "mapping_confirmation"
+    assert feedback_call["changed_by"] == "Case Reviewer"
+
+
+def test_mapping_confirm_rejects_conflicting_amount_paths_before_learning():
+    with (
+        patch("core.mapping_memory.save_profile") as save_profile,
+        patch("routers.ingestion.record_learning_feedback") as record_learning_feedback,
+    ):
+        response = client.post(
+            "/api/mapping/confirm",
+            json={
+                "bank": "scb",
+                "mapping": {
+                    "date": "วันที่",
+                    "description": "รายละเอียด",
+                    "amount": "จำนวนเงิน",
+                    "debit": "ถอนเงิน",
+                },
+                "columns": ["วันที่", "รายละเอียด", "จำนวนเงิน", "ถอนเงิน"],
+                "sample_rows": [{"วันที่": "2026-01-01", "รายละเอียด": "ถอนเงิน", "จำนวนเงิน": "100.00", "ถอนเงิน": "100.00"}],
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["errors"][0]["code"] == "conflicting_amount_paths"
+    save_profile.assert_not_called()
+    record_learning_feedback.assert_not_called()
+
+
+def test_mapping_variants_endpoints_list_and_promote():
+    with (
+        patch("routers.ingestion.list_template_variants", return_value=[{"variant_id": "VARIANT-1"}]) as list_template_variants,
+        patch("routers.ingestion.get_db_session", side_effect=_fake_db_session),
+    ):
+        response = client.get("/api/mapping/variants", params={"bank": "scb", "trust_state": "candidate"})
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
+    list_template_variants.assert_called_once()
+
+    with (
+        patch("routers.ingestion.list_template_variants", return_value=[{"variant_id": "VARIANT-1", "trust_state": "candidate"}]),
+        patch(
+            "routers.ingestion.promote_template_variant",
+            return_value={
+                "variant_id": "VARIANT-1",
+                "bank_key": "scb",
+                "trust_state": "verified",
+                "confirmation_count": 2,
+                "correction_count": 0,
+                "reviewer_count": 2,
+            },
+        ) as promote_template_variant,
+        patch("routers.ingestion.record_learning_feedback") as record_learning_feedback,
+        patch("routers.ingestion.get_db_session", side_effect=_fake_db_session),
+    ):
+        response = client.post(
+            "/api/mapping/variants/VARIANT-1/promote",
+            json={"trust_state": "verified", "reviewer": "reviewer.two", "note": "confirmed twice"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["variant"]["trust_state"] == "verified"
+    promote_template_variant.assert_called_once()
+    assert record_learning_feedback.call_args.kwargs["learning_domain"] == "bank_template_variant"
 
 
 def test_learning_feedback_endpoint_uses_dedicated_query_helper():

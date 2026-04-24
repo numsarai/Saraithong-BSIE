@@ -13,6 +13,7 @@ from persistence.base import DATABASE_RUNTIME_SOURCE, DATABASE_URL, IS_SQLITE, e
 from persistence.models import (
     Account,
     AuditLog,
+    BankTemplateVariant,
     DuplicateGroup,
     Entity,
     ExportJob,
@@ -65,6 +66,7 @@ async def api_db_status():
             "transaction_matches": TransactionMatch,
             "audit_logs": AuditLog,
             "mapping_profiles": MappingProfileRecord,
+            "bank_template_variants": BankTemplateVariant,
             "export_jobs": ExportJob,
         }
         for label, model in count_targets.items():

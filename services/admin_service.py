@@ -22,6 +22,7 @@ from persistence.models import (
     AccountEntityLink,
     AdminSetting,
     AuditLog,
+    BankTemplateVariant,
     CaseTag,
     CaseTagLink,
     DuplicateGroup,
@@ -54,6 +55,7 @@ class TableSpec:
 
 TABLE_SPECS: tuple[TableSpec, ...] = (
     TableSpec("mapping_profiles", MappingProfileRecord.__table__),
+    TableSpec("bank_template_variants", BankTemplateVariant.__table__),
     TableSpec("files", FileRecord.__table__),
     TableSpec("parser_runs", ParserRun.__table__),
     TableSpec("accounts", Account.__table__),

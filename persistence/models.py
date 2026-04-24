@@ -63,6 +63,45 @@ class MappingProfileRecord(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
+class BankTemplateVariant(Base):
+    __tablename__ = "bank_template_variants"
+    __table_args__ = (
+        UniqueConstraint(
+            "bank_key",
+            "source_type",
+            "ordered_signature",
+            "sheet_name",
+            "header_row",
+            name="uq_bank_template_variant_signature",
+        ),
+        Index("ix_bank_template_variants_bank_trust", "bank_key", "trust_state"),
+        Index("ix_bank_template_variants_set_signature", "set_signature"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    bank_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), default="excel", nullable=False)
+    sheet_name: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    header_row: Mapped[int] = mapped_column(default=0, nullable=False)
+    ordered_signature: Mapped[str] = mapped_column(String(64), nullable=False)
+    set_signature: Mapped[str] = mapped_column(String(64), nullable=False)
+    layout_type: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    column_order_json: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    confirmed_mapping_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    trust_state: Mapped[str] = mapped_column(String(32), default="candidate", nullable=False, index=True)
+    usage_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    confirmation_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    correction_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    confirmed_by_json: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    dry_run_summary_json: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    promoted_by: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
+
+
 class ParserRun(Base):
     __tablename__ = "parser_runs"
 

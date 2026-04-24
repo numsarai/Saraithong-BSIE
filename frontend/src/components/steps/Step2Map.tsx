@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { normalizeOperatorName, useStore } from '@/store'
-import { confirmMapping, getBanks, learnBank } from '@/api'
+import { confirmMapping, getBanks, learnBank, previewMapping } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -39,6 +39,7 @@ export function Step2Map() {
     key: '', bank_name: '', format_type: 'standard', amount_mode: 'signed',
   })
   const [learning, setLearning]     = useState(false)
+  const [serverPreview, setServerPreview] = useState<any | null>(null)
 
   useEffect(() => {
     getBanks().then(setBanks).catch((e) => toast.error(`Could not load banks: ${e.message}`))
@@ -50,6 +51,7 @@ export function Step2Map() {
     if (criticalField && mappingReviewed) {
       setMappingReviewed(false)
     }
+    setServerPreview(null)
     setConfirmedMapping(nextMapping)
   }
 
@@ -57,6 +59,7 @@ export function Step2Map() {
     if (mappingReviewed) {
       setMappingReviewed(false)
     }
+    setServerPreview(null)
     setConfirmedMapping({ ...suggestedMapping })
   }
   const clearAll = () => {
@@ -65,6 +68,7 @@ export function Step2Map() {
     if (mappingReviewed) {
       setMappingReviewed(false)
     }
+    setServerPreview(null)
     setConfirmedMapping(cleared)
   }
 
@@ -75,8 +79,24 @@ export function Step2Map() {
     }
     if (!confirmedMapping['date'])        { toast.error('Date field is required'); return }
     if (!confirmedMapping['description']) { toast.error('Description field is required'); return }
+    if (mappingValidation.errors.length > 0) {
+      toast.error(mappingValidation.errors[0].message)
+      return
+    }
     setSaving(true)
     try {
+      const preview = await previewMapping({
+        bank: bankKey,
+        mapping: confirmedMapping,
+        columns: allColumns,
+        sample_rows: sampleRows,
+      })
+      setServerPreview(preview)
+      if (!preview?.ok) {
+        const message = preview?.errors?.[0]?.message || 'Mapping preview failed'
+        toast.error(message)
+        return
+      }
       const response = await confirmMapping(
         bankKey,
         confirmedMapping,
@@ -87,6 +107,8 @@ export function Step2Map() {
           reviewer: normalizeOperatorName(operatorName),
           detected_bank: detectedBank,
           suggested_mapping: suggestedMapping,
+          sample_rows: sampleRows,
+          promote_shared: false,
         },
       )
       setStep(3)
@@ -141,6 +163,11 @@ export function Step2Map() {
   }
 
   const mappedCount = Object.values(confirmedMapping).filter(Boolean).length
+  const mappingValidation = useMemo(
+    () => evaluateLocalMapping(confirmedMapping, allColumns),
+    [confirmedMapping, allColumns],
+  )
+  const hasBlockingMappingErrors = mappingValidation.errors.length > 0
   const reviewGate = evaluateReviewGate({
     detectedBank,
     mapping: confirmedMapping,
@@ -187,7 +214,10 @@ export function Step2Map() {
           </div>
           <select
             value={bankKey}
-            onChange={e => setBankKey(e.target.value)}
+            onChange={e => {
+              setServerPreview(null)
+              setBankKey(e.target.value)
+            }}
             className="bg-surface3 border border-border rounded-lg px-2 py-1.5 text-sm text-text w-full focus:border-accent outline-none cursor-pointer mb-2"
           >
             {banks.map((b: any) => <option key={b.key} value={b.key}>{b.name}</option>)}
@@ -422,7 +452,7 @@ export function Step2Map() {
             <Button
               size="sm"
               variant={mappingReviewed ? 'outline' : 'primary'}
-              disabled={!reviewGate.hasCriticalMapping}
+              disabled={!reviewGate.hasCriticalMapping || hasBlockingMappingErrors}
               onClick={() => {
                 setMappingReviewed(true)
                 toast.success('Critical mapping confirmed')
@@ -504,6 +534,75 @@ export function Step2Map() {
         </div>
       </Card>
 
+      <Card>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <CardTitle className="!mb-1">Mapping Validation</CardTitle>
+            <p className="text-sm text-muted">
+              Conflicts are blocked before BSIE stores this mapping or starts normalization.
+            </p>
+          </div>
+          <Badge variant={hasBlockingMappingErrors ? 'red' : mappingValidation.warnings.length ? 'blue' : 'green'}>
+            {hasBlockingMappingErrors ? 'Blocked' : mappingValidation.warnings.length ? 'Needs Review' : 'Ready'}
+          </Badge>
+        </div>
+
+        <div className="space-y-2">
+          {mappingValidation.errors.map(issue => (
+            <div key={`${issue.code}:${issue.field || issue.column || issue.message}`} className="rounded-lg border border-danger/25 bg-danger/[0.06] px-3 py-2 text-xs text-text2">
+              <span className="font-semibold text-danger">Blocker:</span> {issue.message}
+            </div>
+          ))}
+          {mappingValidation.warnings.map(issue => (
+            <div key={`${issue.code}:${issue.field || issue.column || issue.message}`} className="rounded-lg border border-warning/25 bg-warning/[0.08] px-3 py-2 text-xs text-text2">
+              <span className="font-semibold text-warning">Review:</span> {issue.message}
+            </div>
+          ))}
+          {!hasBlockingMappingErrors && mappingValidation.warnings.length === 0 && (
+            <div className="rounded-lg border border-success/25 bg-success/[0.08] px-3 py-2 text-xs text-text2">
+              Required fields are mapped and no duplicate column assignments were found.
+            </div>
+          )}
+        </div>
+
+        {serverPreview?.dry_run_preview && (
+          <div className="mt-4 border-t border-border pt-4">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <Badge variant="blue">Dry-run preview</Badge>
+              <span className="text-xs text-muted">
+                {serverPreview.dry_run_preview.summary?.valid_transaction_rows || 0} of {serverPreview.dry_run_preview.summary?.preview_row_count || 0} sample rows parse as transactions.
+              </span>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-surface2 text-muted">
+                    <th className="px-2 py-1.5 text-left">Row</th>
+                    <th className="px-2 py-1.5 text-left">Date</th>
+                    <th className="px-2 py-1.5 text-left">Amount</th>
+                    <th className="px-2 py-1.5 text-left">Direction</th>
+                    <th className="px-2 py-1.5 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {serverPreview.dry_run_preview.rows?.slice(0, 5).map((row: any) => (
+                    <tr key={row.row_index} className="border-t border-border/60">
+                      <td className="px-2 py-1.5 text-text2">{row.row_index}</td>
+                      <td className="px-2 py-1.5 text-text2">{row.date || '-'}</td>
+                      <td className="px-2 py-1.5 text-text2">{row.amount ?? '-'}</td>
+                      <td className="px-2 py-1.5 text-text2">{row.direction}</td>
+                      <td className="px-2 py-1.5">
+                        <Badge variant={row.status === 'ok' ? 'green' : row.status === 'rejected' ? 'red' : 'blue'}>{row.status}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Card>
+
       {/* Mapping table */}
       <Card>
         <div className="flex items-center justify-between mb-4">
@@ -532,6 +631,7 @@ export function Step2Map() {
                 const val  = (confirmedMapping[key] as string) || ''
                 const conf = Math.round(Number((confidenceScores[key] as number) || 0) * 100)
                 const mapped = !!val
+                const conflict = !!val && mappingValidation.duplicateColumns.includes(val)
                 return (
                   <tr key={key} className="border-b border-border/50 hover:bg-surface2/50 transition-colors">
                     <td className="py-2.5 px-3 font-medium text-text2">
@@ -556,7 +656,7 @@ export function Step2Map() {
                       </div>
                     </td>
                     <td className="py-2.5 px-3">
-                      <Badge variant={mapped ? 'green' : 'gray'}>{mapped ? 'Mapped' : 'Unmapped'}</Badge>
+                      <Badge variant={conflict ? 'red' : mapped ? 'green' : 'gray'}>{conflict ? 'Conflict' : mapped ? 'Mapped' : 'Unmapped'}</Badge>
                     </td>
                   </tr>
                 )
@@ -601,7 +701,7 @@ export function Step2Map() {
         <Button variant="ghost" onClick={() => setStep(1)}>
           <ChevronLeft size={14} />Back
         </Button>
-        <Button onClick={handleConfirm} disabled={saving || !canProceedToConfig}>
+        <Button onClick={handleConfirm} disabled={saving || !canProceedToConfig || hasBlockingMappingErrors}>
           {saving ? t('step2.confirming') : <><ChevronRight size={14} />{t('step2.confirmMapping')}</>}
         </Button>
       </div>
@@ -696,6 +796,65 @@ function formatEvidenceItem(value: string) {
     .replace(/:/g, ': ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function evaluateLocalMapping(mapping: Record<string, string | null>, columns: string[]) {
+  const errors: Array<{ code: string; message: string; field?: string; column?: string }> = []
+  const warnings: Array<{ code: string; message: string; field?: string; column?: string }> = []
+  const availableColumns = new Set(columns)
+  const mappedColumns = new Map<string, string[]>()
+
+  Object.entries(mapping || {}).forEach(([field, column]) => {
+    if (!column) return
+    if (!availableColumns.has(column)) {
+      errors.push({
+        code: 'unknown_column',
+        field,
+        column,
+        message: `Mapped column "${column}" is not present in the uploaded sheet.`,
+      })
+      return
+    }
+    mappedColumns.set(column, [...(mappedColumns.get(column) || []), field])
+  })
+
+  const duplicateColumns: string[] = []
+  mappedColumns.forEach((fields, column) => {
+    if (fields.length > 1) {
+      duplicateColumns.push(column)
+      errors.push({
+        code: 'duplicate_column_assignment',
+        column,
+        message: `Column "${column}" is assigned to multiple fields: ${fields.join(', ')}.`,
+      })
+    }
+  })
+
+  if (!mapping.date) {
+    errors.push({ code: 'missing_required_field', field: 'date', message: 'Date field is required.' })
+  }
+  if (!mapping.description) {
+    errors.push({ code: 'missing_required_field', field: 'description', message: 'Description field is required.' })
+  }
+
+  const hasAmount = !!mapping.amount
+  const hasDebit = !!mapping.debit
+  const hasCredit = !!mapping.credit
+  if (!hasAmount && !hasDebit && !hasCredit) {
+    errors.push({ code: 'missing_amount_path', message: 'Map either a signed amount column or at least one debit/credit column.' })
+  }
+  if (hasAmount && (hasDebit || hasCredit)) {
+    errors.push({ code: 'conflicting_amount_paths', message: 'Use either signed amount or debit/credit columns, not both.' })
+  }
+  if ((hasDebit && !hasCredit) || (hasCredit && !hasDebit)) {
+    warnings.push({
+      code: 'one_sided_amount_path',
+      field: hasDebit ? 'credit' : 'debit',
+      message: `Only ${hasDebit ? 'debit' : 'credit'} is mapped; the opposite side may need review.`,
+    })
+  }
+
+  return { errors, warnings, duplicateColumns }
 }
 
 function FlowCard({

@@ -6,122 +6,309 @@
 ## Current State
 
 - **Last agent:** Codex (GPT-5)
-- **Date:** 2026-04-16
-- **Branch:** `codex/spni-export-test-runtime-pr`
-- **Baseline:** backend green (`260 passed`), frontend green (`33 passed`), targeted regression suites green (`58 passed`)
-- **Server:** `uvicorn app:app --host 0.0.0.0 --port 8757`
+- **Date:** 2026-04-24
+- **Branch:** `Smarter-BSIE`
+- **Runtime mode:** local-only อีกครั้ง
+- **Baseline:** backend `327 passed`, frontend `33 passed`, frontend build passed
+- **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
+- **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session)
+## Done (latest session) — Phase 2 Template Variant Persistence
 
-- แก้ report/export scoping regressions ตาม review findings:
-  - `services/report_service.py`
-    - เพิ่ม `_resolve_account_for_report()` เพื่อ resolve account จาก `parser_run_id` ก่อน fallback ไปที่ normalized account lookup
-    - `generate_account_report()` ใช้ account ของ parser run ที่เลือก และ filter alerts ด้วย `parser_run_id` เมื่อระบุ
-    - `generate_case_report()` จำกัด combined alerts ให้เฉพาะ account IDs ที่ผู้ใช้ร้องขอในรายงานคดี
-  - `services/spni_service.py`
-    - ปรับ `export_data()` ให้คำนวณ accounts/entities + `meta.total_accounts`/`meta.total_entities` จาก full filtered export set ก่อน apply pagination กับ transactions
-- เพิ่ม regression tests:
-  - `tests/test_report_service.py`
-    - ยืนยัน account report ใช้ account/alerts จาก parser run ที่เลือก
-    - ยืนยัน case report ไม่ปน alerts ของบัญชีที่ไม่ได้ร้องขอ
-  - `tests/test_spni_service.py`
-    - ยืนยัน paginated SPNI export ยังคืน account/entity metadata และ totals แบบ consistent
-- ยืนยันผล:
-  - `.venv/bin/python -m pytest tests/test_report_service.py tests/test_spni_service.py -q` -> `3 passed`
-  - `.venv/bin/python -m pytest tests/test_spni_api.py tests/test_app_api.py tests/test_report_service.py tests/test_spni_service.py -q` -> `58 passed`
+### What I changed
+- Implemented backend persistence for guarded bank template variants.
+- Added `BankTemplateVariant` model/table with:
+  - bank key, source type, sheet/header metadata
+  - ordered signature + set signature
+  - layout type + confirmed mapping
+  - trust state: `candidate`, `verified`, `trusted`
+  - usage / confirmation / correction counts
+  - reviewer list and dry-run summary
+- Added `services/template_variant_service.py` for:
+  - upserting variants from shared mapping confirmations
+  - automatic candidate -> verified/trusted promotion rules based on confirmations, reviewers, and correction rate
+  - manual promotion with named reviewer requirement
+  - listing variants by bank/trust state
+- Changed `/api/mapping/confirm` shared-learning path:
+  - `promote_shared=true` now records/updates a bank template variant
+  - it no longer writes legacy `mapping_profile` or `bank_fingerprint`
+  - response now includes `variant_id` and `shared_learning.trust_state`
+- Added mapping variant API:
+  - `GET /api/mapping/variants`
+  - `POST /api/mapping/variants/{variant_id}/promote`
+- Added Alembic migration `20260424_000004_add_bank_template_variants.py`
+- Included variants in admin DB status counts and JSON backup/restore table specs.
 
-- ตรวจ CI failure บน PR #10 แล้วเจอ 2 ชั้น:
-  - `Backend Tests` ล้มตั้งแต่ test collection เพราะ `services/report_service.py` import `from fpdf import FPDF` แต่ CI ติดตั้งจาก `requirements.txt` ซึ่งยังไม่มี `fpdf2`
-  - หลัง push แก้ dependency แล้ว PR-side `CI` ผ่าน แต่ยังมี `CodeQL` fail จาก open alert `py/path-injection` ที่ `services/file_ingestion_service.py`
-- แก้ dependency สำหรับ backend CI:
-  - เพิ่ม `fpdf2>=2.8.0` ใน `requirements.txt`
-- แก้ CodeQL path-validation สำหรับ evidence storage:
-  - เพิ่ม `_normalize_file_id()` ให้รับเฉพาะ UUID
-  - เปลี่ยน evidence filename จากการประกอบด้วย sanitized suffix ไปเป็น fixed allowlist mapping (`original.xlsx`, `original.ofx`, ... , fallback `original.dat`) เพื่อให้ storage path ขึ้นกับ server-controlled UUID + known-safe filename เท่านั้น
-  - ทำ `_canonical_evidence_path()` / `_canonical_evidence_exists()` / `_write_canonical_evidence()` ให้ทำงานกับ `FileRecord` โดยตรง แทนการรับ path parts ดิบ
-  - ปรับ duplicate repair ให้ reuse/repair เฉพาะ canonical path ใต้ current `EVIDENCE_DIR` แทนการ `resolve()` arbitrary stored path จาก record เดิม
-  - คง canonical stored path/`storage_key` เดิมไว้ (`.../original.ofx` เป็นต้น) เพื่อไม่กระทบ parser dispatch และ duplicate self-heal behavior
-  - ปรับ regression test ให้ validate invalid file id ผ่าน `_normalize_file_id()` โดยตรง และให้ duplicate repair ยังเทียบ resolved path ได้ถูกต้องบน macOS temp alias
-- เพิ่ม regression test `test_canonical_evidence_path_rejects_invalid_file_id` ใน `tests/test_persistence_platform.py`
-- ยืนยันผลหลังแก้:
-  - `.venv/bin/python -m pytest tests/test_persistence_platform.py -q` -> `11 passed`
-  - `.venv/bin/python -m pytest tests/ -q` -> `260 passed`
-- เตรียม push latest follow-up commit นี้กลับเข้า `codex/spni-export-test-runtime-pr` เพื่ออัปเดต PR checks
+### Files changed
+- `persistence/models.py`
+- `persistence/schemas.py`
+- `services/template_variant_service.py`
+- `routers/ingestion.py`
+- `routers/admin.py`
+- `services/admin_service.py`
+- `alembic/versions/20260424_000004_add_bank_template_variants.py`
+- `tests/test_template_variant_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
 
-## Commits (this session)
+### Tests run
+- Baseline before Phase 2:
+  - `.venv/bin/python -m pytest tests/ -q` -> `323 passed`
+  - `npm test` in `frontend/` -> `33 passed`
+- Focused after Phase 2:
+  - `.venv/bin/python -m pytest tests/test_template_variant_service.py tests/test_app_api.py -q` -> `46 passed`
+  - `npm test -- src/components/steps/Step2Map.test.tsx src/App.workflow.test.tsx` -> `7 passed`
+- Final verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `327 passed`
+  - `npm test` in `frontend/` -> `33 passed`
+  - `npm run build` in `frontend/` -> passed, Vite large chunk warning only
 
-```
-Pending local changes for report/export scoping fixes (`services/report_service.py`, `services/spni_service.py`, `tests/test_report_service.py`, `tests/test_spni_service.py`, `docs/HANDOFF.md`) plus earlier uncommitted follow-up noted below.
-```
+### Decisions made
+- Added `DEC-011`: bank template variants are persisted separately from legacy mapping profiles.
+- `promote_shared=true` now means “record/update guarded variant”, not “write immediately to legacy shared memory”.
+- Auto-pass is still not enabled; trusted variants exist as a lifecycle state only.
 
-## Next (priority order)
+### Warnings
+- Variants are not yet wired into upload/bulk suggestion selection; current upload detection still uses existing deterministic detection + legacy mapping memory.
+- There is no frontend variant admin/review UI yet; variants can be listed/promoted via API.
+- Manual promotion endpoint prevents demotion; demotion/revocation should be designed with audit semantics if needed later.
 
-1. **SPNI Sprint 0-2** — init Next.js project, workspace/entity CRUD, graph viz (`/Users/saraithong/Documents/The terminal/spni/`)
-2. **SPNI Sprint 3** — สร้าง BSIEAdapter ฝั่ง SPNI เรียก `/api/spni/export`
-3. BSIE: พิจารณา per-test DB cleanup หรือ dedicated fixtures สำหรับ tests ที่ยังพึ่ง shared in-session state
-4. BSIE: พิจารณา Pydantic response models สำหรับ SPNI endpoints (OpenAPI docs)
-5. BSIE: ADR-005 legacy table migration (v4.1-4.3)
+### Failed attempts / Notes
+- Focused backend tests initially failed because older mocks still patched `save_bank_fingerprint`; tests were updated for the variant path.
+- Existing uncommitted local-only cleanup/doc files from prior sessions remain part of the current worktree and were not reverted.
 
-## Active Decisions
+### Environment changes
+- No new dependencies installed.
+- No migrations were applied to the local runtime DB during this session; the model is available through `Base.metadata.create_all`, and the Alembic migration was added for managed upgrades.
 
-- SPNI integration ใช้ Module Adapter Pattern — BSIE standalone, SPNI เรียกผ่าน REST API
-- Export scoped by `parser_run_id` — ไม่มี workspace concept ใน BSIE
-- Entity model ไม่มี `identifier_type` — SPNI adapter ต้อง derive จาก `entity_type`
-- Parser run status ใช้ `"done"` (ไม่ใช่ `"completed"`)
-- AccountFlowGraph ใช้ in-memory aggregation แทน CSV fetch
-- Duplicate file reuse ต้อง self-heal `stored_path` กลับเข้า `EVIDENCE_DIR` ปัจจุบันเมื่อ path เก่าหายหรืออยู่นอก workspace ปัจจุบัน
-- Pytest ต้องใช้ temp runtime root ผ่าน `tests/conftest.py` แทน project-root `bsie.db` และ writable dirs
-- PDF reports ต้อง scope account/alerts ตาม parser run หรือ requested account set เพื่อไม่ให้ปนคนละคดี/คนละ ingest
-- SPNI export ต้องคำนวณ account/entity metadata จาก full filtered set ก่อน pagination ของ transactions
+## Done (previous session) — Phase 1 Mapping Flow Hardening
+
+### What I changed
+- เริ่ม implementation ตาม `docs/LOCAL_LLM_MAPPING_ROADMAP.md` Phase 1
+- เพิ่ม backend service `services/mapping_validation_service.py` สำหรับ:
+  - validate required mapping (`date`, `description`, amount path)
+  - กัน duplicate column assignment
+  - กัน conflict ระหว่าง signed amount กับ debit/credit
+  - ตรวจ mapped column ว่ามีจริงใน uploaded sheet
+  - สร้าง dry-run preview จาก sample rows โดย parse date/time/amount/direction/balance
+- เพิ่ม endpoint `POST /api/mapping/preview`
+- ปรับ `POST /api/mapping/confirm` ให้:
+  - validate + dry-run ก่อนบันทึก
+  - reject invalid mapping ก่อน learning write
+  - confirm สำหรับ run ปัจจุบันเป็น default
+  - ไม่ promote shared mapping/bank memory เว้นแต่ส่ง `promote_shared=true`
+  - require named reviewer สำหรับ shared promotion
+  - audit run-level mapping confirmation เมื่อไม่ได้ promote
+- ปรับ frontend Step 2 ให้:
+  - แสดง `Mapping Validation` card
+  - block ปุ่ม confirm เมื่อเจอ conflict
+  - แสดง conflict badge ใน mapping table
+  - call preview endpoint ก่อน confirm จริง
+  - ส่ง `sample_rows` และ `promote_shared:false` ใน confirm flow
+- เพิ่ม/อัปเดต regression tests backend และ frontend workflow
+
+### Files changed
+- `services/mapping_validation_service.py`
+- `persistence/schemas.py`
+- `routers/ingestion.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `frontend/src/App.workflow.test.tsx`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before changes:
+  - `.venv/bin/python -m pytest tests/ -q` -> `320 passed`
+  - `npm test` in `frontend/` -> `33 passed`
+- Focused after changes:
+  - `.venv/bin/python -m pytest tests/test_app_api.py -q` -> `42 passed`
+  - `npm test -- src/components/steps/Step2Map.test.tsx` -> `5 passed`
+- Final verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `323 passed`
+  - `npm test` in `frontend/` -> `33 passed`
+  - `npm run build` in `frontend/` -> passed, Vite large chunk warning only
+
+### Decisions made
+- Added `DEC-010`: `/api/mapping/confirm` no longer promotes shared memory by default
+- Shared mapping/bank memory promotion is opt-in and named-reviewer gated until template variants exist
+- Preview endpoint returns `status: invalid` with structured errors instead of throwing, so UI can show conflicts without treating preview as transport failure
+
+### Warnings
+- `Learn New Bank` modal still uses the older bank-template learning path; variant lifecycle is not implemented yet
+- `promote_shared=true` still writes to current mapping/bank memory, not to the future variant tables
+- This phase does not yet add template variant persistence, trust states, or auto-pass rollout
+
+### Failed attempts / Notes
+- Full frontend test initially failed because `App.workflow.test.tsx` did not mock the new `previewMapping` API; updated the test harness and reran successfully
+- Existing uncommitted local-only cleanup/doc files from prior sessions remain in the worktree and were not reverted
+
+### Environment changes
+- No new dependencies installed
+- `npm run build` regenerated build output under `static/dist`, but no tracked static build files changed
+
+## Done (previous session) — Planning handoff for Mapping + Local LLM work
+
+### What I changed
+- สรุปแผนงานรอบใหม่และสร้าง `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- ล็อก decisions สำคัญใน `docs/DECISIONS.md` เรื่อง:
+  - guarded shared template variants
+  - no auto-pass for new templates
+  - trusted Excel variants only for future auto-pass
+  - baseline local model split for text / vision / fast fallback
+- เตรียม handoff ให้ session ใหม่เริ่มงานจาก `Phase 1: Harden Current Mapping Flow`
+
+### Files changed
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- ไม่มีการรัน tests รอบนี้ เพราะเป็น session วางแผน/เอกสาร
+
+## Done (previous session) — Return BSIE to local-only development
+
+### What I changed
+- ถอด cloud-demo integration ที่ยังค้าง uncommitted ออกจาก repo
+- เพิ่ม `docs/CLOUD_RESTORE.md` เป็น checklist สำหรับกลับไปใช้ Vercel/Supabase/Fly ภายหลัง
+- คืน `persistence/base.py` ให้ใช้ SQLite local แบบตายตัวอีกครั้ง
+- คืน `services/auth_service.py` ให้ใช้ local token path เท่านั้น
+- คืน `app.py` CORS ให้เหลือ origin สำหรับ local dev/same-origin ตามเดิม
+- ถอด Supabase login gate ออกจาก frontend และลบ Supabase client files
+- ลบไฟล์ deploy/config ที่เพิ่มมาเพื่อ Vercel/Fly/Render:
+  - `vercel.json`
+  - `.vercelignore`
+  - `Dockerfile`
+  - `fly.toml`
+  - `render.yaml`
+  - `requirements-cloud.txt`
+  - frontend env files สำหรับ cloud build
+- ลบ dependency `@supabase/supabase-js` ออกจาก `frontend/package.json` และ lockfile
+- คง `httpx` ไว้ใน `requirements.txt` เพราะ `services/llm_service.py` ยังใช้อยู่ ไม่เกี่ยวกับ Supabase อย่างเดียว
+- คง `frontend/src/api.ts` ไว้เป็น fetch wrapper เล็ก ๆ สำหรับ optional `VITE_API_BASE_URL` แต่ไม่ inject auth token แล้ว
+
+### Files changed
+- Backend/runtime:
+  - `app.py`
+  - `persistence/base.py`
+  - `services/auth_service.py`
+  - `requirements.txt`
+  - `.env.example`
+- Frontend/runtime:
+  - `frontend/src/api.ts`
+  - `frontend/src/main.tsx`
+  - `frontend/vite.config.ts`
+  - `frontend/package.json`
+  - `frontend/package-lock.json`
+- Tests/docs:
+  - `tests/test_persistence_base.py`
+  - `docs/CLOUD_RESTORE.md`
+  - `docs/DECISIONS.md`
+  - `docs/HANDOFF.md`
+
+### Files removed
+- `.dockerignore`
+- `.vercelignore`
+- `Dockerfile`
+- `fly.toml`
+- `render.yaml`
+- `requirements-cloud.txt`
+- `vercel.json`
+- `services/supabase_auth.py`
+- `tests/test_supabase_auth.py`
+- `frontend/.env.example`
+- `frontend/.env.production`
+- `frontend/src/components/Login.tsx`
+- `frontend/src/components/LoginGate.tsx`
+- `frontend/src/lib/supabase.ts`
+- `frontend/src/lib/useAuth.ts`
+
+### Tests run
+- `.venv/bin/python -m pytest tests/ -q` -> `320 passed`
+- `npm test` (in `frontend/`) -> `33 passed`
+
+## What's Next
+
+1. เดินหน้าพัฒนา local-first ต่อได้เลยโดยใช้ backend `127.0.0.1:8757` + frontend `127.0.0.1:6776`
+2. ถ้าจะกลับไปทำ cloud deploy อีกครั้ง ให้เริ่มเป็นงานใหม่บน branch แยก ไม่ควร revive handoff/cloud config ชุดนี้ตรง ๆ
+3. ถ้าจะ restore cloud ให้ใช้ `docs/CLOUD_RESTORE.md` เป็น checklist กลาง
+4. งานรอบใหม่ให้เริ่มจาก `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+5. เป้าหมาย implementation รอบถัดไป:
+   - เชื่อม template variants เข้ากับ upload/bulk suggestion path แบบ gated
+   - เพิ่ม frontend/admin review UI สำหรับ variant promotion
+   - เริ่ม Phase 3: Local LLM mapping-assist เฉพาะเคส ambiguous
+6. เดินงานค้างเดิมต่อได้:
+   - SPNI Sprint 0-2 / Sprint 3
+   - Pydantic response models สำหรับ SPNI endpoints
+   - ADR-005 legacy table migration
+
+## Decisions Made
+
+- ย้อน runtime กลับเป็น local-only แบบชัดเจน แทนการซ่อน cloud path ไว้หลัง env flags
+- ถอด auth/db/deploy integration ของ Supabase/Vercel/Fly ออกจาก working tree ไปเลย เพื่อให้ handoff และ dev flow ตรงกับการใช้งานจริง
+- เก็บ `httpx` ไว้ เพราะยังเป็น dependency ของ LLM service
+- ผู้ใช้ทุกคน confirm mapping สำหรับรอบงานปัจจุบันได้ แต่ shared learning ต้องผ่าน variant lifecycle
+- template ใหม่ไม่ auto-pass
+- auto-pass เปิดได้เฉพาะ trusted Excel variants
+- `/api/mapping/confirm` เป็น run confirmation by default; shared promotion ต้อง opt-in ด้วย `promote_shared=true`
+- `promote_shared=true` จะบันทึก guarded bank template variant ไม่เขียน legacy mapping profile/bank fingerprint ทันที
+- local model baseline:
+  - text: `qwen2.5:14b`
+  - vision/doc: `qwen2.5vl:7b`
+  - fast fallback: `gemma4:e4b`
 
 ## Warnings
 
-- Runtime app ปกติยังใช้ `bsie.db` ที่ project root (ไม่ใช่ `data/bsie.db`)
-- Pytest runtime ถูกแยกแล้ว แต่ยังเป็น session-level temp DB ไม่ใช่ per-test DB isolation
-- BSIE server ต้องรันจาก `/Users/saraithong/Documents/The terminal/bsie/`
-- CORS `localhost:3000` เพิ่มแล้ว — ถ้า SPNI เปลี่ยน port ต้องอัพเดต `app.py` line 181
-- `CLAUDE.md` ใช้ `@AGENTS.md` (pointer) — เนื้อหาจริงอยู่ใน `AGENTS.md`
-- `docs/.handoff-snapshot.md` ยังไม่มีไฟล์
-- `frontend npm test` ไม่มี React `act(...)` warning และไม่มี Node `--localstorage-file` warning แล้ว
-- ถ้า PR ยังมี `CodeQL` fail หลัง push รอบนี้ ให้ตรวจ open code-scanning alert ใหม่บน PR merge ref; ตอนนี้ backend tests ผ่านที่ `260 passed` แล้ว เหลือยืนยันว่า CodeQL ปิด alert สองจุดเดิมได้จริง
+- รอบนี้ **ไม่ได้ลบ remote resources จริง** บน Vercel/Supabase/Fly; แค่ถอดความผูกกับ repo/local runtime
+- local private env files ที่ไม่ได้ track เช่น `frontend/.env.local` อาจยังมีค่า cloud เดิมอยู่ ถ้าจะ cleanup ให้ตรวจเองก่อน
+- `BSIE_AUTH_REQUIRED` ยังทำงานตาม `.env`; ถ้าเปิดไว้แต่ไม่มี token valid ระบบก็ยังบังคับ auth ตาม local flow
+- `docs/.handoff-snapshot.md` ยังไม่มีเหมือนเดิม
+- current code ยังใช้ default model strings ฝั่ง LLM ที่เป็น `gemma4:*`; model env split ยังเป็นงานรอบถัดไป
+- Phase 1 mapping hardening ถูก implement แล้ว แต่ variant lifecycle ยังไม่ถูก implement
+- Variant persistence/lifecycle backend ถูก implement แล้ว แต่ยังไม่ถูกใช้ใน upload/bulk suggestion path
 
-## Failed Attempts
+## Failed Attempts / Notes
 
-- ความพยายามรอบก่อนที่ใช้ regex-sanitized suffix + realpath/prefix check อย่างเดียว ยังไม่พอให้ CodeQL ปิด alert `py/path-injection`; รอบล่าสุดจึงเปลี่ยนเป็น fixed storage-name allowlist แทน dynamic suffix composition
+- คำสั่ง `npm test -- --runInBand` ใช้ไม่ได้กับ Vitest เวอร์ชันใน repo นี้; ใช้ `npm test` ตรง ๆ แทนแล้วผ่าน
+- cloud demo worktree จาก session ก่อนหน้าไม่ได้ถูก commit และถูกยกเลิกตามความต้องการ local-first รอบนี้
+- การให้ผู้ใช้ทุกคนสอน shared template ตรง ๆ ถูกประเมินว่าเสี่ยงเกินไปสำหรับ evidentiary workflow; จึงเปลี่ยนทิศทางเป็น guarded variant promotion
+- frontend workflow tests ต้อง mock `previewMapping` เพราะ Step 2 เรียก dry-run ก่อน confirm
+- tests ที่ mock shared promotion ต้อง mock `upsert_template_variant` แทน legacy `save_profile` / `save_bank_fingerprint`
 
-## Environment
+## Environment Changes
 
-- Python 3.12.13 (`.venv/`)
-- Node (frontend): React 19 + Vite
-- Database: SQLite WAL at `bsie.db`
-- No new deps installed this session
+- ลบ frontend dependency `@supabase/supabase-js`
+- ไม่ได้เพิ่ม dependency ใหม่
+- ลบ local `.vercel/` metadata directory ออกจาก workspace
+- ไม่มี environment changes รอบ planning session นี้
+- ไม่มี environment changes จาก Phase 1 mapping hardening
+- ไม่มี environment changes จาก Phase 2 template variant persistence
 
 ---
 
-## History
+## Recent History
 
+- Codex (GPT-5), 2026-04-24
+  - Implement Phase 2 template variant persistence/lifecycle backend and API
+  - ยืนยันผล: backend `327 passed`, frontend `33 passed`, frontend build passed
+- Codex (GPT-5), 2026-04-24
+  - Implement Phase 1 mapping hardening: backend validation, dry-run preview, run-only confirm default, Step2 conflict UI
+  - ยืนยันผล: backend `323 passed`, frontend `33 passed`, frontend build passed
+- Codex (GPT-5), 2026-04-24
+  - สรุป roadmap สำหรับ Mapping + Local LLM และเตรียม handoff สำหรับ session ใหม่
+  - สร้าง `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+  - เพิ่ม decisions เรื่อง shared variants, auto-pass policy, และ local model baseline
+- Codex (GPT-5), 2026-04-23
+  - ถอด Vercel + Supabase + Fly integration ออกจาก repo เพื่อกลับไปพัฒนา local-only
+  - ยืนยันผล: backend `320 passed`, frontend `33 passed`
+- Claude Code (Opus 4.7), 2026-04-21
+  - สร้าง cloud demo แบบ Vercel + Fly.io + Supabase ใน working tree เดิม
+  - งานชุดนี้ถูก supersede แล้วโดย local-only decision วันที่ 2026-04-23
 - Codex (GPT-5), 2026-04-16
-  - แก้ report/export scoping regressions: account report resolve account จาก parser run, filter alerts ตาม parser run, case report จำกัด alerts ตาม requested accounts, และ SPNI export คำนวณ accounts/entities/totals ก่อน pagination
-  - เพิ่ม regression tests `tests/test_report_service.py` และ `tests/test_spni_service.py`
-  - ยืนยันผล: targeted report/SPNI + nearby API suites `58 passed`
+  - แก้ report/export scoping regressions และเพิ่ม regression tests
 - Codex (GPT-5), 2026-04-15
-  - เปลี่ยน evidence storage ให้ใช้ fixed allowlist filename ต่อชนิดไฟล์ (`original.xlsx`, `original.ofx`, ฯลฯ) แทน dynamic suffix string
-  - ปรับ helper ให้ operate บน `FileRecord` โดยตรง และยังคง canonical `stored_path`/`storage_key` เดิมเพื่อไม่กระทบ ingestion dispatch
-  - ยืนยันผล: targeted persistence `11 passed`, backend suite `260 passed`
-- Codex (GPT-5), 2026-04-15
-  - แก้ CodeQL `py/path-injection` บน `services/file_ingestion_service.py` ด้วย UUID/suffix normalization และ canonical-path-only duplicate repair
-  - refine helper ให้ validate ด้วย `realpath` แต่คืน stored path เดิมของ runtime
-  - rewrite sink helpers ให้มี local `abspath/realpath + prefix check` ก่อน `exists/open`
-  - align sinks ให้ใช้ validated `realpath` เดียวกัน และปรับ test ให้ assert ที่ resolved path
-  - เพิ่ม regression test `test_canonical_evidence_path_rejects_invalid_file_id`
-  - ยืนยันผล: targeted persistence `11 passed`, backend suite `232 passed`
-- Codex (GPT-5), 2026-04-15
-  - แก้ CI backend collection failure โดยเพิ่ม `fpdf2>=2.8.0` ใน `requirements.txt`
-  - ยืนยัน local import `from fpdf import FPDF` และ backend suite `231 passed`
-- Codex (GPT-5), 2026-04-15
-  - เพิ่ม canonical evidence-path self-heal ใน `services/file_ingestion_service.py`
-  - แยก pytest runtime ออกจาก project-root state ใน `tests/conftest.py`
-  - เก็บ frontend test warnings ใน `frontend/src/App.workflow.test.tsx` และ `frontend/src/test/setup.ts`
-  - ยืนยันผล: `pytest tests/` = `231 passed`, `frontend npm test` = `33 passed`
-- Claude Code (Opus 4.6), 2026-04-15
-  - เพิ่ม SPNI router/service, graph/timeline ingestion fixes, และ docs v4.1
+  - แก้ persistence/runtime isolation และ evidence storage hardening

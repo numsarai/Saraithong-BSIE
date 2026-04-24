@@ -6,6 +6,16 @@ import { toast } from 'sonner'
 
 vi.mock('@/api', () => ({
   confirmMapping: vi.fn(async () => ({ status: 'ok' })),
+  previewMapping: vi.fn(async () => ({
+    status: 'ok',
+    ok: true,
+    errors: [],
+    warnings: [],
+    dry_run_preview: {
+      summary: { valid_transaction_rows: 1, preview_row_count: 1 },
+      rows: [{ row_index: 1, date: '2026-01-01', amount: 100, direction: 'IN', status: 'ok' }],
+    },
+  })),
   getBanks: vi.fn(async () => ([
     { key: 'scb', name: 'SCB', logo_url: '/api/bank-logos/scb.svg' },
     { key: 'ktb', name: 'KTB', logo_url: '/api/bank-logos/ktb.svg' },
@@ -21,7 +31,7 @@ vi.mock('sonner', () => ({
   },
 }))
 
-const { confirmMapping } = await import('@/api')
+const { confirmMapping, previewMapping } = await import('@/api')
 
 function seedUpload(data: Record<string, unknown> = {}) {
   useStore.getState().setUploadResult({
@@ -85,6 +95,7 @@ describe('Step2Map analyst gate', () => {
     fireEvent.click(continueButton)
 
     await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
+    expect(previewMapping).toHaveBeenCalledTimes(1)
     expect(useStore.getState().step).toBe(3)
   })
 
@@ -191,6 +202,16 @@ describe('Step2Map analyst gate', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^confirm mapping$/i }))
 
     await waitFor(() => expect(confirmMapping).toHaveBeenCalledTimes(1))
+    expect(previewMapping).toHaveBeenCalledWith({
+      bank: 'scb',
+      mapping: {
+        date: 'วันที่',
+        description: 'รายละเอียด',
+        amount: 'จำนวนเงิน',
+      },
+      columns: ['วันที่', 'รายละเอียด', 'จำนวนเงิน', 'ถอนเงิน', 'ฝากเงิน'],
+      sample_rows: [{ วันที่: '2026-01-01', รายละเอียด: 'โอนเงิน', จำนวนเงิน: '100.00' }],
+    })
     expect(confirmMapping).toHaveBeenCalledWith(
       'scb',
       {
@@ -209,6 +230,8 @@ describe('Step2Map analyst gate', () => {
             description: 'รายละเอียด',
           amount: 'จำนวนเงิน',
         },
+        sample_rows: [{ วันที่: '2026-01-01', รายละเอียด: 'โอนเงิน', จำนวนเงิน: '100.00' }],
+        promote_shared: false,
       },
     )
     expect(toast.success).toHaveBeenCalledWith('Saved and reinforced your correction')

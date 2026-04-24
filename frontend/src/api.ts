@@ -1,9 +1,16 @@
+const API_BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '').replace(/\/$/, '')
+
+async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const url = path.startsWith('http') ? path : `${API_BASE}${path}`
+  return globalThis.fetch(url, init)
+}
+
 export async function uploadFile(file: File, uploaded_by?: string, force_redetect?: boolean) {
   const fd = new FormData()
   fd.append('file', file)
   if (uploaded_by) fd.append('uploaded_by', uploaded_by)
   if (force_redetect) fd.append('force_redetect', '1')
-  const r = await fetch('/api/upload', { method: 'POST', body: fd })
+  const r = await apiFetch('/api/upload', { method: 'POST', body: fd })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -18,9 +25,11 @@ export async function confirmMapping(
     reviewer?: string
     detected_bank?: unknown
     suggested_mapping?: Record<string, string | null>
+    sample_rows?: Record<string, unknown>[]
+    promote_shared?: boolean
   },
 ) {
-  const r = await fetch('/api/mapping/confirm', {
+  const r = await apiFetch('/api/mapping/confirm', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -32,7 +41,24 @@ export async function confirmMapping(
       reviewer: context?.reviewer,
       detected_bank: context?.detected_bank,
       suggested_mapping: context?.suggested_mapping,
+      sample_rows: context?.sample_rows,
+      promote_shared: context?.promote_shared ?? false,
     }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export async function previewMapping(payload: {
+  bank: string
+  mapping: Record<string, string | null>
+  columns: string[]
+  sample_rows?: Record<string, unknown>[]
+}) {
+  const r = await apiFetch('/api/mapping/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
@@ -49,7 +75,7 @@ export async function startProcess(payload: {
   header_row?: number
   sheet_name?: string
 }) {
-  const r = await fetch('/api/process', {
+  const r = await apiFetch('/api/process', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -63,7 +89,7 @@ export async function processFolder(payload: {
   recursive: boolean
   operator?: string
 }) {
-  const r = await fetch('/api/process-folder', {
+  const r = await apiFetch('/api/process-folder', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -73,7 +99,7 @@ export async function processFolder(payload: {
 }
 
 export async function getJobStatus(jobId: string) {
-  const r = await fetch(`/api/job/${jobId}`)
+  const r = await apiFetch(`/api/job/${jobId}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -86,7 +112,7 @@ export async function getResults(account: string, page = 1, pageSize = 100, pars
   if (parserRunId) {
     params.set('parser_run_id', parserRunId)
   }
-  const r = await fetch(`/api/results/${account}?${params.toString()}`)
+  const r = await apiFetch(`/api/results/${account}?${params.toString()}`)
   if (!r.ok) throw new Error(await r.text())
   const payload = await r.json()
   if (!payload.rows && Array.isArray(payload.items)) {
@@ -101,7 +127,7 @@ export async function getResults(account: string, page = 1, pageSize = 100, pars
 export async function getResultsTimeline(account: string, parserRunId?: string | null) {
   const params = new URLSearchParams()
   if (parserRunId) params.set('parser_run_id', parserRunId)
-  const r = await fetch(`/api/results/${account}/timeline?${params.toString()}`)
+  const r = await apiFetch(`/api/results/${account}/timeline?${params.toString()}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -111,7 +137,7 @@ export async function getTimelineAggregate(params: Record<string, string | numbe
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== '') qs.set(k, String(v))
   }
-  const r = await fetch(`/api/transactions/timeline-aggregate?${qs.toString()}`)
+  const r = await apiFetch(`/api/transactions/timeline-aggregate?${qs.toString()}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -121,25 +147,25 @@ export async function getAlerts(params: Record<string, string | number | undefin
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== '') qs.set(k, String(v))
   }
-  const r = await fetch(`/api/alerts?${qs.toString()}`)
+  const r = await apiFetch(`/api/alerts?${qs.toString()}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getAlertSummary() {
-  const r = await fetch('/api/alerts/summary')
+  const r = await apiFetch('/api/alerts/summary')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getAlertConfig() {
-  const r = await fetch('/api/alerts/config')
+  const r = await apiFetch('/api/alerts/config')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function updateAlertConfig(config: Record<string, any>) {
-  const r = await fetch('/api/alerts/config', {
+  const r = await apiFetch('/api/alerts/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
@@ -149,7 +175,7 @@ export async function updateAlertConfig(config: Record<string, any>) {
 }
 
 export async function reviewAlert(alertId: string, status: string, reviewer: string = 'analyst', note: string = '') {
-  const r = await fetch(`/api/alerts/${alertId}/review`, {
+  const r = await apiFetch(`/api/alerts/${alertId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status, reviewer, note }),
@@ -159,7 +185,7 @@ export async function reviewAlert(alertId: string, status: string, reviewer: str
 }
 
 export async function generateAccountReport(account: string, parserRunId?: string, analyst = 'analyst') {
-  const r = await fetch('/api/reports/account', {
+  const r = await apiFetch('/api/reports/account', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ account, parser_run_id: parserRunId || '', analyst }),
@@ -175,7 +201,7 @@ export async function generateAccountReport(account: string, parserRunId?: strin
 }
 
 export async function generateCaseReport(accounts: string[], analyst = 'analyst') {
-  const r = await fetch('/api/reports/case', {
+  const r = await apiFetch('/api/reports/case', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ accounts, analyst }),
@@ -191,32 +217,32 @@ export async function generateCaseReport(accounts: string[], analyst = 'analyst'
 }
 
 export async function getAccountInsights(account: string) {
-  const r = await fetch(`/api/analytics/insights?account=${account}`)
+  const r = await apiFetch(`/api/analytics/insights?account=${account}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getSnaMetrics() {
-  const r = await fetch('/api/analytics/sna')
+  const r = await apiFetch('/api/analytics/sna')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getAccountProfile(accountId: string) {
-  const r = await fetch(`/api/accounts/${accountId}/profile`)
+  const r = await apiFetch(`/api/accounts/${accountId}/profile`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getAnnotations(nodeId?: string) {
   const qs = nodeId ? `?node_id=${nodeId}` : ''
-  const r = await fetch(`/api/annotations${qs}`)
+  const r = await apiFetch(`/api/annotations${qs}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function createAnnotation(nodeId: string, content: string, tag = '', createdBy = 'analyst') {
-  const r = await fetch('/api/annotations', {
+  const r = await apiFetch('/api/annotations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ node_id: nodeId, content, tag, type: tag ? 'tag' : 'note', created_by: createdBy }),
@@ -226,19 +252,19 @@ export async function createAnnotation(nodeId: string, content: string, tag = ''
 }
 
 export async function deleteAnnotation(annotationId: string) {
-  const r = await fetch(`/api/annotations/${annotationId}`, { method: 'DELETE' })
+  const r = await apiFetch(`/api/annotations/${annotationId}`, { method: 'DELETE' })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function listWorkspaces() {
-  const r = await fetch('/api/workspaces')
+  const r = await apiFetch('/api/workspaces')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function saveWorkspace(data: Record<string, any>) {
-  const r = await fetch('/api/workspaces', {
+  const r = await apiFetch('/api/workspaces', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -248,31 +274,31 @@ export async function saveWorkspace(data: Record<string, any>) {
 }
 
 export async function loadWorkspace(workspaceId: string) {
-  const r = await fetch(`/api/workspaces/${workspaceId}`)
+  const r = await apiFetch(`/api/workspaces/${workspaceId}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function deleteWorkspace(workspaceId: string) {
-  const r = await fetch(`/api/workspaces/${workspaceId}`, { method: 'DELETE' })
+  const r = await apiFetch(`/api/workspaces/${workspaceId}`, { method: 'DELETE' })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getAccountFlows(account: string) {
-  const r = await fetch(`/api/fund-flow/${account}`)
+  const r = await apiFetch(`/api/fund-flow/${account}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getMatchedTransactions(accountA: string, accountB: string) {
-  const r = await fetch(`/api/fund-flow/${accountA}/to/${accountB}`)
+  const r = await apiFetch(`/api/fund-flow/${accountA}/to/${accountB}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function traceFundPath(from: string, to: string, maxHops = 4) {
-  const r = await fetch(`/api/fund-flow/trace?from_account=${from}&to_account=${to}&max_hops=${maxHops}`)
+  const r = await apiFetch(`/api/fund-flow/trace?from_account=${from}&to_account=${to}&max_hops=${maxHops}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -280,13 +306,13 @@ export async function traceFundPath(from: string, to: string, maxHops = 4) {
 // ── LLM ──────────────────────────────────────────────────────────────────
 
 export async function getLlmStatus() {
-  const r = await fetch('/api/llm/status')
+  const r = await apiFetch('/api/llm/status')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function llmChat(message: string, opts?: { account?: string; transactions?: any[]; model?: string }) {
-  const r = await fetch('/api/llm/chat', {
+  const r = await apiFetch('/api/llm/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, ...opts }),
@@ -296,7 +322,7 @@ export async function llmChat(message: string, opts?: { account?: string; transa
 }
 
 export async function llmSummarize(transactions: any[], account?: string, model?: string) {
-  const r = await fetch('/api/llm/summarize', {
+  const r = await apiFetch('/api/llm/summarize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ transactions, account, model }),
@@ -306,13 +332,13 @@ export async function llmSummarize(transactions: any[], account?: string, model?
 }
 
 export async function getDashboard() {
-  const r = await fetch('/api/dashboard')
+  const r = await apiFetch('/api/dashboard')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function annotateTransaction(transactionId: string, note: string, reviewer = 'analyst') {
-  const r = await fetch(`/api/transactions/${transactionId}/annotate`, {
+  const r = await apiFetch(`/api/transactions/${transactionId}/annotate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ note, reviewer }),
@@ -322,31 +348,31 @@ export async function annotateTransaction(transactionId: string, note: string, r
 }
 
 export async function getAuditTrail(objectType: string, objectId: string) {
-  const r = await fetch(`/api/audit-trail/${objectType}/${objectId}`)
+  const r = await apiFetch(`/api/audit-trail/${objectType}/${objectId}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getFiles() {
-  const r = await fetch('/api/files')
+  const r = await apiFetch('/api/files')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getDbStatus() {
-  const r = await fetch('/api/admin/db-status')
+  const r = await apiFetch('/api/admin/db-status')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getDatabaseBackups() {
-  const r = await fetch('/api/admin/backups')
+  const r = await apiFetch('/api/admin/backups')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getDatabaseBackupSettings() {
-  const r = await fetch('/api/admin/backup-settings')
+  const r = await apiFetch('/api/admin/backup-settings')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -359,7 +385,7 @@ export async function updateDatabaseBackupSettings(payload: {
   retain_count: number
   updated_by?: string
 }) {
-  const r = await fetch('/api/admin/backup-settings', {
+  const r = await apiFetch('/api/admin/backup-settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -369,13 +395,13 @@ export async function updateDatabaseBackupSettings(payload: {
 }
 
 export async function getDatabaseBackupPreview(backupName: string) {
-  const r = await fetch(`/api/admin/backups/${encodeURIComponent(backupName)}/preview`)
+  const r = await apiFetch(`/api/admin/backups/${encodeURIComponent(backupName)}/preview`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function createDatabaseBackup(payload: { operator?: string; note?: string; backup_format?: string }) {
-  const r = await fetch('/api/admin/backup', {
+  const r = await apiFetch('/api/admin/backup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -385,7 +411,7 @@ export async function createDatabaseBackup(payload: { operator?: string; note?: 
 }
 
 export async function resetDatabase(payload: { confirm_text: string; operator?: string; note?: string; create_pre_reset_backup?: boolean }) {
-  const r = await fetch('/api/admin/reset', {
+  const r = await apiFetch('/api/admin/reset', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -395,7 +421,7 @@ export async function resetDatabase(payload: { confirm_text: string; operator?: 
 }
 
 export async function restoreDatabase(payload: { backup_filename: string; confirm_text: string; operator?: string; note?: string; create_pre_restore_backup?: boolean }) {
-  const r = await fetch('/api/admin/restore', {
+  const r = await apiFetch('/api/admin/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -405,26 +431,26 @@ export async function restoreDatabase(payload: { backup_filename: string; confir
 }
 
 export async function getFileDetail(fileId: string) {
-  const r = await fetch(`/api/files/${fileId}`)
+  const r = await apiFetch(`/api/files/${fileId}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getParserRuns(fileId?: string) {
   const suffix = fileId ? `?file_id=${encodeURIComponent(fileId)}` : ''
-  const r = await fetch(`/api/parser-runs${suffix}`)
+  const r = await apiFetch(`/api/parser-runs${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getParserRunDetail(parserRunId: string) {
-  const r = await fetch(`/api/parser-runs/${parserRunId}`)
+  const r = await apiFetch(`/api/parser-runs/${parserRunId}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function reprocessParserRun(parserRunId: string, payload: { reviewer: string; reviewer_note?: string; decision_value: string }) {
-  const r = await fetch(`/api/parser-runs/${parserRunId}/reprocess`, {
+  const r = await apiFetch(`/api/parser-runs/${parserRunId}/reprocess`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -435,7 +461,7 @@ export async function reprocessParserRun(parserRunId: string, payload: { reviewe
 
 export async function getAccounts(q = '') {
   const suffix = q ? `?q=${encodeURIComponent(q)}` : ''
-  const r = await fetch(`/api/accounts${suffix}`)
+  const r = await apiFetch(`/api/accounts${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -444,13 +470,13 @@ export async function lookupRememberedAccountName(params: { account: string; ban
   const search = new URLSearchParams()
   search.set('account', params.account)
   if (params.bank_key) search.set('bank_key', params.bank_key)
-  const r = await fetch(`/api/accounts/remembered-name?${search.toString()}`)
+  const r = await apiFetch(`/api/accounts/remembered-name?${search.toString()}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getAccountDetail(accountId: string) {
-  const r = await fetch(`/api/accounts/${accountId}`)
+  const r = await apiFetch(`/api/accounts/${accountId}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -460,25 +486,25 @@ export async function searchTransactionRecords(params: Record<string, string | n
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
   })
-  const r = await fetch(`/api/transactions/search?${search.toString()}`)
+  const r = await apiFetch(`/api/transactions/search?${search.toString()}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getTransactionDetail(transactionId: string) {
-  const r = await fetch(`/api/transactions/${transactionId}`)
+  const r = await apiFetch(`/api/transactions/${transactionId}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getDuplicates() {
-  const r = await fetch('/api/duplicates')
+  const r = await apiFetch('/api/duplicates')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function reviewDuplicate(groupId: string, payload: { decision_value: string; reviewer: string; reviewer_note?: string }) {
-  const r = await fetch(`/api/duplicates/${groupId}/review`, {
+  const r = await apiFetch(`/api/duplicates/${groupId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -489,13 +515,13 @@ export async function reviewDuplicate(groupId: string, payload: { decision_value
 
 export async function getMatches(status = '') {
   const suffix = status ? `?status=${encodeURIComponent(status)}` : ''
-  const r = await fetch(`/api/matches${suffix}`)
+  const r = await apiFetch(`/api/matches${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function reviewMatch(matchId: string, payload: { decision_value: string; reviewer: string; reviewer_note?: string }) {
-  const r = await fetch(`/api/matches/${matchId}/review`, {
+  const r = await apiFetch(`/api/matches/${matchId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -505,7 +531,7 @@ export async function reviewMatch(matchId: string, payload: { decision_value: st
 }
 
 export async function reviewTransaction(transactionId: string, payload: { reviewer: string; reason?: string; changes: Record<string, any> }) {
-  const r = await fetch(`/api/transactions/${transactionId}/review`, {
+  const r = await apiFetch(`/api/transactions/${transactionId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -515,7 +541,7 @@ export async function reviewTransaction(transactionId: string, payload: { review
 }
 
 export async function reviewAccount(accountId: string, payload: { reviewer: string; reason?: string; changes: Record<string, any> }) {
-  const r = await fetch(`/api/accounts/${accountId}/review`, {
+  const r = await apiFetch(`/api/accounts/${accountId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -530,7 +556,7 @@ export async function getAuditLogs(params: Record<string, string | number | unde
     if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
   })
   const suffix = search.toString() ? `?${search.toString()}` : ''
-  const r = await fetch(`/api/audit-logs${suffix}`)
+  const r = await apiFetch(`/api/audit-logs${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -541,13 +567,13 @@ export async function getLearningFeedbackLogs(params: Record<string, string | nu
     if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
   })
   const suffix = search.toString() ? `?${search.toString()}` : ''
-  const r = await fetch(`/api/learning-feedback${suffix}`)
+  const r = await apiFetch(`/api/learning-feedback${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getExportJobs() {
-  const r = await fetch('/api/export-jobs')
+  const r = await apiFetch('/api/export-jobs')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -558,7 +584,7 @@ export async function getGraphAnalysis(params: Record<string, string | number | 
     if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
   })
   const suffix = search.toString() ? `?${search.toString()}` : ''
-  const r = await fetch(`/api/graph-analysis${suffix}`)
+  const r = await apiFetch(`/api/graph-analysis${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -569,7 +595,7 @@ export async function getGraphNodes(params: Record<string, string | number | boo
     if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
   })
   const suffix = search.toString() ? `?${search.toString()}` : ''
-  const r = await fetch(`/api/graph/nodes${suffix}`)
+  const r = await apiFetch(`/api/graph/nodes${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -580,7 +606,7 @@ export async function getGraphEdges(params: Record<string, string | number | boo
     if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
   })
   const suffix = search.toString() ? `?${search.toString()}` : ''
-  const r = await fetch(`/api/graph/edges${suffix}`)
+  const r = await apiFetch(`/api/graph/edges${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -591,7 +617,7 @@ export async function getGraphDerivedEdges(params: Record<string, string | numbe
     if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
   })
   const suffix = search.toString() ? `?${search.toString()}` : ''
-  const r = await fetch(`/api/graph/derived-edges${suffix}`)
+  const r = await apiFetch(`/api/graph/derived-edges${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -602,7 +628,7 @@ export async function getGraphFindings(params: Record<string, string | number | 
     if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
   })
   const suffix = search.toString() ? `?${search.toString()}` : ''
-  const r = await fetch(`/api/graph/findings${suffix}`)
+  const r = await apiFetch(`/api/graph/findings${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -613,19 +639,19 @@ export async function getGraphNeighborhood(nodeId: string, params: Record<string
     if (value !== undefined && value !== null && `${value}` !== '') search.set(key, `${value}`)
   })
   const suffix = search.toString() ? `?${search.toString()}` : ''
-  const r = await fetch(`/api/graph/neighborhood/${encodeURIComponent(nodeId)}${suffix}`)
+  const r = await apiFetch(`/api/graph/neighborhood/${encodeURIComponent(nodeId)}${suffix}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getGraphNeo4jStatus() {
-  const r = await fetch('/api/graph/neo4j-status')
+  const r = await apiFetch('/api/graph/neo4j-status')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function syncGraphToNeo4j(payload: { include_findings?: boolean; limit?: number; filters?: Record<string, any> }) {
-  const r = await fetch('/api/graph/neo4j-sync', {
+  const r = await apiFetch('/api/graph/neo4j-sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -635,7 +661,7 @@ export async function syncGraphToNeo4j(payload: { include_findings?: boolean; li
 }
 
 export async function createExportJob(payload: { export_type: string; filters?: Record<string, any>; created_by?: string }) {
-  const r = await fetch('/api/exports', {
+  const r = await apiFetch('/api/exports', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -645,31 +671,31 @@ export async function createExportJob(payload: { export_type: string; filters?: 
 }
 
 export async function getBulkAnalytics(runId: string) {
-  const r = await fetch(`/api/bulk/${runId}/analytics`)
+  const r = await apiFetch(`/api/bulk/${runId}/analytics`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getBanks() {
-  const r = await fetch('/api/banks')
+  const r = await apiFetch('/api/banks')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getBankLogoCatalog() {
-  const r = await fetch('/api/bank-logo-catalog')
+  const r = await apiFetch('/api/bank-logo-catalog')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function getBank(key: string) {
-  const r = await fetch(`/api/banks/${key}`)
+  const r = await apiFetch(`/api/banks/${key}`)
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
 export async function createBank(payload: Record<string, any>) {
-  const r = await fetch('/api/banks', {
+  const r = await apiFetch('/api/banks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -679,7 +705,7 @@ export async function createBank(payload: Record<string, any>) {
 }
 
 export async function deleteBank(key: string) {
-  const r = await fetch(`/api/banks/${key}`, { method: 'DELETE' })
+  const r = await apiFetch(`/api/banks/${key}`, { method: 'DELETE' })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -692,7 +718,7 @@ export async function learnBank(payload: {
   confirmed_mapping: Record<string, string | null>
   all_columns: string[]
 }) {
-  const r = await fetch('/api/banks/learn', {
+  const r = await apiFetch('/api/banks/learn', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -709,7 +735,7 @@ export async function saveOverride(payload: {
   reason: string
   override_by: string
 }) {
-  const r = await fetch('/api/override', {
+  const r = await apiFetch('/api/override', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -726,7 +752,7 @@ export async function saveOverride(payload: {
 }
 
 export async function getOverrides() {
-  const r = await fetch('/api/overrides')
+  const r = await apiFetch('/api/overrides')
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
@@ -735,7 +761,7 @@ export async function deleteOverride(transactionId: string, accountNumber: strin
   const params = new URLSearchParams()
   if (accountNumber) params.set('account_number', accountNumber)
   if (operator) params.set('operator', operator)
-  const r = await fetch(`/api/override/${encodeURIComponent(transactionId)}?${params.toString()}`, {
+  const r = await apiFetch(`/api/override/${encodeURIComponent(transactionId)}?${params.toString()}`, {
     method: 'DELETE',
   })
   if (!r.ok) throw new Error(await r.text())

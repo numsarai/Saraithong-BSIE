@@ -157,9 +157,37 @@ def repair_suggested_mapping(
         repaired["debit"] = None
         repaired["credit"] = None
 
+    _restore_auto_amount_pair(repaired, auto_suggested, available_columns)
+    _restore_auto_time_description_swap(repaired, auto_suggested, available_columns)
     _prefer_curated_balance_column(repaired, available_columns)
 
     return repaired
+
+
+def _restore_auto_amount_pair(mapping: dict, auto_suggested: dict, available_columns: list[str]) -> None:
+    """Prefer deterministic debit/credit columns over stale learned profiles."""
+    auto_debit = auto_suggested.get("debit")
+    auto_credit = auto_suggested.get("credit")
+    if auto_debit not in available_columns or auto_credit not in available_columns:
+        return
+    if mapping.get("debit") == auto_debit and mapping.get("credit") == auto_credit:
+        return
+
+    mapping["debit"] = auto_debit
+    mapping["credit"] = auto_credit
+    mapping["amount"] = None
+    mapping["direction_marker"] = None
+
+
+def _restore_auto_time_description_swap(mapping: dict, auto_suggested: dict, available_columns: list[str]) -> None:
+    """Repair obvious stale-profile swaps between time and description fields."""
+    auto_time = auto_suggested.get("time")
+    auto_description = auto_suggested.get("description")
+    if auto_time not in available_columns or auto_description not in available_columns:
+        return
+    if mapping.get("time") == auto_description and mapping.get("description") == auto_time:
+        mapping["time"] = auto_time
+        mapping["description"] = auto_description
 
 
 def _normalized_column_key(value: object) -> str:

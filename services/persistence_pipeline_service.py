@@ -563,11 +563,12 @@ def persist_pipeline_run(
 
         # Generate alerts from graph analysis findings
         try:
-            from core.graph_analysis import build_graph_analysis
+            from services.graph_analysis_service import get_graph_analysis
             from services.alert_service import process_findings
-            graph_result = build_graph_analysis(
+
+            graph_result = get_graph_analysis(
                 session,
-                account=subject_account,
+                parser_run_id=parser_run_id,
                 limit=2000,
             )
             findings = graph_result.get("suspicious_findings", [])

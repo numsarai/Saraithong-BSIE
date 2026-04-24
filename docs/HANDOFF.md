@@ -10,10 +10,90 @@
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
 - **Baseline:** backend `397 passed`, frontend `54 passed`, frontend build passed without Vite chunk-size warning
-- **Auth/DB:** local JWT auth required (`BSIE_AUTH_REQUIRED=true`) + clean local SQLite WAL (`bsie.db`); admin credential rotated for local login recovery
+- **Auth/DB:** local JWT auth required (`BSIE_AUTH_REQUIRED=true`) + local SQLite WAL (`bsie.db`) now contains one processed real test statement
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Admin Credential Recovery
+## Done (latest session) — Mapping Profile Guard and KBANK Reprocess
+
+### What I changed
+- Investigated why the latest processed KBANK statement produced only inbound transactions.
+- Root cause: a stale learned mapping profile overrode deterministic auto-detection and mapped `debit` to `IP Address` instead of `ถอนเงิน`; it also swapped `description`/`time`.
+- Added mapping repair guardrails so profile-assisted suggestions restore deterministic `debit`/`credit` when auto-detection finds an explicit debit/credit pair.
+- Added repair for obvious stale-profile `time`/`description` swaps.
+- Added mapping confirmation validation that rejects suspicious amount mappings when sample rows show a likely debit/credit column with numeric transaction amounts while the mapped column has none.
+- Fixed non-fatal alert generation after persistence by calling the DB-backed graph analysis service with `parser_run_id` instead of calling `core.graph_analysis.build_graph_analysis()` with unsupported DB/session arguments.
+- Reprocessed the affected KBANK file with the corrected mapping.
+
+### Current local database state
+- Latest active parser run for the KBANK file:
+  - `parser_run_id=17b77946-2690-4be3-a5e6-4954b3798f3a`
+  - `status=done`
+  - `transaction_count=1595`
+  - directions: `IN=620`, `OUT=975`
+  - alerts generated: `165`
+- Prior faulty/repair runs for the same file are `superseded`:
+  - `f6a2c23d-b839-4468-a26a-156def476b0e` had `620` transactions from the bad debit mapping
+  - `a082ed9c-1672-4c93-8440-bd3849890bbb` was an intermediate corrected run
+- Reprocessing cleanup worked: current DB has one active statement batch and no duplicate accumulation from the superseded runs.
+- Data Hygiene Audit is now `review_required` with `0` blockers and `1` warning:
+  - warning: the processed real test filename contains `ใช้ทดสอบ`, which matches sample/test-like filename heuristics
+  - info: one uploaded file has not produced a parser run yet
+- Key counts after reprocess:
+  - `files=2`
+  - `parser_runs=3`
+  - `statement_batches=1`
+  - `raw_import_rows=1596`
+  - `accounts=292`
+  - `transactions=1595`
+  - `transaction_matches=2922`
+  - `alerts=165`
+
+### Files changed
+- `utils/app_helpers.py`
+- `services/mapping_validation_service.py`
+- `services/persistence_pipeline_service.py`
+- `tests/test_app_helpers.py`
+- `tests/test_mapping_validation_service.py`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `397 passed`
+  - `npm test -- --run` in `frontend/` -> `54 passed`
+- Focused:
+  - `.venv/bin/python -m pytest tests/test_app_helpers.py tests/test_mapping_validation_service.py -q` -> `5 passed`
+  - `.venv/bin/python -m py_compile services/persistence_pipeline_service.py utils/app_helpers.py services/mapping_validation_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_app_helpers.py tests/test_mapping_validation_service.py tests/test_persistence_platform.py::test_ofx_pipeline_persists_parser_run_batch_and_transactions -q` -> `6 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `397 passed`
+  - `npm test -- --run` in `frontend/` -> `54 passed`
+- Runtime verification:
+  - backend restarted on `127.0.0.1:8757`
+  - frontend remains on `127.0.0.1:6777`
+  - reprocess job completed with `1595` transactions, `IN=620`, `OUT=975`
+  - prior faulty run marked `superseded`
+  - alert generation now completes: `165` alerts generated from `165` findings
+
+### Decisions made
+- No new architectural decision. This was a correctness fix for stale mapping-memory suggestions and persistence-time alert generation.
+
+### Warnings / Next
+- The current browser tab may still hold the old superseded `parser_run_id=f6a2c23d-b839-4468-a26a-156def476b0e`; reload or return through the latest result/job context to view run `17b77946-2690-4be3-a5e6-4954b3798f3a`.
+- Data hygiene warning is expected while the real test file still has `ใช้ทดสอบ` in its filename. Do not reset the DB solely for this warning unless the operator wants a clean live-case repository again.
+- There is one uploaded but unprocessed file in the DB; decide later whether to process it, leave it as intake evidence, or remove it through an explicit operator cleanup flow.
+- Next useful slice: expose a clearer UI warning when a memory profile is repaired by safety guardrails, so investigators see why a remembered mapping was not used verbatim.
+
+### Failed attempts
+- Initial backend restart command used `python -m uvicorn` after activation, but this shell did not expose `python`; restarted successfully with `.venv/bin/python -m uvicorn`.
+
+### Environment changes
+- Backend restarted in tmux session `bsie-backend-dev`.
+- Added runtime log file `logs/backend-dev.log` locally.
+- Local DB now contains the corrected processed KBANK statement and generated alerts.
+- No dependencies installed.
+
+## Done (previous session) — Admin Credential Recovery
 
 ### What I changed
 - Rotated the local admin password for username `numsarai` after the operator could not remember the login credential.

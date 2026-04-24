@@ -8,6 +8,11 @@ from utils.date_utils import parse_date, parse_time
 from utils.text_utils import normalize_text
 
 
+AMOUNT_COLUMN_HINTS = {
+    "debit": ("ถอน", "เดบิต", "debit", "withdraw", "withdrawal", "dr", "เงินออก", "outgoing"),
+    "credit": ("ฝาก", "เครดิต", "credit", "deposit", "cr", "เงินเข้า", "incoming"),
+}
+
 MAPPING_FIELDS = {
     "date",
     "time",
@@ -303,6 +308,17 @@ def validate_and_preview_mapping(
     sample_rows: list[dict[str, Any]] | None = None,
 ) -> dict:
     validation = validate_mapping(mapping, columns, bank=bank)
+    amount_sample_errors = _amount_sample_sanity_errors(
+        validation["mapping"],
+        validation["columns"],
+        sample_rows or [],
+    )
+    if amount_sample_errors:
+        validation = {
+            **validation,
+            "errors": [*validation["errors"], *amount_sample_errors],
+            "ok": False,
+        }
     preview = build_mapping_preview(validation["mapping"], sample_rows or [])
     return {
         **validation,
@@ -343,3 +359,62 @@ def _preview_amount(
     if not debit and not credit:
         return None
     return round(credit - debit, 6)
+
+
+def _amount_sample_sanity_errors(
+    mapping: dict[str, str | None],
+    columns: list[str],
+    sample_rows: list[dict[str, Any]],
+) -> list[dict]:
+    if not sample_rows or not mapping.get("debit") or not mapping.get("credit"):
+        return []
+
+    errors: list[dict] = []
+    for field in ("debit", "credit"):
+        mapped_column = mapping.get(field)
+        if not mapped_column:
+            continue
+        mapped_nonzero = _nonzero_numeric_count(sample_rows, mapped_column)
+        if mapped_nonzero:
+            continue
+
+        candidate = _best_amount_hint_column(field, columns, exclude=mapped_column)
+        if not candidate:
+            continue
+        candidate_nonzero = _nonzero_numeric_count(sample_rows, candidate)
+        if not candidate_nonzero:
+            continue
+
+        errors.append(
+            _issue(
+                "suspicious_amount_column",
+                f"Mapped '{field}' column '{mapped_column}' has no numeric values in the sample, "
+                f"but likely column '{candidate}' has transaction amounts.",
+                field=field,
+                column=mapped_column,
+            )
+        )
+
+    return errors
+
+
+def _best_amount_hint_column(field: str, columns: list[str], *, exclude: str) -> str:
+    hints = AMOUNT_COLUMN_HINTS.get(field, ())
+    for column in columns:
+        if column == exclude:
+            continue
+        normalized = normalize_text(column).lower()
+        if any(hint in normalized for hint in hints):
+            return column
+    return ""
+
+
+def _nonzero_numeric_count(sample_rows: list[dict[str, Any]], column: str) -> int:
+    count = 0
+    for row in sample_rows:
+        if not isinstance(row, dict):
+            continue
+        amount = _clean_amount(row.get(column))
+        if amount:
+            count += 1
+    return count

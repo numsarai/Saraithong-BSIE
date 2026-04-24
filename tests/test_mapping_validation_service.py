@@ -62,3 +62,49 @@ def test_validate_mapping_requires_amount_for_direction_marker():
 
     assert result["ok"] is False
     assert any(issue["code"] == "direction_marker_requires_amount" for issue in result["errors"])
+
+
+def test_validate_mapping_rejects_stale_debit_column_when_sample_shows_debits():
+    result = validate_and_preview_mapping(
+        bank="kbank",
+        mapping={
+            "date": "วันที่ทำรายการ",
+            "description": "ประเภทรายการ",
+            "time": "เวลาที่ทำรายการ",
+            "debit": "IP Address",
+            "credit": "ฝากเงิน",
+            "balance": "ยอดเงินคงเหลือ",
+        },
+        columns=[
+            "วันที่ทำรายการ",
+            "เวลาที่ทำรายการ",
+            "ประเภทรายการ",
+            "ถอนเงิน",
+            "ฝากเงิน",
+            "ยอดเงินคงเหลือ",
+            "IP Address",
+        ],
+        sample_rows=[
+            {
+                "วันที่ทำรายการ": "07/07/2567",
+                "เวลาที่ทำรายการ": "22:34:24",
+                "ประเภทรายการ": "โอนเงิน",
+                "ถอนเงิน": "300",
+                "ฝากเงิน": "0",
+                "ยอดเงินคงเหลือ": "1200",
+                "IP Address": "",
+            },
+            {
+                "วันที่ทำรายการ": "07/07/2567",
+                "เวลาที่ทำรายการ": "22:40:24",
+                "ประเภทรายการ": "รับโอนเงิน",
+                "ถอนเงิน": "0",
+                "ฝากเงิน": "1200",
+                "ยอดเงินคงเหลือ": "2400",
+                "IP Address": "",
+            },
+        ],
+    )
+
+    assert result["ok"] is False
+    assert any(issue["code"] == "suspicious_amount_column" and issue["field"] == "debit" for issue in result["errors"])

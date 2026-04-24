@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BrainCircuit, FileText, ListChecks, Loader2, ScrollText, Send, ShieldAlert, ShieldCheck, Sparkles, Target } from 'lucide-react'
-import { askCopilot, getCaseTagDetail, listCaseTags, previewClassification, searchTransactionRecords, type CaseTagDetail, type CaseTagItem, type CaseTagLinkedObject } from '@/api'
+import { askCopilot, getCaseTagDetail, listCaseTags, previewClassification, reviewTransaction, searchTransactionRecords, type CaseTagDetail, type CaseTagItem, type CaseTagLinkedObject } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -136,6 +136,25 @@ function toClassificationPreviewTransaction(row: ScopedTransactionRow, index: nu
   }
 }
 
+function classificationSuggestionChanges(item: any) {
+  const changes: Record<string, string> = {}
+  const currentType = textValue(item.current?.transaction_type)
+  const suggestedType = textValue(item.suggested?.transaction_type)
+  if (suggestedType && suggestedType !== currentType) {
+    changes.transaction_type = suggestedType
+  }
+  const currentName = textValue(item.current?.counterparty_name)
+  const suggestedName = textValue(item.suggested?.counterparty_name)
+  if (suggestedName && suggestedName !== currentName) {
+    changes.counterparty_name_normalized = suggestedName
+  }
+  return changes
+}
+
+function classificationSuggestionCanApply(item: any) {
+  return Boolean(item?.would_apply && Object.keys(classificationSuggestionChanges(item)).length > 0)
+}
+
 function caseTagCountLabel(tag: CaseTagItem, linkedLabel: string) {
   const counts = Object.entries(tag.linked_object_counts || {})
     .filter(([, count]) => Number(count) > 0)
@@ -176,6 +195,11 @@ export function CopilotTab({
   const [selectedScopedClassificationKeys, setSelectedScopedClassificationKeys] = useState<string[]>([])
   const [hasLoadedScopedClassificationRows, setHasLoadedScopedClassificationRows] = useState(false)
   const [isLoadingScopedClassificationRows, setIsLoadingScopedClassificationRows] = useState(false)
+  const [selectedClassificationSuggestionIds, setSelectedClassificationSuggestionIds] = useState<string[]>([])
+  const [classificationApplyReason, setClassificationApplyReason] = useState('')
+  const [classificationApplyError, setClassificationApplyError] = useState('')
+  const [classificationApplyResult, setClassificationApplyResult] = useState<any>(null)
+  const [isApplyingClassificationSuggestions, setIsApplyingClassificationSuggestions] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -281,6 +305,12 @@ export function CopilotTab({
     setSelectedScopedClassificationKeys([])
     setHasLoadedScopedClassificationRows(false)
   }, [scope.account, scope.file_id, scope.parser_run_id])
+
+  useEffect(() => {
+    setSelectedClassificationSuggestionIds([])
+    setClassificationApplyError('')
+    setClassificationApplyResult(null)
+  }, [classificationPreview])
 
   const selectCaseTag = (caseTagId: string) => {
     const tag = caseTags.find((item) => item.id === caseTagId)
@@ -404,6 +434,40 @@ export function CopilotTab({
   }
 
   const previewItems = Array.isArray(classificationPreview?.items) ? classificationPreview.items.slice(0, 10) : []
+  const canApplyClassificationPreview = classificationPreview?.preview_input === 'selected'
+  const applicablePreviewItems = previewItems.filter(classificationSuggestionCanApply)
+  const selectedApplicablePreviewItems = applicablePreviewItems.filter((item: any) => selectedClassificationSuggestionIds.includes(item.transaction_id))
+
+  const toggleClassificationSuggestion = (transactionId: string) => {
+    setSelectedClassificationSuggestionIds((state) => (
+      state.includes(transactionId) ? state.filter((item) => item !== transactionId) : [...state, transactionId]
+    ))
+  }
+
+  const applySelectedClassificationSuggestions = async () => {
+    const reason = classificationApplyReason.trim()
+    if (!selectedApplicablePreviewItems.length || !reason) return
+    setIsApplyingClassificationSuggestions(true)
+    setClassificationApplyError('')
+    setClassificationApplyResult(null)
+    try {
+      const applied: string[] = []
+      for (const item of selectedApplicablePreviewItems) {
+        await reviewTransaction(item.transaction_id, {
+          reviewer: operatorName || 'analyst',
+          reason,
+          changes: classificationSuggestionChanges(item),
+        })
+        applied.push(item.transaction_id)
+      }
+      setClassificationApplyResult({ status: 'ok', applied_count: applied.length, transaction_ids: applied })
+      setSelectedClassificationSuggestionIds([])
+    } catch (err: any) {
+      setClassificationApplyError(err.message || String(err))
+    } finally {
+      setIsApplyingClassificationSuggestions(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -779,6 +843,18 @@ export function CopilotTab({
             {previewItems.map((previewItem: any) => (
               <div key={previewItem.transaction_id} className="space-y-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
                 <div className="flex flex-wrap items-center gap-2">
+                  {canApplyClassificationPreview && classificationSuggestionCanApply(previewItem) && (
+                    <label className="flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs font-semibold text-text">
+                      <input
+                        type="checkbox"
+                        aria-label={t('investigation.copilot.selectClassificationSuggestion', { id: previewItem.transaction_id })}
+                        checked={selectedClassificationSuggestionIds.includes(previewItem.transaction_id)}
+                        onChange={() => toggleClassificationSuggestion(previewItem.transaction_id)}
+                        className="h-4 w-4 rounded border-border bg-surface"
+                      />
+                      {t('investigation.copilot.classificationSuggestionApplyCandidate')}
+                    </label>
+                  )}
                   <Badge variant={previewItem.review_required ? 'yellow' : 'green'}>{previewItem.action}</Badge>
                   <Badge variant="blue">{classificationPreview.model || 'local'}</Badge>
                   <span className="font-mono text-xs text-muted">{previewItem.transaction_id}</span>
@@ -805,6 +881,55 @@ export function CopilotTab({
                 </div>
               </div>
             ))}
+            {canApplyClassificationPreview && applicablePreviewItems.length > 0 && (
+              <div className="space-y-3 rounded-md border border-border bg-surface p-3">
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-text">{t('investigation.copilot.classificationApplyReview')}</div>
+                    <div className="text-xs text-muted">
+                      {t('investigation.copilot.classificationApplySummary', {
+                        selected: selectedApplicablePreviewItems.length,
+                        total: applicablePreviewItems.length,
+                      })}
+                    </div>
+                  </div>
+                  <Badge variant="blue">{operatorName || 'analyst'}</Badge>
+                </div>
+                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                  {t('investigation.copilot.classificationApplyReason')}
+                  <textarea
+                    value={classificationApplyReason}
+                    onChange={(event) => setClassificationApplyReason(event.target.value)}
+                    placeholder={t('investigation.copilot.classificationApplyReasonPlaceholder')}
+                    rows={3}
+                    className="min-h-[84px] resize-y rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+                  />
+                </label>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={applySelectedClassificationSuggestions}
+                    disabled={isApplyingClassificationSuggestions || selectedApplicablePreviewItems.length === 0 || !classificationApplyReason.trim()}
+                  >
+                    {isApplyingClassificationSuggestions ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                    {isApplyingClassificationSuggestions
+                      ? t('investigation.copilot.applyingClassificationSuggestions')
+                      : t('investigation.copilot.applySelectedClassificationSuggestions')}
+                  </Button>
+                </div>
+                {classificationApplyError && (
+                  <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+                    {classificationApplyError}
+                  </div>
+                )}
+                {classificationApplyResult && (
+                  <div className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
+                    {t('investigation.copilot.classificationApplyDone', {
+                      count: Number(classificationApplyResult.applied_count || 0),
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </Card>

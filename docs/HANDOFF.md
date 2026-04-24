@@ -13,7 +13,54 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Scoped Classification Transaction Picker
+## Done (latest session) — Audited Classification Suggestion Apply
+
+### What I changed
+- Added a Review and Apply workflow under AI Copilot Evidence classification preview results.
+- Apply controls only appear for selected scoped transaction preview results, not for manual one-off preview.
+- Analysts must select individual suggestions and enter an apply reason before saving.
+- The workflow sends explicit `transaction_type` and/or `counterparty_name_normalized` changes through the existing audited `POST /api/transactions/{transaction_id}/review` path.
+- Added English/Thai labels, frontend regression coverage for reviewer/reason/changes payloads, DEC-047, and roadmap status.
+
+### Files changed
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `391 passed`
+  - `npm test -- --run` in `frontend/` -> `50 passed`
+- Focused:
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `8 passed`
+  - `npm run build` in `frontend/` -> passed
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `391 passed`
+  - `npm test -- --run` in `frontend/` -> `51 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-047: classification suggestions apply through audited transaction review.
+- Preview remains read-only; mutation is deliberately routed through the existing review/audit contract.
+
+### Warnings / Next
+- This applies only selected preview suggestions from scoped persisted transactions. Manual preview remains non-applicable to avoid saving fake/manual transaction ids.
+- The apply path does not yet provide batch undo/history UI beyond the existing audit and review-decision records.
+- Next useful slice: refresh scoped transaction rows after apply and/or add a compact applied-history panel for batch suggestion review.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but generated dist files remain untracked.
+
+## Done (previous session) — Scoped Classification Transaction Picker
 
 ### What I changed
 - Replaced the primary Evidence UI scoped classification flow with a transparent load -> select -> preview workflow.

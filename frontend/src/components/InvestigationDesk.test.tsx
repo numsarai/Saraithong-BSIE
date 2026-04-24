@@ -285,7 +285,7 @@ vi.mock('@/api', () => ({
   searchTransactionRecords: vi.fn(async () => ({ items: [] })),
 }))
 
-const { askCopilot, createExportJob, getAuditLogs, getLearningFeedbackLogs, previewClassification, searchTransactionRecords } = await import('@/api')
+const { askCopilot, createExportJob, getAuditLogs, getLearningFeedbackLogs, previewClassification, reviewTransaction, searchTransactionRecords } = await import('@/api')
 const { useStore } = await import('@/store')
 
 vi.mock('sonner', () => ({
@@ -521,5 +521,74 @@ describe('InvestigationDesk date formatting', () => {
       ],
     }))
     expect(await screen.findByText('review_divergence')).toBeInTheDocument()
+  })
+
+  it('applies selected classification suggestions through the audited review endpoint', async () => {
+    vi.mocked(searchTransactionRecords).mockResolvedValueOnce({
+      items: [
+        {
+          id: 'TXN-SCOPE-1',
+          parser_run_id: 'RUN-1',
+          transaction_datetime: '2026-01-01T08:00:00Z',
+          amount: -900,
+          direction: 'OUT',
+          description_normalized: 'ATM WDL 1234567890',
+          transaction_type: 'OUT_TRANSFER',
+          confidence: 0.76,
+        },
+      ],
+    })
+    vi.mocked(previewClassification).mockResolvedValueOnce({
+      status: 'ok',
+      source: 'local_llm_classification_preview',
+      read_only: true,
+      mutations_allowed: false,
+      provider: 'local',
+      model: 'qwen3.5:9b',
+      total: 1,
+      suggestion_count: 1,
+      review_count: 1,
+      min_confidence: 0.85,
+      items: [
+        {
+          transaction_id: 'TXN-SCOPE-1',
+          direction: 'OUT',
+          amount: -900,
+          description: 'ATM WDL 1234567890',
+          current: { transaction_type: 'OUT_TRANSFER', confidence: 0.76, counterparty_name: '' },
+          ai: { transaction_type: 'WITHDRAW', confidence: 0.91, counterparty_name: 'ATM Withdrawal' },
+          suggested: { transaction_type: 'WITHDRAW', confidence: 0.91, counterparty_name: 'ATM Withdrawal' },
+          review_required: true,
+          would_apply: true,
+          action: 'review_divergence',
+          reason: 'ai_type_differs_from_current',
+        },
+      ],
+      warnings: [],
+    })
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'AI Copilot' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Evidence' }))
+    fireEvent.change(screen.getByLabelText('Parser Run ID'), { target: { value: 'RUN-1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Load Scoped Transactions' }))
+    expect(await screen.findByText('TXN-SCOPE-1')).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Select transaction TXN-SCOPE-1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Selected' }))
+
+    expect(await screen.findByText('Review and Apply')).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Select suggestion TXN-SCOPE-1'))
+    fireEvent.change(screen.getByLabelText('Apply Reason'), { target: { value: 'Accepted ATM classification after analyst review' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply Selected Suggestions' }))
+
+    await waitFor(() => expect(reviewTransaction).toHaveBeenCalledWith('TXN-SCOPE-1', {
+      reviewer: 'Case Reviewer',
+      reason: 'Accepted ATM classification after analyst review',
+      changes: {
+        transaction_type: 'WITHDRAW',
+        counterparty_name_normalized: 'ATM Withdrawal',
+      },
+    }))
+    expect(await screen.findByText('Applied 1 suggestion(s) with audit trail.')).toBeInTheDocument()
   })
 })

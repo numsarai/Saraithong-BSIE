@@ -294,7 +294,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 4 — AI Copilot / Investigation Copilot
 
-สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036, unified AI Copilot workspace implemented ตาม DEC-038, Evidence task modes implemented ตาม DEC-039, scoped review/audit history implemented ตาม DEC-040, scoped graph metrics implemented ตาม DEC-041, case tag scope implemented ตาม DEC-042, optional AI classification enrichment moved to local-first ตาม DEC-043, read-only classification preview implemented ตาม DEC-044, scoped persisted transaction preview implemented ตาม DEC-045, และ scoped classification picker implemented ตาม DEC-046
+สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036, unified AI Copilot workspace implemented ตาม DEC-038, Evidence task modes implemented ตาม DEC-039, scoped review/audit history implemented ตาม DEC-040, scoped graph metrics implemented ตาม DEC-041, case tag scope implemented ตาม DEC-042, optional AI classification enrichment moved to local-first ตาม DEC-043, read-only classification preview implemented ตาม DEC-044, scoped persisted transaction preview implemented ตาม DEC-045, scoped classification picker implemented ตาม DEC-046, และ audited classification apply implemented ตาม DEC-047
 
 เป้าหมาย:
 
@@ -332,6 +332,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] เพิ่ม read-only classification preview ใน Evidence UI + `/api/llm/classification-preview` เพื่อเทียบ heuristic/current กับ local AI suggestion โดยยังไม่ apply หรือ mutate evidence
 - [x] ให้ classification preview ดึง persisted transactions จาก scope (`parser_run_id`, `file_id`, `account`) ได้ โดย cap จำนวนรายการและยังไม่รองรับ case tag จนกว่าจะมี policy แปลง tag เป็นรายการธุรกรรม
 - [x] เพิ่ม transaction picker ใน Evidence UI ให้โหลดรายการจาก scope ก่อน เลือกแถวที่ต้องการ แล้วส่งเฉพาะรายการที่เลือกเข้า local classification preview
+- [x] เพิ่ม apply workflow สำหรับ classification suggestions โดยต้องเลือกข้อเสนอ กรอกเหตุผล และบันทึกผ่าน audited transaction review endpoint เท่านั้น
 
 ### Phase 5 — Auto-pass Rollout
 

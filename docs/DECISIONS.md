@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-047: Classification suggestions apply through audited transaction review
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** DEC-046 made local classification preview transparent by requiring analyst row selection before sending transactions to the model. The next step is allowing accepted suggestions to update persisted transaction classifications without turning preview into a hidden mutation path.
+- **Decision:** The Evidence UI now treats apply as an analyst review action: only selected preview suggestions from scoped persisted transactions can be applied, the analyst must provide a reason, and the UI calls the existing audited `POST /api/transactions/{transaction_id}/review` endpoint with explicit field changes. The allowed UI-applied fields are `transaction_type` and `counterparty_name_normalized`; preview itself remains read-only.
+- **Alternatives:** (1) Add an apply mode to `/api/llm/classification-preview` -- blurs preview and mutation responsibilities. (2) Write directly from the frontend to a new generic update endpoint -- bypasses existing review/audit semantics. (3) Keep suggestions preview-only -- safest, but leaves analysts copying corrections into another form and increases transcription risk.
+- **Consequences:** Accepted local AI suggestions now flow through the same audit and review-decision path as manual transaction corrections. Future work should add batch history/undo affordances if analysts start applying many suggestions at once.
+
 ### DEC-046: Scoped classification preview requires analyst row selection
 - **Date:** 2026-04-24
 - **Status:** accepted

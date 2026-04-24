@@ -9,11 +9,36 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
+- **Active dev runtime:** backend `127.0.0.1:8757`, frontend `127.0.0.1:6776`; stale frontend port `6777` is closed
 - **Baseline:** backend `398 passed`, frontend `54 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth required (`BSIE_AUTH_REQUIRED=true`) + local SQLite WAL (`bsie.db`) now contains one processed real test statement
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Results Timeline Fallback Restores Flow Graph
+## Done (latest session) — Runtime Restart and Port Cleanup
+
+### What I changed
+- Restarted the local BSIE runtime.
+- Closed the stale frontend dev server that was listening on `127.0.0.1:6777`.
+- Restarted the backend in tmux session `bsie-backend-dev` on `127.0.0.1:8757`.
+- Restarted the frontend in tmux session `bsie-frontend-dev` on the configured Vite port `127.0.0.1:6776` with `--strictPort`.
+
+### Verification
+- `GET http://127.0.0.1:8757/health` -> `200`, `{"status":"ok"}`
+- `HEAD http://127.0.0.1:6776/` -> `200`
+- Listening ports after cleanup:
+  - `127.0.0.1:8757` -> backend Python/uvicorn
+  - `127.0.0.1:6776` -> frontend Vite
+  - `127.0.0.1:6777` -> no listener
+
+### Decisions made
+- Use `6776` for frontend dev because `frontend/vite.config.ts` defines `server.port = 6776` and project CORS already allows `localhost:6776`.
+
+### Warnings / Next
+- Any browser tab still open at `http://127.0.0.1:6777/` must be changed to `http://127.0.0.1:6776/`.
+- No database changes were made.
+- No dependencies installed.
+
+## Done (previous session) — Results Timeline Fallback Restores Flow Graph
 
 ### What I changed
 - Investigated why the results flow graph disappeared after the KBANK reprocess.

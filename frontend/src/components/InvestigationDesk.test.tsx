@@ -524,20 +524,36 @@ describe('InvestigationDesk date formatting', () => {
   })
 
   it('applies selected classification suggestions through the audited review endpoint', async () => {
-    vi.mocked(searchTransactionRecords).mockResolvedValueOnce({
-      items: [
-        {
-          id: 'TXN-SCOPE-1',
-          parser_run_id: 'RUN-1',
-          transaction_datetime: '2026-01-01T08:00:00Z',
-          amount: -900,
-          direction: 'OUT',
-          description_normalized: 'ATM WDL 1234567890',
-          transaction_type: 'OUT_TRANSFER',
-          confidence: 0.76,
-        },
-      ],
-    })
+    vi.mocked(searchTransactionRecords)
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'TXN-SCOPE-1',
+            parser_run_id: 'RUN-1',
+            transaction_datetime: '2026-01-01T08:00:00Z',
+            amount: -900,
+            direction: 'OUT',
+            description_normalized: 'ATM WDL 1234567890',
+            transaction_type: 'OUT_TRANSFER',
+            confidence: 0.76,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'TXN-SCOPE-1',
+            parser_run_id: 'RUN-1',
+            transaction_datetime: '2026-01-01T08:00:00Z',
+            amount: -900,
+            direction: 'OUT',
+            description_normalized: 'ATM WDL 1234567890',
+            transaction_type: 'WITHDRAW',
+            counterparty_name_normalized: 'ATM Withdrawal',
+            confidence: 0.76,
+          },
+        ],
+      })
     vi.mocked(previewClassification).mockResolvedValueOnce({
       status: 'ok',
       source: 'local_llm_classification_preview',
@@ -589,6 +605,16 @@ describe('InvestigationDesk date formatting', () => {
         counterparty_name_normalized: 'ATM Withdrawal',
       },
     }))
-    expect(await screen.findByText('Applied 1 suggestion(s) with audit trail.')).toBeInTheDocument()
+    await waitFor(() => expect(searchTransactionRecords).toHaveBeenCalledTimes(2))
+    expect(searchTransactionRecords).toHaveBeenLastCalledWith({
+      parser_run_id: 'RUN-1',
+      file_id: '',
+      account: '',
+      limit: 20,
+      offset: 0,
+    })
+    expect(await screen.findByText('Applied 1 suggestion(s) with audit trail and refreshed scoped rows.')).toBeInTheDocument()
+    expect(await screen.findByText('Applied History')).toBeInTheDocument()
+    expect(await screen.findByText('transaction_type: WITHDRAW · counterparty_name_normalized: ATM Withdrawal')).toBeInTheDocument()
   })
 })

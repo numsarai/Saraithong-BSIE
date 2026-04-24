@@ -549,7 +549,9 @@
       "classificationApplyReasonPlaceholder": "บันทึกเหตุผลที่ยอมรับข้อเสนอจาก AI",
       "applySelectedClassificationSuggestions": "บันทึกข้อเสนอที่เลือก",
       "applyingClassificationSuggestions": "กำลังบันทึกข้อเสนอ",
-      "classificationApplyDone": "บันทึก {{count}} ข้อเสนอพร้อม audit trail แล้ว",
+      "classificationApplyDone": "บันทึก {{count}} ข้อเสนอพร้อม audit trail และรีเฟรชรายการใน scope แล้ว",
+      "classificationAppliedHistory": "ประวัติการบันทึกล่าสุด",
+      "classificationAppliedReason": "เหตุผล: {{reason}}",
       "task": {
         "account_summary": "สรุปบัญชี",
         "alert_explanation": "อธิบาย alert",

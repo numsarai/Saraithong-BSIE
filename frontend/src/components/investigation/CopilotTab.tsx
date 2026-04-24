@@ -199,6 +199,7 @@ export function CopilotTab({
   const [classificationApplyReason, setClassificationApplyReason] = useState('')
   const [classificationApplyError, setClassificationApplyError] = useState('')
   const [classificationApplyResult, setClassificationApplyResult] = useState<any>(null)
+  const [classificationAppliedHistory, setClassificationAppliedHistory] = useState<Array<{ transaction_id: string; changes: Record<string, string>; reason: string }>>([])
   const [isApplyingClassificationSuggestions, setIsApplyingClassificationSuggestions] = useState(false)
 
   useEffect(() => {
@@ -304,6 +305,7 @@ export function CopilotTab({
     setScopedClassificationRows([])
     setSelectedScopedClassificationKeys([])
     setHasLoadedScopedClassificationRows(false)
+    setClassificationAppliedHistory([])
   }, [scope.account, scope.file_id, scope.parser_run_id])
 
   useEffect(() => {
@@ -376,11 +378,14 @@ export function CopilotTab({
     }
   }
 
-  const loadScopedClassificationRows = async () => {
+  const refreshScopedClassificationRows = async ({
+    resetPreview = false,
+    resetHistory = false,
+  }: { resetPreview?: boolean; resetHistory?: boolean } = {}) => {
     if (!hasClassificationScope(scope)) return
     setIsLoadingScopedClassificationRows(true)
     setClassificationPreviewError('')
-    setHasLoadedScopedClassificationRows(false)
+    if (resetPreview) setHasLoadedScopedClassificationRows(false)
     try {
       const payload = await searchTransactionRecords({
         parser_run_id: scope.parser_run_id.trim(),
@@ -393,12 +398,17 @@ export function CopilotTab({
       setScopedClassificationRows(rows)
       setSelectedScopedClassificationKeys([])
       setHasLoadedScopedClassificationRows(true)
-      setClassificationPreview(null)
+      if (resetPreview) setClassificationPreview(null)
+      if (resetHistory) setClassificationAppliedHistory([])
     } catch (err: any) {
       setClassificationPreviewError(err.message || String(err))
     } finally {
       setIsLoadingScopedClassificationRows(false)
     }
+  }
+
+  const loadScopedClassificationRows = async () => {
+    await refreshScopedClassificationRows({ resetPreview: true, resetHistory: true })
   }
 
   const toggleScopedClassificationRow = (row: ScopedTransactionRow, index: number) => {
@@ -451,17 +461,20 @@ export function CopilotTab({
     setClassificationApplyError('')
     setClassificationApplyResult(null)
     try {
-      const applied: string[] = []
+      const applied: Array<{ transaction_id: string; changes: Record<string, string>; reason: string }> = []
       for (const item of selectedApplicablePreviewItems) {
+        const changes = classificationSuggestionChanges(item)
         await reviewTransaction(item.transaction_id, {
           reviewer: operatorName || 'analyst',
           reason,
-          changes: classificationSuggestionChanges(item),
+          changes,
         })
-        applied.push(item.transaction_id)
+        applied.push({ transaction_id: item.transaction_id, changes, reason })
       }
-      setClassificationApplyResult({ status: 'ok', applied_count: applied.length, transaction_ids: applied })
+      setClassificationApplyResult({ status: 'ok', applied_count: applied.length, transaction_ids: applied.map((item) => item.transaction_id) })
+      setClassificationAppliedHistory((state) => [...applied, ...state].slice(0, 10))
       setSelectedClassificationSuggestionIds([])
+      await refreshScopedClassificationRows({ resetPreview: false })
     } catch (err: any) {
       setClassificationApplyError(err.message || String(err))
     } finally {
@@ -818,6 +831,26 @@ export function CopilotTab({
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {classificationAppliedHistory.length > 0 && (
+              <div className="space-y-2 rounded-md border border-border bg-surface p-3">
+                <div className="text-sm font-semibold text-text">{t('investigation.copilot.classificationAppliedHistory')}</div>
+                <div className="space-y-2">
+                  {classificationAppliedHistory.map((item, index) => (
+                    <div key={`${item.transaction_id}-${index}`} className="rounded-md border border-border bg-surface2 px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="green">{item.transaction_id}</Badge>
+                        <span className="font-mono text-xs text-text">
+                          {Object.entries(item.changes).map(([field, value]) => `${field}: ${value}`).join(' · ')}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-muted">
+                        {t('investigation.copilot.classificationAppliedReason', { reason: item.reason })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

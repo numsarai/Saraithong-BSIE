@@ -549,7 +549,9 @@
       "classificationApplyReasonPlaceholder": "Record why this AI suggestion is accepted...",
       "applySelectedClassificationSuggestions": "Apply Selected Suggestions",
       "applyingClassificationSuggestions": "Applying Suggestions",
-      "classificationApplyDone": "Applied {{count}} suggestion(s) with audit trail.",
+      "classificationApplyDone": "Applied {{count}} suggestion(s) with audit trail and refreshed scoped rows.",
+      "classificationAppliedHistory": "Applied History",
+      "classificationAppliedReason": "Reason: {{reason}}",
       "task": {
         "account_summary": "Account summary",
         "alert_explanation": "Alert explanation",

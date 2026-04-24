@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-048: Classification apply refreshes scoped rows and keeps session history
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** DEC-047 routed accepted classification suggestions through audited transaction review, but after saving, the picker still showed the pre-apply row state and there was no compact in-screen memory of what the analyst just applied.
+- **Decision:** After selected suggestions are applied, the Evidence UI refreshes the scoped transaction rows through the same `/api/transactions/search` path without clearing the preview result, clears selected apply checkboxes, and records a bounded session history of applied transaction ids, changed fields, and reviewer reason.
+- **Alternatives:** (1) Leave refresh to a manual reload button -- simpler, but stale row state invites repeat applications or confusion. (2) Clear the preview entirely after apply -- avoids stale preview current values but hides the review context immediately. (3) Query audit logs for history immediately -- more authoritative, but heavier than needed for the compact post-apply session confirmation.
+- **Consequences:** Analysts see the persisted row state update after apply and have a short local confirmation trail while the durable audit/review records remain the source of truth. Future work can add a dedicated audit-backed history/undo view for larger batches.
+
 ### DEC-047: Classification suggestions apply through audited transaction review
 - **Date:** 2026-04-24
 - **Status:** accepted

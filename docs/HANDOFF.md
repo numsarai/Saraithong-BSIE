@@ -9,11 +9,58 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `391 passed`, frontend `50 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `391 passed`, frontend `51 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Audited Classification Suggestion Apply
+## Done (latest session) — Post-apply Refresh and History
+
+### What I changed
+- After applying selected classification suggestions, the Evidence UI now refreshes scoped transaction rows through the same `/api/transactions/search` path.
+- The refresh keeps the preview result visible, clears selected apply checkboxes, and updates the picker rows so the persisted type/name state is no longer stale.
+- Added a compact in-session Applied History panel showing transaction ids, changed fields, and the reviewer reason for the last applied suggestions.
+- Updated success copy to make the row refresh explicit.
+- Added DEC-048, roadmap status, i18n labels, and regression coverage for the second scoped search after apply.
+
+### Files changed
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `391 passed`
+  - `npm test -- --run` in `frontend/` -> `51 passed`
+- Focused:
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `8 passed`
+  - `npm run build` in `frontend/` -> passed
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `391 passed`
+  - `npm test -- --run` in `frontend/` -> `51 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-048: classification apply refreshes scoped rows and keeps session history.
+- The compact history is a UI confirmation aid only; durable truth remains the existing audit log and review-decision records.
+
+### Warnings / Next
+- Preview cards still show the model comparison from the time of preview; the refreshed picker rows show persisted post-apply state.
+- The applied history is session-local and bounded to the latest 10 applied suggestions.
+- Next useful slice: add an audit-backed history/undo view for classification batches, or begin designing cautious Phase 5 metrics/rollback gates.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but generated dist files remain untracked.
+
+## Done (previous session) — Audited Classification Suggestion Apply
 
 ### What I changed
 - Added a Review and Apply workflow under AI Copilot Evidence classification preview results.

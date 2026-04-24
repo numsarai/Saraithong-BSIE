@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-030: Account presence verification extends to text PDF and OCR tables fail-closed
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Account-presence verification initially covered Excel only, but Step 2 already accepts stored PDF/image evidence. Investigators need the same explicit account check on text PDFs and OCR-derived tables without asking an LLM to infer whether an account appears.
+- **Decision:** Extend `/api/mapping/account-presence` to scan text-based PDF page text, extracted PDF tables, and OCR table cells from image/scanned-PDF parsing. The verifier reports source regions (`page_text`, `pdf_table`, `ocr_table`), page/table locations, OCR usage, and search-unit counts. If OCR is unavailable or produces no searchable table cells, return structured warning statuses (`read_error` or `no_searchable_text`) instead of claiming the account is absent.
+- **Alternatives:** (1) Keep the endpoint Excel-only — leaves PDF/image workflows without deterministic account review. (2) Use vision LLM output to decide presence — non-reproducible and unsafe for evidence checks. (3) Treat OCR dependency failures as `not_found` — too strict because unavailable OCR is not evidence of absence.
+- **Consequences:** Text PDFs and OCR table outputs can now participate in the same Step 2 account review gate when a deterministic scan returns `not_found` or `possible_leading_zero_loss`. OCR-unavailable and no-searchable-text cases stay warning-only until better extraction coverage exists.
+
 ### DEC-029: Negative account presence verification requires analyst confirmation
 - **Date:** 2026-04-24
 - **Status:** accepted

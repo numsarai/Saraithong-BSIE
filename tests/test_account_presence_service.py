@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -49,3 +50,73 @@ def test_verify_account_presence_marks_leading_zero_loss_candidate(tmp_path: Pat
     assert result["possible_match"] is True
     assert result["match_status"] == "possible_leading_zero_loss"
     assert result["possible_locations"][0]["match_type"] == "possible_leading_zero_loss"
+
+
+def test_verify_account_presence_scans_text_pdf_lines(tmp_path: Path):
+    from fpdf import FPDF
+
+    pdf_path = tmp_path / "statement.pdf"
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+    pdf.cell(0, 10, "Statement account 123-456-7890", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, "Date Description Amount", new_x="LMARGIN", new_y="NEXT")
+    pdf.output(str(pdf_path))
+
+    result = verify_account_presence(
+        file_path=pdf_path,
+        subject_account="1234567890",
+    )
+
+    assert result["status"] == "ok"
+    assert result["file_type"] == "pdf"
+    assert result["found"] is True
+    assert result["match_status"] == "exact_found"
+    assert result["locations"][0]["source_region"] == "page_text"
+    assert result["locations"][0]["page_number"] == 1
+    assert result["summary"]["text_lines_scanned"] >= 1
+
+
+def test_verify_account_presence_scans_image_ocr_table(tmp_path: Path):
+    image_path = tmp_path / "statement.png"
+    image_path.write_bytes(b"not-a-real-image")
+    ocr_df = pd.DataFrame(
+        [
+            {"Account": "123-456-7890", "Amount": "100.00"},
+        ]
+    )
+
+    with patch("core.image_loader.parse_image_file", return_value={
+        "df": ocr_df,
+        "source_format": "IMAGE",
+        "page_count": 1,
+        "ocr_used": True,
+        "header_row": 0,
+        "tables_found": 1,
+    }):
+        result = verify_account_presence(
+            file_path=image_path,
+            subject_account="1234567890",
+        )
+
+    assert result["status"] == "ok"
+    assert result["file_type"] == "image_ocr"
+    assert result["found"] is True
+    assert result["locations"][0]["source_region"] == "ocr_table"
+    assert result["locations"][0]["column_label"] == "Account"
+
+
+def test_verify_account_presence_returns_warning_when_image_ocr_unavailable(tmp_path: Path):
+    image_path = tmp_path / "statement.png"
+    image_path.write_bytes(b"not-a-real-image")
+
+    with patch("core.image_loader.parse_image_file", side_effect=RuntimeError("EasyOCR missing")):
+        result = verify_account_presence(
+            file_path=image_path,
+            subject_account="1234567890",
+        )
+
+    assert result["status"] == "read_error"
+    assert result["match_status"] == "read_error"
+    assert result["found"] is False
+    assert "OCR scan unavailable" in result["warnings"][0]

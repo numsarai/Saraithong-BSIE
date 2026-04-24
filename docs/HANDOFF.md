@@ -9,11 +9,58 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `364 passed`, frontend `45 passed`, frontend build passed
+- **Baseline:** backend `368 passed`, frontend `45 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Account Presence Review Gate Policy
+## Done (latest session) — PDF/Image Account Presence Verification
+
+### What I changed
+- Extended `services/account_presence_service.py` beyond Excel workbook scanning.
+- Text PDFs now scan page text lines and extracted PDF table cells deterministically.
+- Image files and scanned PDFs now scan OCR table cells via the existing `core.image_loader.parse_image_file` path.
+- Results now report source regions such as `page_text`, `pdf_table`, and `ocr_table`, plus page count, OCR usage, and search-unit counts.
+- OCR unavailable/no searchable OCR table cells return structured warning statuses (`read_error` / `no_searchable_text`) rather than claiming an account is absent.
+- Step 2 label changed from `Verify in Workbook` to `Verify Evidence` because the action now covers Excel, PDF, and image evidence.
+- Added service and API regressions for PDF text scanning and image OCR table scanning/failure behavior.
+
+### Files changed
+- `services/account_presence_service.py`
+- `tests/test_account_presence_service.py`
+- `tests/test_app_api.py`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `364 passed`
+  - `npm test -- --run` in `frontend/` -> `45 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/account_presence_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_account_presence_service.py tests/test_app_api.py::test_account_presence_endpoint_scans_stored_excel_file tests/test_app_api.py::test_account_presence_endpoint_scans_stored_text_pdf_file -q` -> `7 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `12 passed`
+- Full verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `368 passed`
+  - `npm test -- --run` in `frontend/` -> `45 passed`
+  - `npm run build` in `frontend/` -> passed; Vite chunk-size warning only
+  - `git diff --check` -> passed
+
+### Decisions made
+- Added DEC-030: account presence verification extends to text PDF and OCR tables fail-closed.
+
+### Warnings / Next
+- Image/scanned-PDF account presence depends on the existing OCR table reconstruction. If OCR is unavailable or produces no searchable cells, BSIE returns warning-only status rather than `not_found`.
+- The image path scans OCR table cells, not every raw OCR token. If account numbers appear only outside the reconstructed table, they may still need a future raw-OCR-token scan.
+- Vite still reports the existing large main chunk warning; correctness tests/build pass.
+- Next useful slice: add raw OCR token scanning for account presence, or tackle frontend code-splitting to reduce the Vite chunk warning.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Account Presence Review Gate Policy
 
 ### What I changed
 - Extended the Step 2 review gate so account-presence verification results can block progression.

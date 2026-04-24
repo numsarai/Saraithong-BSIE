@@ -9,6 +9,9 @@ from services.subject_context_service import normalize_subject_account
 
 
 EXCEL_SUFFIXES = {".xlsx", ".xls"}
+PDF_SUFFIXES = {".pdf"}
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp"}
+SUPPORTED_SUFFIXES = EXCEL_SUFFIXES | PDF_SUFFIXES | IMAGE_SUFFIXES
 
 
 def verify_account_presence(
@@ -19,7 +22,7 @@ def verify_account_presence(
     header_row: int = 0,
     max_matches: int = 25,
 ) -> dict[str, Any]:
-    """Scan workbook cells for an analyst-selected subject account."""
+    """Scan stored evidence for an analyst-selected subject account."""
     path = Path(file_path)
     normalized_account = normalize_subject_account(subject_account)
     max_items = max(1, min(int(max_matches or 25), 100))
@@ -35,7 +38,8 @@ def verify_account_presence(
             warnings=["Subject account must be exactly 10 or 12 digits after normalization."],
         )
 
-    if path.suffix.lower() not in EXCEL_SUFFIXES:
+    suffix = path.suffix.lower()
+    if suffix not in SUPPORTED_SUFFIXES:
         return _empty_result(
             path=path,
             subject_account=subject_account,
@@ -44,7 +48,7 @@ def verify_account_presence(
             header_row=header_row,
             status="unsupported_file",
             match_status="unsupported_file",
-            warnings=["Full account-presence verification is currently supported for Excel workbooks only."],
+            warnings=["Account-presence verification supports Excel, text PDF, and OCR-supported image/PDF evidence."],
         )
 
     if not path.exists():
@@ -59,6 +63,43 @@ def verify_account_presence(
             warnings=["Source evidence file was not found."],
         )
 
+    if suffix in EXCEL_SUFFIXES:
+        return _verify_excel_account_presence(
+            path=path,
+            subject_account=subject_account,
+            normalized_account=normalized_account,
+            sheet_name=sheet_name,
+            header_row=header_row,
+            max_items=max_items,
+        )
+    if suffix in PDF_SUFFIXES:
+        return _verify_pdf_account_presence(
+            path=path,
+            subject_account=subject_account,
+            normalized_account=normalized_account,
+            sheet_name=sheet_name,
+            header_row=header_row,
+            max_items=max_items,
+        )
+    return _verify_image_account_presence(
+        path=path,
+        subject_account=subject_account,
+        normalized_account=normalized_account,
+        sheet_name=sheet_name,
+        header_row=header_row,
+        max_items=max_items,
+    )
+
+
+def _verify_excel_account_presence(
+    *,
+    path: Path,
+    subject_account: Any,
+    normalized_account: str,
+    sheet_name: str,
+    header_row: int,
+    max_items: int,
+) -> dict[str, Any]:
     exact_locations: list[dict[str, Any]] = []
     possible_locations: list[dict[str, Any]] = []
     scanned_sheets: list[str] = []
@@ -110,19 +151,302 @@ def verify_account_presence(
             warnings=[f"Could not scan workbook for account presence: {exc}"],
         )
 
+    return _presence_result(
+        path=path,
+        subject_account=subject_account,
+        normalized_account=normalized_account,
+        sheet_name=sheet_name,
+        header_row=header_row,
+        file_type="excel",
+        scanned_sheets=scanned_sheets,
+        exact_locations=exact_locations,
+        possible_locations=possible_locations,
+        exact_match_count=exact_match_count,
+        possible_match_count=possible_match_count,
+        cells_scanned=cells_scanned,
+        not_found_warning="Selected account was not found in the scanned workbook cells.",
+    )
+
+
+def _verify_pdf_account_presence(
+    *,
+    path: Path,
+    subject_account: Any,
+    normalized_account: str,
+    sheet_name: str,
+    header_row: int,
+    max_items: int,
+) -> dict[str, Any]:
+    exact_locations: list[dict[str, Any]] = []
+    possible_locations: list[dict[str, Any]] = []
+    scanned_sources: list[str] = []
+    cells_scanned = 0
+    exact_match_count = 0
+    possible_match_count = 0
+    page_count = 0
+    text_lines_scanned = 0
+    tables_found = 0
+    ocr_used = False
+    warnings: list[str] = []
+
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(path) as pdf:
+            page_count = len(pdf.pages)
+            for page_index, page in enumerate(pdf.pages):
+                page_number = page_index + 1
+                page_label = f"PDF page {page_number}"
+                text = page.extract_text() or ""
+                lines = [line for line in text.splitlines() if line.strip()]
+                if lines and page_label not in scanned_sources:
+                    scanned_sources.append(page_label)
+                for line_index, line in enumerate(lines):
+                    cells_scanned += 1
+                    text_lines_scanned += 1
+                    matched = _record_match(
+                        raw_value=line,
+                        normalized_account=normalized_account,
+                        location={
+                            "sheet_name": page_label,
+                            "row_index": line_index,
+                            "row_number": line_index + 1,
+                            "column_index": 0,
+                            "column_number": 1,
+                            "column_label": "page_text",
+                            "row_zone": "page_text",
+                            "page_number": page_number,
+                            "source_region": "page_text",
+                        },
+                        max_items=max_items,
+                        exact_locations=exact_locations,
+                        possible_locations=possible_locations,
+                    )
+                    if matched == "possible_leading_zero_loss":
+                        possible_match_count += 1
+                    elif matched:
+                        exact_match_count += 1
+    except Exception as exc:
+        warnings.append(f"Could not scan PDF text for account presence: {exc}")
+
+    try:
+        from core.pdf_loader import parse_pdf_file
+
+        pdf_result = parse_pdf_file(path)
+        tables_found = int(pdf_result.get("tables_found") or 0)
+        table_df = pdf_result.get("df")
+        if isinstance(table_df, pd.DataFrame) and not table_df.empty:
+            scanned_sources.append("PDF table")
+            table_counts = _scan_dataframe_cells(
+                df=table_df,
+                normalized_account=normalized_account,
+                sheet_label="PDF table",
+                header_row=int(pdf_result.get("header_row") or 0),
+                row_zone="body",
+                source_region="pdf_table",
+                max_items=max_items,
+                exact_locations=exact_locations,
+                possible_locations=possible_locations,
+            )
+            cells_scanned += table_counts["cells_scanned"]
+            exact_match_count += table_counts["exact_match_count"]
+            possible_match_count += table_counts["possible_match_count"]
+    except Exception as exc:
+        warnings.append(f"Could not scan PDF tables for account presence: {exc}")
+
+    should_try_ocr = cells_scanned == 0 or (exact_match_count == 0 and possible_match_count == 0 and tables_found == 0)
+    if should_try_ocr:
+        try:
+            from core.image_loader import parse_image_file
+
+            ocr_result = parse_image_file(path)
+            ocr_used = True
+            ocr_df = ocr_result.get("df")
+            if isinstance(ocr_df, pd.DataFrame) and not ocr_df.empty:
+                scanned_sources.append("PDF OCR")
+                ocr_counts = _scan_dataframe_cells(
+                    df=ocr_df,
+                    normalized_account=normalized_account,
+                    sheet_label="PDF OCR",
+                    header_row=int(ocr_result.get("header_row") or 0),
+                    row_zone="body",
+                    source_region="ocr_table",
+                    max_items=max_items,
+                    exact_locations=exact_locations,
+                    possible_locations=possible_locations,
+                )
+                cells_scanned += ocr_counts["cells_scanned"]
+                exact_match_count += ocr_counts["exact_match_count"]
+                possible_match_count += ocr_counts["possible_match_count"]
+            else:
+                warnings.append("OCR completed but produced no searchable table cells for account presence.")
+        except Exception as exc:
+            warnings.append(f"OCR scan unavailable for account presence: {exc}")
+
+    if cells_scanned == 0:
+        return _empty_result(
+            path=path,
+            subject_account=subject_account,
+            normalized_account=normalized_account,
+            sheet_name=sheet_name,
+            header_row=header_row,
+            status="read_error",
+            match_status="read_error",
+            warnings=warnings or ["No searchable PDF text, table cells, or OCR cells were available for account presence verification."],
+            summary_extra={
+                "page_count": page_count,
+                "text_lines_scanned": text_lines_scanned,
+                "tables_found": tables_found,
+                "ocr_used": ocr_used,
+                "search_units_scanned": cells_scanned,
+            },
+        )
+
+    return _presence_result(
+        path=path,
+        subject_account=subject_account,
+        normalized_account=normalized_account,
+        sheet_name=sheet_name,
+        header_row=header_row,
+        file_type="pdf",
+        scanned_sheets=scanned_sources,
+        exact_locations=exact_locations,
+        possible_locations=possible_locations,
+        exact_match_count=exact_match_count,
+        possible_match_count=possible_match_count,
+        cells_scanned=cells_scanned,
+        warnings=warnings,
+        not_found_warning="Selected account was not found in the scanned PDF text/table evidence.",
+        summary_extra={
+            "page_count": page_count,
+            "text_lines_scanned": text_lines_scanned,
+            "tables_found": tables_found,
+            "ocr_used": ocr_used,
+            "search_units_scanned": cells_scanned,
+        },
+    )
+
+
+def _verify_image_account_presence(
+    *,
+    path: Path,
+    subject_account: Any,
+    normalized_account: str,
+    sheet_name: str,
+    header_row: int,
+    max_items: int,
+) -> dict[str, Any]:
+    try:
+        from core.image_loader import parse_image_file
+
+        ocr_result = parse_image_file(path)
+        ocr_df = ocr_result.get("df")
+    except Exception as exc:
+        return _empty_result(
+            path=path,
+            subject_account=subject_account,
+            normalized_account=normalized_account,
+            sheet_name=sheet_name,
+            header_row=header_row,
+            status="read_error",
+            match_status="read_error",
+            warnings=[f"OCR scan unavailable for account presence: {exc}"],
+            summary_extra={"ocr_used": False, "search_units_scanned": 0},
+        )
+
+    if not isinstance(ocr_df, pd.DataFrame) or ocr_df.empty:
+        return _empty_result(
+            path=path,
+            subject_account=subject_account,
+            normalized_account=normalized_account,
+            sheet_name=sheet_name,
+            header_row=header_row,
+            status="no_searchable_text",
+            match_status="no_searchable_text",
+            warnings=["OCR completed but produced no searchable table cells for account presence."],
+            summary_extra={
+                "page_count": int(ocr_result.get("page_count") or 1),
+                "ocr_used": True,
+                "search_units_scanned": 0,
+            },
+        )
+
+    exact_locations: list[dict[str, Any]] = []
+    possible_locations: list[dict[str, Any]] = []
+    counts = _scan_dataframe_cells(
+        df=ocr_df,
+        normalized_account=normalized_account,
+        sheet_label="IMAGE OCR",
+        header_row=int(ocr_result.get("header_row") or 0),
+        row_zone="body",
+        source_region="ocr_table",
+        max_items=max_items,
+        exact_locations=exact_locations,
+        possible_locations=possible_locations,
+    )
+
+    return _presence_result(
+        path=path,
+        subject_account=subject_account,
+        normalized_account=normalized_account,
+        sheet_name=sheet_name,
+        header_row=header_row,
+        file_type="image_ocr",
+        scanned_sheets=["IMAGE OCR"],
+        exact_locations=exact_locations,
+        possible_locations=possible_locations,
+        exact_match_count=counts["exact_match_count"],
+        possible_match_count=counts["possible_match_count"],
+        cells_scanned=counts["cells_scanned"],
+        not_found_warning="Selected account was not found in OCR table cells.",
+        summary_extra={
+            "page_count": int(ocr_result.get("page_count") or 1),
+            "ocr_used": True,
+            "search_units_scanned": counts["cells_scanned"],
+        },
+    )
+
+
+def _presence_result(
+    *,
+    path: Path,
+    subject_account: Any,
+    normalized_account: str,
+    sheet_name: str,
+    header_row: int,
+    file_type: str,
+    scanned_sheets: list[str],
+    exact_locations: list[dict[str, Any]],
+    possible_locations: list[dict[str, Any]],
+    exact_match_count: int,
+    possible_match_count: int,
+    cells_scanned: int,
+    not_found_warning: str,
+    warnings: list[str] | None = None,
+    summary_extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     found = exact_match_count > 0
     possible_match = possible_match_count > 0 and not found
     match_status = "exact_found" if found else "possible_leading_zero_loss" if possible_match else "not_found"
-    warnings: list[str] = []
+    result_warnings = list(warnings or [])
     if possible_match:
-        warnings.append("Only leading-zero-loss candidates were found; analyst review is required.")
+        result_warnings.append("Only leading-zero-loss candidates were found; analyst review is required.")
     elif not found:
-        warnings.append("Selected account was not found in the scanned workbook cells.")
+        result_warnings.append(not_found_warning)
+    summary = {
+        "exact_match_count": exact_match_count,
+        "possible_match_count": possible_match_count,
+        "sheets_scanned": len(scanned_sheets),
+        "cells_scanned": cells_scanned,
+        "locations_returned": len(exact_locations) + len(possible_locations),
+    }
+    if summary_extra:
+        summary.update(summary_extra)
 
     return {
         "status": "ok",
         "source": "deterministic_account_presence",
-        "file_type": "excel",
+        "file_type": file_type,
         "file_name": path.name,
         "subject_account_raw": str(subject_account or "").strip()[:80],
         "normalized_account": normalized_account,
@@ -134,14 +458,8 @@ def verify_account_presence(
         "match_status": match_status,
         "locations": exact_locations,
         "possible_locations": possible_locations,
-        "summary": {
-            "exact_match_count": exact_match_count,
-            "possible_match_count": possible_match_count,
-            "sheets_scanned": len(scanned_sheets),
-            "cells_scanned": cells_scanned,
-            "locations_returned": len(exact_locations) + len(possible_locations),
-        },
-        "warnings": warnings,
+        "summary": summary,
+        "warnings": result_warnings,
     }
 
 
@@ -155,7 +473,17 @@ def _empty_result(
     status: str,
     match_status: str,
     warnings: list[str],
+    summary_extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    summary = {
+        "exact_match_count": 0,
+        "possible_match_count": 0,
+        "sheets_scanned": 0,
+        "cells_scanned": 0,
+        "locations_returned": 0,
+    }
+    if summary_extra:
+        summary.update(summary_extra)
     return {
         "status": status,
         "source": "deterministic_account_presence",
@@ -171,13 +499,7 @@ def _empty_result(
         "match_status": match_status,
         "locations": [],
         "possible_locations": [],
-        "summary": {
-            "exact_match_count": 0,
-            "possible_match_count": 0,
-            "sheets_scanned": 0,
-            "cells_scanned": 0,
-            "locations_returned": 0,
-        },
+        "summary": summary,
         "warnings": warnings,
     }
 
@@ -194,6 +516,79 @@ def _row_zone(row_index: int, header_row: int) -> str:
     if row_index == header_row:
         return "header"
     return "body"
+
+
+def _scan_dataframe_cells(
+    *,
+    df: pd.DataFrame,
+    normalized_account: str,
+    sheet_label: str,
+    header_row: int,
+    row_zone: str | None = None,
+    source_region: str = "table",
+    max_items: int,
+    exact_locations: list[dict[str, Any]],
+    possible_locations: list[dict[str, Any]],
+) -> dict[str, int]:
+    cells_scanned = 0
+    exact_match_count = 0
+    possible_match_count = 0
+    header_labels = {int(index): str(value or "").strip()[:80] for index, value in enumerate(df.columns.tolist())}
+    for row_index, row in df.iterrows():
+        for column_index, raw_value in enumerate(row.tolist()):
+            cells_scanned += 1
+            matched = _record_match(
+                raw_value=raw_value,
+                normalized_account=normalized_account,
+                location={
+                    "sheet_name": sheet_label,
+                    "row_index": int(row_index),
+                    "row_number": int(row_index) + 1,
+                    "column_index": int(column_index),
+                    "column_number": int(column_index) + 1,
+                    "column_label": header_labels.get(int(column_index), ""),
+                    "row_zone": row_zone or _row_zone(int(row_index), int(header_row or 0)),
+                    "source_region": source_region,
+                },
+                max_items=max_items,
+                exact_locations=exact_locations,
+                possible_locations=possible_locations,
+            )
+            if matched == "possible_leading_zero_loss":
+                possible_match_count += 1
+            elif matched:
+                exact_match_count += 1
+    return {
+        "cells_scanned": cells_scanned,
+        "exact_match_count": exact_match_count,
+        "possible_match_count": possible_match_count,
+    }
+
+
+def _record_match(
+    *,
+    raw_value: Any,
+    normalized_account: str,
+    location: dict[str, Any],
+    max_items: int,
+    exact_locations: list[dict[str, Any]],
+    possible_locations: list[dict[str, Any]],
+) -> str:
+    match_type = _match_type(raw_value, normalized_account)
+    if not match_type:
+        return ""
+    next_location = {
+        **location,
+        "match_type": match_type,
+        "value_preview": str(raw_value or "").strip()[:160],
+    }
+    if match_type == "possible_leading_zero_loss":
+        if len(possible_locations) < max_items:
+            possible_locations.append(next_location)
+        return match_type
+    if len(exact_locations) < max_items:
+        exact_locations.append(next_location)
+    return match_type
 
 
 def _match_type(raw_value: Any, normalized_account: str) -> str:

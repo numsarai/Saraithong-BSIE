@@ -405,7 +405,7 @@ describe('Step2Map analyst gate', () => {
     )
   })
 
-  it('verifies the known account against the stored workbook evidence', async () => {
+  it('verifies the known account against the stored evidence file', async () => {
     seedUpload({
       account_guess: '1234567890',
       identity_guess: {
@@ -417,7 +417,7 @@ describe('Step2Map analyst gate', () => {
 
     render(<Step2Map />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /verify in workbook/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /verify evidence/i }))
 
     await waitFor(() => expect(verifyAccountPresence).toHaveBeenCalledWith({
       file_id: 'file-1',
@@ -472,7 +472,7 @@ describe('Step2Map analyst gate', () => {
     const continueButton = await screen.findByRole('button', { name: /^confirm mapping$/i })
     expect(continueButton).toBeEnabled()
 
-    fireEvent.click(screen.getByRole('button', { name: /verify in workbook/i }))
+    fireEvent.click(screen.getByRole('button', { name: /verify evidence/i }))
 
     expect(await screen.findByText(/Account was not found in workbook evidence/i)).toBeInTheDocument()
     await waitFor(() => expect(continueButton).toBeDisabled())

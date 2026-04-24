@@ -174,11 +174,11 @@ export function Step2Map() {
       })
       setAccountPresence(result)
       if (result?.found) {
-        toast.success('Account found in workbook evidence')
+        toast.success('Account found in evidence file')
       } else if (result?.possible_match) {
         toast.success('Possible account match found; review leading-zero warning')
       } else {
-        toast.error(result?.warnings?.[0] || 'Account was not found in workbook evidence')
+        toast.error(result?.warnings?.[0] || 'Account was not found in evidence file')
       }
     } catch (e: any) {
       toast.error(`Account verification failed: ${e.message}`)
@@ -486,7 +486,7 @@ export function Step2Map() {
                 <span className="text-xs text-muted">
                   {accountPresence
                     ? `${accountPresence.summary?.exact_match_count || 0} exact, ${accountPresence.summary?.possible_match_count || 0} possible`
-                    : 'Scan the selected workbook sheet before pipeline processing.'}
+                    : 'Scan the selected evidence file before pipeline processing.'}
                 </span>
               </div>
               <Button
@@ -496,7 +496,7 @@ export function Step2Map() {
                 onClick={handleVerifyAccountPresence}
               >
                 {presenceLoading ? <Loader2 size={13} className="animate-spin" /> : <FileSearch size={13} />}
-                {presenceLoading ? 'Verifying' : 'Verify in Workbook'}
+                {presenceLoading ? 'Verifying' : 'Verify Evidence'}
               </Button>
             </div>
             {accountPresence?.locations?.length > 0 && (

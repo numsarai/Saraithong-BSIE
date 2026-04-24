@@ -980,6 +980,37 @@ def test_account_presence_endpoint_scans_stored_excel_file(tmp_path):
     assert payload["locations"][0]["row_zone"] == "pre_header"
 
 
+def test_account_presence_endpoint_scans_stored_text_pdf_file(tmp_path):
+    from fpdf import FPDF
+
+    source = tmp_path / "original.pdf"
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+    pdf.cell(0, 10, "Statement account 123-456-7890", new_x="LMARGIN", new_y="NEXT")
+    pdf.output(str(source))
+
+    with (
+        patch("paths.EVIDENCE_DIR", tmp_path),
+        patch("routers.ingestion.get_file_record", return_value=SimpleNamespace(stored_path=str(source))),
+    ):
+        response = client.post(
+            "/api/mapping/account-presence",
+            json={
+                "file_id": "FILE-1",
+                "subject_account": "1234567890",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "deterministic_account_presence"
+    assert payload["file_type"] == "pdf"
+    assert payload["found"] is True
+    assert payload["match_status"] == "exact_found"
+    assert payload["locations"][0]["source_region"] == "page_text"
+
+
 def test_mapping_assist_endpoint_returns_suggestion_only_payload():
     assist_result = {
         "status": "ok",

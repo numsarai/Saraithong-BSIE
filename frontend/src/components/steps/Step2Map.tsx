@@ -1403,7 +1403,7 @@ function EvidencePreviewDrawer({
   const previewUrl = evidencePreviewUrl(fileId, isImagePreview ? null : location.page_number)
   const confidence = formatOcrConfidence(location.ocr_confidence)
   const position = formatOcrPosition(location)
-  const marker = buildOcrImageMarker(location, imageSize)
+  const overlay = buildOcrImageOverlay(location, imageSize)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
@@ -1441,11 +1441,23 @@ function EvidencePreviewDrawer({
                       setImageSize({ width: image.naturalWidth, height: image.naturalHeight })
                     }}
                   />
-                  {marker && (
+                  {overlay && overlay.kind === 'box' && (
+                    <div
+                      aria-label="OCR bounding box"
+                      className="pointer-events-none absolute rounded-sm border-2 border-warning bg-warning/20 shadow-[0_0_0_3px_rgba(245,158,11,0.18)]"
+                      style={{
+                        left: percentStyle(overlay.leftPercent),
+                        top: percentStyle(overlay.topPercent),
+                        width: percentStyle(overlay.widthPercent),
+                        height: percentStyle(overlay.heightPercent),
+                      }}
+                    />
+                  )}
+                  {overlay && overlay.kind === 'point' && (
                     <div
                       aria-label="OCR position marker"
                       className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-warning bg-warning/25 shadow-[0_0_0_4px_rgba(245,158,11,0.20)]"
-                      style={{ left: `${marker.leftPercent}%`, top: `${marker.topPercent}%` }}
+                      style={{ left: percentStyle(overlay.leftPercent), top: percentStyle(overlay.topPercent) }}
                     >
                       <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-warning" />
                     </div>
@@ -1476,7 +1488,7 @@ function EvidencePreviewDrawer({
                 <EvidenceDetail label="Column" value={location.column_label ? formatEvidenceItem(location.column_label) : ''} />
                 <EvidenceDetail label="Zone" value={location.row_zone ? formatEvidenceItem(location.row_zone) : ''} />
                 <EvidenceDetail label="Position" value={position} />
-                <EvidenceDetail label="Image marker" value={marker ? `${marker.leftPercent.toFixed(1)}% x, ${marker.topPercent.toFixed(1)}% y` : ''} />
+                <EvidenceDetail label="Image marker" value={formatImageOverlay(overlay)} />
               </div>
 
               {location.value_preview && (
@@ -1561,16 +1573,64 @@ function formatOcrPosition(location: any) {
   return `Position: x ${x.toFixed(1)}, y ${y.toFixed(1)}`
 }
 
-function buildOcrImageMarker(location: any, imageSize: { width: number; height: number } | null) {
+type EvidenceImageOverlay =
+  | { kind: 'box'; leftPercent: number; topPercent: number; widthPercent: number; heightPercent: number }
+  | { kind: 'point'; leftPercent: number; topPercent: number }
+
+function buildOcrImageOverlay(location: any, imageSize: { width: number; height: number } | null): EvidenceImageOverlay | null {
   if (!imageSize || imageSize.width <= 0 || imageSize.height <= 0) return null
+  const bbox = normalizeOcrBBox(location.ocr_bbox || location.bbox)
+  if (bbox.length >= 2) {
+    const xs = bbox.map(point => point[0])
+    const ys = bbox.map(point => point[1])
+    const left = Math.min(...xs)
+    const right = Math.max(...xs)
+    const top = Math.min(...ys)
+    const bottom = Math.max(...ys)
+    if (left >= 0 && top >= 0 && right <= imageSize.width && bottom <= imageSize.height && right > left && bottom > top) {
+      return {
+        kind: 'box',
+        leftPercent: (left / imageSize.width) * 100,
+        topPercent: (top / imageSize.height) * 100,
+        widthPercent: ((right - left) / imageSize.width) * 100,
+        heightPercent: ((bottom - top) / imageSize.height) * 100,
+      }
+    }
+  }
   const x = Number(location.x_center)
   const y = Number(location.y_center)
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null
   if (x < 0 || y < 0 || x > imageSize.width || y > imageSize.height) return null
   return {
+    kind: 'point',
     leftPercent: (x / imageSize.width) * 100,
     topPercent: (y / imageSize.height) * 100,
   }
+}
+
+function normalizeOcrBBox(value: unknown) {
+  if (!Array.isArray(value)) return []
+  const points: Array<[number, number]> = []
+  for (const point of value) {
+    if (!Array.isArray(point) || point.length < 2) return []
+    const x = Number(point[0])
+    const y = Number(point[1])
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return []
+    points.push([x, y])
+  }
+  return points
+}
+
+function formatImageOverlay(overlay: EvidenceImageOverlay | null) {
+  if (!overlay) return ''
+  if (overlay.kind === 'box') {
+    return `${overlay.leftPercent.toFixed(1)}% x, ${overlay.topPercent.toFixed(1)}% y, ${overlay.widthPercent.toFixed(1)}% w, ${overlay.heightPercent.toFixed(1)}% h`
+  }
+  return `${overlay.leftPercent.toFixed(1)}% x, ${overlay.topPercent.toFixed(1)}% y`
+}
+
+function percentStyle(value: number) {
+  return `${Number(value.toFixed(4))}%`
 }
 
 function FlowCard({

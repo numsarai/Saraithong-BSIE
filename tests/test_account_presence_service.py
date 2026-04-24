@@ -124,6 +124,7 @@ def test_verify_account_presence_scans_image_raw_ocr_tokens_when_table_is_empty(
                 "page_number": 1,
                 "x_center": 120.0,
                 "y_center": 40.0,
+                "bbox": [[100.0, 30.0], [140.0, 30.0], [140.0, 50.0], [100.0, 50.0]],
             },
         ],
     }):
@@ -138,6 +139,7 @@ def test_verify_account_presence_scans_image_raw_ocr_tokens_when_table_is_empty(
     assert result["locations"][0]["source_region"] == "ocr_token"
     assert result["locations"][0]["column_label"] == "ocr_token"
     assert result["locations"][0]["ocr_confidence"] == 0.91
+    assert result["locations"][0]["ocr_bbox"] == [[100.0, 30.0], [140.0, 30.0], [140.0, 50.0], [100.0, 50.0]]
     assert result["summary"]["ocr_tokens_scanned"] == 1
 
 

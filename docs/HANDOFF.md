@@ -13,7 +13,47 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — OCR Marker Overlay For Image Evidence
+## Done (latest session) — OCR Bounding Box Overlay For Image Evidence
+
+### What I changed
+- `services/account_presence_service.py` now carries OCR token `bbox` lineage into match locations as `ocr_bbox`.
+- Step 2 evidence preview drawer prefers `ocr_bbox` to draw a rectangular overlay over image evidence.
+- If a valid bbox is missing, the drawer still falls back to the prior center-point marker from `x_center` / `y_center`.
+- The image marker metadata now reports rectangle percentages (`x`, `y`, `w`, `h`) when a bbox is available.
+- Updated backend and frontend regressions for OCR bbox preservation and image overlay placement.
+
+### Files changed
+- `services/account_presence_service.py`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `tests/test_account_presence_service.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `372 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `13 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/account_presence_service.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_account_presence_service.py::test_verify_account_presence_scans_image_raw_ocr_tokens_when_table_is_empty -q` -> `1 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `13 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+- Full verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `372 passed`
+  - `npm test -- --run` in `frontend/` -> `46 passed`
+
+### Decisions made
+- Added DEC-034: OCR account presence locations preserve bounding boxes for evidence overlays.
+
+### Warnings / Next
+- OCR bbox overlays are available only for OCR token matches that include bbox lineage. OCR table/page-text/PDF table matches still use row/column/page metadata.
+- The next useful slice is Phase 4 investigation copilot scope locking, or carrying PDF text coordinates if we want PDF-region overlays later.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — OCR Marker Overlay For Image Evidence
 
 ### What I changed
 - Step 2 evidence preview drawer now renders image evidence as an `<img>` instead of an iframe.

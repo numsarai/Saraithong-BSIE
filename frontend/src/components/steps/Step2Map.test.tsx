@@ -470,6 +470,7 @@ describe('Step2Map analyst gate', () => {
         ocr_confidence: 0.87,
         x_center: 120.5,
         y_center: 240.25,
+        ocr_bbox: [[100, 220], [180, 220], [180, 260], [100, 260]],
       }],
       possible_locations: [{
         sheet_name: 'Image OCR',
@@ -520,8 +521,13 @@ describe('Step2Map analyst gate', () => {
     Object.defineProperty(previewImage, 'naturalWidth', { configurable: true, value: 400 })
     Object.defineProperty(previewImage, 'naturalHeight', { configurable: true, value: 800 })
     fireEvent.load(previewImage)
-    expect(await screen.findByLabelText(/ocr position marker/i)).toHaveStyle({ left: '30.125%', top: '30.03125%' })
-    expect(screen.getByText(/30.1% x, 30.0% y/i)).toBeInTheDocument()
+    expect(await screen.findByLabelText(/ocr bounding box/i)).toHaveStyle({
+      left: '25%',
+      top: '27.5%',
+      width: '20%',
+      height: '5%',
+    })
+    expect(screen.getByText(/25.0% x, 27.5% y, 20.0% w, 5.0% h/i)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /open in new tab/i })).toHaveAttribute('href', '/api/files/file-1/evidence-preview')
     expect(screen.getByText(/Possible leading-zero matches/i)).toBeInTheDocument()
     expect(screen.getByText(/Image OCR Page 2 R8C3/i)).toBeInTheDocument()

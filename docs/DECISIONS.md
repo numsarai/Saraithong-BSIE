@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-034: OCR account presence locations preserve bounding boxes for evidence overlays
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Step 2 could show OCR match centers on image evidence, but center dots are weaker than the OCR text box lineage already produced by EasyOCR. The OCR loader preserves full token `bbox` coordinates, but account-presence results did not expose them.
+- **Decision:** Carry OCR token bounding boxes through account-presence match locations as `ocr_bbox` and use them in the Step 2 evidence preview drawer to draw a rectangular overlay on image evidence. If no valid bbox is present, fall back to the existing center-point marker.
+- **Alternatives:** (1) Keep center markers only -- usable but less precise. (2) Recompute OCR boxes in the frontend -- not acceptable and duplicates evidence extraction. (3) Ask a vision model to locate the account text -- non-deterministic and unnecessary when EasyOCR already returned coordinates.
+- **Consequences:** Investigators can see the exact OCR text region behind an account-presence match on images. PDF/table/page-text matches still use textual page/row/column lineage until a separate PDF coordinate extraction path exists.
+
 ### DEC-033: Evidence preview opens only stored PDF/image evidence by file_id
 - **Date:** 2026-04-24
 - **Status:** accepted

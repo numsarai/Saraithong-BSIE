@@ -622,6 +622,7 @@ def _scan_ocr_tokens(
             continue
         cells_scanned += 1
         page_number = int(token.get("page_number") or 1)
+        ocr_bbox = _coerce_ocr_bbox(token.get("bbox"))
         matched = _record_match(
             raw_value=raw_value,
             normalized_account=normalized_account,
@@ -638,6 +639,7 @@ def _scan_ocr_tokens(
                 "ocr_confidence": float(token.get("confidence") or 0),
                 "x_center": token.get("x_center"),
                 "y_center": token.get("y_center"),
+                "ocr_bbox": ocr_bbox,
             },
             max_items=max_items,
             exact_locations=exact_locations,
@@ -662,6 +664,20 @@ def _coerce_ocr_tokens(value: Any) -> list[dict[str, Any]]:
         if isinstance(item, dict) and str(item.get("text") or "").strip():
             tokens.append(item)
     return tokens
+
+
+def _coerce_ocr_bbox(value: Any) -> list[list[float]]:
+    if not isinstance(value, list):
+        return []
+    points: list[list[float]] = []
+    for point in value:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            return []
+        try:
+            points.append([float(point[0]), float(point[1])])
+        except (TypeError, ValueError):
+            return []
+    return points
 
 
 def _merge_counts(left: dict[str, int], right: dict[str, int]) -> dict[str, int]:

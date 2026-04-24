@@ -12,6 +12,17 @@
 - Endpoint path: native Ollama `/api/chat` through `think=false`
 - Evidence data: none; all fixtures are synthetic bank-header / OCR-layout examples
 
+Reproducible harness added:
+
+```bash
+.venv/bin/python scripts/benchmark_mapping_models.py --run-id 20260424-gemma-mapping-fixtures
+```
+
+The harness writes ignored artifacts under `artifacts/llm_mapping_benchmarks/`:
+
+- `mapping_model_benchmark_<run-id>.json`
+- `mapping_model_benchmark_<run-id>.md`
+
 Before this run, production mapping assist was adjusted to use `think=false` and a bounded output budget for structured JSON calls. A quick pre-fix probe showed the old path could be slow and incomplete under Gemma: `gemma4:e2b` took about 14.1s and returned only `date`/`description` for a Thai debit/credit fixture, while `gemma4:e4b` and `gemma4:26b` took about 24.7s and 32.9s for the same shape.
 
 ### Fixtures
@@ -29,6 +40,14 @@ Before this run, production mapping assist was adjusted to use `think=false` and
 | `gemma4:e2b` | 14 / 21 = 66.67% | 4,022.08 ms | 3 / 21 = 14.29% | 4,264.31 ms | Fast but unreliable for noisy mapping; vision often selected row values instead of column names, which BSIE safely filtered |
 | `gemma4:e4b` | 15 / 21 = 71.43% | 7,375.73 ms | 15 / 21 = 71.43% | 7,043.96 ms | Strong on clean fixtures, failed noisy OCR-like Thai fixture |
 | `gemma4:26b` | 21 / 21 = 100% | 8,520.42 ms | 21 / 21 = 100% | 6,688.96 ms | Best accuracy; passed clean, English signed amount, and noisy Thai OCR-like fixtures |
+
+Re-run from the committed harness (`20260424-gemma-mapping-fixtures`) produced the same ranking:
+
+| Model | Text score | Text avg | Vision score | Vision avg |
+|---|---:|---:|---:|---:|
+| `gemma4:26b` | 21 / 21 = 100% | 5,759.21 ms | 21 / 21 = 100% | 6,204.92 ms |
+| `gemma4:e4b` | 15 / 21 = 71.43% | 7,310.27 ms | 15 / 21 = 71.43% | 6,454.89 ms |
+| `gemma4:e2b` | 13 / 21 = 61.90% | 4,967.51 ms | 3 / 21 = 14.29% | 4,664.24 ms |
 
 ### Follow-up Prompt Experiment
 

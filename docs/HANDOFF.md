@@ -9,11 +9,78 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `344 passed`, frontend `37 passed`, frontend build passed
+- **Baseline:** backend `347 passed`, frontend `37 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Mapping Assist Fixture Benchmark
+## Done (latest session) — Reproducible Mapping Model Benchmark Harness
+
+### What I changed
+- Added `scripts/benchmark_mapping_models.py`.
+  - Uses only synthetic fixtures; does not read evidence, parser runs, or the DB.
+  - Runs text and/or vision mapping assist against fixed mapping fixtures.
+  - Scores expected logical fields against actual suggested columns.
+  - Writes JSON and Markdown reports under ignored `artifacts/llm_mapping_benchmarks/`.
+  - Supports `--models`, `--mode`, repeated `--fixture`, `--run-id`, `--keep-fixtures`, and `--print-json`.
+- Added `tests/test_benchmark_mapping_models.py` for model parsing, scoring, summary, and Markdown output.
+- Updated docs:
+  - `docs/LOCAL_LLM_BENCHMARKS.md`
+  - `docs/DECISIONS.md` (`DEC-022`)
+  - `docs/HANDOFF.md`
+  - `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Harness command
+
+```bash
+.venv/bin/python scripts/benchmark_mapping_models.py --run-id 20260424-gemma-mapping-fixtures
+```
+
+The first committed-harness run wrote:
+
+- `artifacts/llm_mapping_benchmarks/mapping_model_benchmark_20260424-gemma-mapping-fixtures.json`
+- `artifacts/llm_mapping_benchmarks/mapping_model_benchmark_20260424-gemma-mapping-fixtures.md`
+
+### Benchmark results from harness run
+- `gemma4:26b`:
+  - text `21/21` = `100%`, avg `5,759.21 ms`
+  - vision `21/21` = `100%`, avg `6,204.92 ms`
+- `gemma4:e4b`:
+  - text `15/21` = `71.43%`, avg `7,310.27 ms`
+  - vision `15/21` = `71.43%`, avg `6,454.89 ms`
+- `gemma4:e2b`:
+  - text `13/21` = `61.90%`, avg `4,967.51 ms`
+  - vision `3/21` = `14.29%`, avg `4,664.24 ms`
+
+### Files changed
+- `scripts/benchmark_mapping_models.py`
+- `tests/test_benchmark_mapping_models.py`
+- `docs/LOCAL_LLM_BENCHMARKS.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- `.venv/bin/python -m py_compile scripts/benchmark_mapping_models.py tests/test_benchmark_mapping_models.py` -> passed
+- `.venv/bin/python -m pytest tests/test_benchmark_mapping_models.py -q` -> `3 passed`
+- `.venv/bin/python -m pytest tests/ -q` -> `347 passed`
+- Live harness smoke:
+  - `.venv/bin/python scripts/benchmark_mapping_models.py --models gemma4:26b --fixture thai_debit_credit --mode text --run-id smoke --no-markdown` -> passed
+- Full harness:
+  - `.venv/bin/python scripts/benchmark_mapping_models.py --run-id 20260424-gemma-mapping-fixtures` -> passed
+
+### Decisions made
+- Use this script, not ad hoc snippets, for future local model comparisons.
+- Keep benchmark artifacts ignored under `artifacts/`; record only summarized outcomes in docs unless a specific artifact must be preserved.
+
+### Warnings
+- The harness is not a CI test; it requires local Ollama and installed models.
+- Fixtures are synthetic and useful for model comparison, but still need expansion across all 8 supported banks before any stronger automation policy.
+
+### Environment changes
+- No dependencies installed by Codex.
+- Generated ignored artifacts under `artifacts/llm_mapping_benchmarks/`.
+
+## Done (previous session) — Mapping Assist Fixture Benchmark
 
 ### What I changed
 - Updated production mapping assist calls in `services/mapping_assist_service.py`:

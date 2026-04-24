@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-022: Mapping model selection uses a reproducible synthetic fixture harness
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Manual ad hoc benchmark snippets were useful for exploration, but model-selection decisions for evidence-sensitive mapping should be reproducible and should not depend on real case data or one-off shell history.
+- **Decision:** Add `scripts/benchmark_mapping_models.py` as the reusable local-only harness for synthetic mapping fixtures. It runs text and/or vision mapping assist against fixed synthetic fixtures, scores expected mapping fields, and writes JSON/Markdown artifacts under ignored `artifacts/llm_mapping_benchmarks/`.
+- **Alternatives:** (1) Keep manual snippets in docs — quick but hard to rerun safely. (2) Use real uploaded statements for accuracy tests — more realistic but not acceptable for a reusable benchmark log. (3) Fold task benchmarks into normal pytest — would make tests require Ollama and local models.
+- **Consequences:** Future model changes can be compared with the same synthetic fixtures and output format. The harness is not a CI test because it depends on local Ollama model availability.
+
 ### DEC-021: Mapping assist defaults to Gemma 4 26B with bounded no-think structured calls
 - **Date:** 2026-04-24
 - **Status:** accepted

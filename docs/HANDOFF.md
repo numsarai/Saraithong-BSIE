@@ -9,11 +9,67 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `391 passed`, frontend `52 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `392 passed`, frontend `52 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Audit-backed Classification History/Revert
+## Done (latest session) — Phase 5 Observe-only Auto-pass Gates
+
+### What I changed
+- Started Phase 5 with observe-only auto-pass gate telemetry for bank template variants.
+- Added `build_auto_pass_gate()` in `services/template_variant_service.py` to evaluate source type, trust state, confirmations, reviewer diversity, correction rate, valid preview rows, bank confidence, bank ambiguity, mapping validity, exact match type, and match score.
+- Variant list/match payloads now include `auto_pass_gate` with `would_auto_pass`, blockers, rollback reasons, thresholds, and metrics, while `auto_pass_eligible` remains `false`.
+- Upload/redetect and bulk trusted-variant suggestion paths now attach gate telemetry without changing suggestion-only behavior.
+- Bank Manager now shows Auto-pass Gate status, observe-only mode, blockers, and rollback review reasons for each template variant.
+- Added DEC-050, roadmap status, i18n labels, and regression coverage.
+
+### Files changed
+- `services/template_variant_service.py`
+- `routers/ingestion.py`
+- `core/bulk_processor.py`
+- `frontend/src/components/BankManager.tsx`
+- `frontend/src/components/BankManager.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `tests/test_template_variant_service.py`
+- `tests/test_bulk_processor.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `391 passed`
+  - `npm test -- --run` in `frontend/` -> `52 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/template_variant_service.py routers/ingestion.py core/bulk_processor.py tests/test_template_variant_service.py tests/test_app_api.py tests/test_bulk_processor.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_template_variant_service.py tests/test_bulk_processor.py::test_bulk_mapping_uses_only_trusted_template_variants tests/test_app_api.py::test_upload_excel_applies_valid_template_variant_as_suggestion_only -q` -> `8 passed`
+  - `npm test -- --run src/components/BankManager.test.tsx` in `frontend/` -> `2 passed`
+  - `npm run build` in `frontend/` -> passed
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `392 passed`
+  - `npm test -- --run` in `frontend/` -> `52 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- Added DEC-050: auto-pass rollout starts with observe-only gates.
+- This does not enable auto-pass; it only exposes readiness/blocker/rollback telemetry so reviewers can decide before enforcement.
+
+### Warnings / Next
+- `auto_pass_eligible` intentionally remains `false` for every match in this slice.
+- Gate readiness currently requires exact ordered signature match for future auto-pass; set-signature matches are blocked with `match_not_exact`.
+- Next useful slice: add aggregate gate metrics by bank/state, or add a reviewer workflow to mark trusted variants for rollback/demotion review before any actual auto-pass enablement.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but generated dist files remain untracked.
+
+## Done (previous session) — Audit-backed Classification History/Revert
 
 ### What I changed
 - Added an Audit History panel under AI Copilot Evidence classification review for the currently scoped transaction picker rows.

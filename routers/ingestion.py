@@ -37,6 +37,7 @@ from services.mapping_validation_service import validate_and_preview_mapping, va
 from services.persistence_pipeline_service import create_parser_run
 from services.subject_context_service import build_subject_account_context
 from services.template_variant_service import (
+    build_auto_pass_gate,
     find_matching_template_variant,
     list_template_variants,
     promote_template_variant,
@@ -58,6 +59,13 @@ logger = logging.getLogger("bsie.api")
 router = APIRouter(prefix="/api", tags=["ingestion"], dependencies=[Depends(require_auth)])
 
 VARIANT_BANK_CONFIDENCE_THRESHOLD = 0.75
+
+
+def _bank_confidence_value(bank_result: dict) -> float:
+    try:
+        return float(bank_result.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -83,11 +91,34 @@ def _is_stable_variant_bank(bank_result: dict, source_type: str) -> bool:
         return False
     if bool(bank_result.get("ambiguous")):
         return False
-    try:
-        confidence = float(bank_result.get("confidence") or 0.0)
-    except (TypeError, ValueError):
-        confidence = 0.0
+    confidence = _bank_confidence_value(bank_result)
     return confidence >= VARIANT_BANK_CONFIDENCE_THRESHOLD
+
+
+def _template_variant_match_summary(variant: dict, bank_result: dict, *, mapping_valid: bool) -> dict:
+    gate = build_auto_pass_gate(
+        variant,
+        source_type=variant.get("source_type") or "excel",
+        bank_confidence=_bank_confidence_value(bank_result),
+        bank_ambiguous=bool(bank_result.get("ambiguous", False)),
+        mapping_valid=mapping_valid,
+        match_type=variant.get("match_type"),
+        match_score=variant.get("match_score"),
+    )
+    return {
+        "variant_id": variant["variant_id"],
+        "bank_key": variant["bank_key"],
+        "trust_state": variant["trust_state"],
+        "match_type": variant["match_type"],
+        "match_score": variant["match_score"],
+        "confirmation_count": variant["confirmation_count"],
+        "correction_count": variant["correction_count"],
+        "reviewer_count": variant["reviewer_count"],
+        "correction_rate": variant.get("correction_rate", 0.0),
+        "suggestion_only": True,
+        "auto_pass_eligible": gate["auto_pass_eligible"],
+        "auto_pass_gate": gate,
+    }
 
 
 def _suggest_mapping_with_memory(
@@ -134,6 +165,8 @@ def _suggest_mapping_with_memory(
                 sheet_name=sheet_name,
                 header_row=header_row,
                 include_candidate=True,
+                bank_confidence=_bank_confidence_value(bank_result),
+                bank_ambiguous=bool(bank_result.get("ambiguous", False)),
             )
         if variant:
             variant_suggested = repair_suggested_mapping(
@@ -141,21 +174,11 @@ def _suggest_mapping_with_memory(
                 auto_suggested,
                 columns,
             )
-            if validate_mapping(variant_suggested, columns, bank=bank_key)["ok"]:
+            variant_validation = validate_mapping(variant_suggested, columns, bank=bank_key)
+            if variant_validation["ok"]:
                 suggested = variant_suggested
                 suggestion_source = "template_variant"
-                template_variant_match = {
-                    "variant_id": variant["variant_id"],
-                    "bank_key": variant["bank_key"],
-                    "trust_state": variant["trust_state"],
-                    "match_type": variant["match_type"],
-                    "match_score": variant["match_score"],
-                    "confirmation_count": variant["confirmation_count"],
-                    "correction_count": variant["correction_count"],
-                    "reviewer_count": variant["reviewer_count"],
-                    "suggestion_only": True,
-                    "auto_pass_eligible": False,
-                }
+                template_variant_match = _template_variant_match_summary(variant, bank_result, mapping_valid=True)
 
     return {
         "suggested_mapping": suggested,

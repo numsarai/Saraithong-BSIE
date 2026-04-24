@@ -124,6 +124,15 @@ describe('BankManager prepared bank logos', () => {
         correction_rate: 0,
         reviewer_count: 1,
         dry_run_summary: { valid_transaction_rows: 3 },
+        auto_pass_gate: {
+          mode: 'observe_only',
+          status: 'blocked',
+          would_auto_pass: false,
+          auto_pass_eligible: false,
+          blocked_reasons: ['not_trusted', 'insufficient_reviewers'],
+          rollback_recommended: false,
+          rollback_reasons: [],
+        },
         updated_at: '2026-04-24T02:00:00Z',
       }],
     })
@@ -134,6 +143,9 @@ describe('BankManager prepared bank logos', () => {
     expect(await screen.findByText('Template Variants')).toBeInTheDocument()
     expect(await screen.findByText('VARIANT-1')).toBeInTheDocument()
     expect(screen.getByText('2 confirmations')).toBeInTheDocument()
+    expect(screen.getByText('Auto-pass Gate')).toBeInTheDocument()
+    expect(screen.getByText('Observe only')).toBeInTheDocument()
+    expect(screen.getByText('not trusted')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('Promotion note'), {
       target: { value: 'confirmed in two reviewed files' },

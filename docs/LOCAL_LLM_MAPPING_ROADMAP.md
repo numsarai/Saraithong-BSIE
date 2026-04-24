@@ -236,6 +236,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - Bulk intake ใช้เฉพาะ trusted Excel variants เพราะเป็น flow ที่ไม่มี per-file analyst confirmation
 - Bank Manager มี per-bank Template Variants panel สำหรับตรวจและโปรโมต `candidate -> verified -> trusted`
 - ทุก variant match ยังส่ง `auto_pass_eligible=false`; ยังไม่ได้เปิด auto-pass จริง
+- Variant responses เริ่มมี `auto_pass_gate` แบบ observe-only เพื่อแสดง readiness/blockers/rollback review ก่อนเปิด automation
 
 ไฟล์หลัก:
 
@@ -338,15 +339,19 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 5 — Auto-pass Rollout
 
+สถานะ: started เมื่อ 2026-04-24; observe-only auto-pass gate telemetry implemented ตาม DEC-050
+
 เป้าหมาย:
 
 - เปิดใช้แบบระวังและวัดผลได้
 
 งานหลัก:
 
-- เปิดเฉพาะ Excel trusted variants
-- เพิ่ม metrics และ rollback conditions
-- monitor correction rate
+- [x] เพิ่ม observe-only auto-pass gate สำหรับ template variants โดยยังคง `auto_pass_eligible=false`
+- [x] แสดง metrics/blockers/rollback review ใน Bank Manager เพื่อให้ reviewer เห็นความพร้อมก่อนเปิด automation
+- [ ] เปิดเฉพาะ Excel trusted variants เมื่อ policy พร้อมและมี reviewer sign-off
+- [ ] เพิ่ม metrics aggregation และ rollback conditions สำหรับรอบที่ auto-pass ถูกเปิดจริง
+- [ ] monitor correction rate หลัง rollout
 
 ## Metrics
 

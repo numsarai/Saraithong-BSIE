@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
 import { BankLogo } from '@/components/BankLogo'
 import { toast } from 'sonner'
-import { ArrowUpCircle, ChevronLeft, Building2, Plus, RefreshCw, Save, ShieldCheck, Trash2, X } from 'lucide-react'
+import { ArrowUpCircle, ChevronLeft, Building2, Plus, RefreshCw, Save, ShieldAlert, ShieldCheck, Trash2, X } from 'lucide-react'
 
 const LOGICAL_FIELDS = [
   'date','time','description','amount','direction_marker','debit','credit',
@@ -84,6 +84,15 @@ type TemplateVariant = {
   reviewer_count?: number
   confirmed_by?: string[]
   dry_run_summary?: Record<string, any>
+  auto_pass_gate?: {
+    mode?: string
+    status?: string
+    would_auto_pass?: boolean
+    auto_pass_eligible?: boolean
+    blocked_reasons?: string[]
+    rollback_recommended?: boolean
+    rollback_reasons?: string[]
+  }
   updated_at?: string | null
   last_confirmed_at?: string | null
   promoted_by?: string
@@ -92,6 +101,10 @@ type TemplateVariant = {
 const EMPTY_CFG: BankCfg = {
   key: '', bank_name: '', sheet_index: 0, header_row: 0,
   format_type: 'standard', amount_mode: 'signed', column_mapping: {},
+}
+
+function formatGateReason(reason: string) {
+  return String(reason || '').replaceAll('_', ' ')
 }
 
 export function BankManager() {
@@ -404,6 +417,10 @@ function TemplateVariantsPanel({ bankKey, operatorName }: { bankKey: string; ope
           const mappedFields = Object.keys(variant.confirmed_mapping || {}).filter(key => variant.confirmed_mapping?.[key])
           const correctionRate = Math.round(Number(variant.correction_rate || 0) * 100)
           const dryRun = variant.dry_run_summary || {}
+          const autoPassGate = variant.auto_pass_gate
+          const blockedReasons = Array.isArray(autoPassGate?.blocked_reasons) ? autoPassGate.blocked_reasons : []
+          const rollbackReasons = Array.isArray(autoPassGate?.rollback_reasons) ? autoPassGate.rollback_reasons : []
+          const gateStatusTone = autoPassGate?.rollback_recommended ? 'yellow' : autoPassGate?.would_auto_pass ? 'green' : 'gray'
           return (
             <div key={variant.variant_id} className="rounded-lg border border-border bg-surface2/40 p-3">
               <div className="flex items-start justify-between gap-3">
@@ -439,6 +456,44 @@ function TemplateVariantsPanel({ bankKey, operatorName }: { bankKey: string; ope
                   <div className="text-text2">{Number(dryRun.valid_transaction_rows || 0)}</div>
                 </div>
               </div>
+
+              {autoPassGate && (
+                <div className="mt-3 rounded-md border border-border/70 bg-surface px-3 py-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {autoPassGate.rollback_recommended ? (
+                      <ShieldAlert size={13} className="text-warning" />
+                    ) : (
+                      <ShieldCheck size={13} className={autoPassGate.would_auto_pass ? 'text-success' : 'text-muted'} />
+                    )}
+                    <span className="font-semibold text-text2">{t('bankManager.variants.autoPassGate')}</span>
+                    <Badge variant="blue">{t('bankManager.variants.observeOnly')}</Badge>
+                    <Badge variant={gateStatusTone}>{autoPassGate.rollback_recommended
+                      ? t('bankManager.variants.rollbackReview')
+                      : autoPassGate.would_auto_pass
+                        ? t('bankManager.variants.gateReady')
+                        : t('bankManager.variants.gateBlocked')}</Badge>
+                  </div>
+                  <div className="mt-1 text-muted">
+                    {autoPassGate.would_auto_pass
+                      ? t('bankManager.variants.gateReadyDescription')
+                      : t('bankManager.variants.gateBlockedDescription')}
+                  </div>
+                  {blockedReasons.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {blockedReasons.slice(0, 6).map(reason => (
+                        <span key={reason} className="rounded-full border border-border bg-surface2 px-2 py-0.5 text-[11px] text-text2">
+                          {formatGateReason(reason)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {rollbackReasons.length > 0 && (
+                    <div className="mt-2 text-[11px] text-warning">
+                      {t('bankManager.variants.rollbackReasons')}: {rollbackReasons.slice(0, 4).map(formatGateReason).join(', ')}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {mappedFields.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">

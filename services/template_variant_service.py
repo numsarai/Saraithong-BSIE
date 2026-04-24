@@ -11,6 +11,14 @@ from persistence.models import BankTemplateVariant
 
 TRUST_STATES = {"candidate", "verified", "trusted"}
 TRUST_ORDER = {"candidate": 0, "verified": 1, "trusted": 2}
+AUTO_PASS_MODE = "observe_only"
+AUTO_PASS_MIN_CONFIRMATIONS = 3
+AUTO_PASS_MIN_REVIEWERS = 2
+AUTO_PASS_MAX_CORRECTION_RATE = 0.10
+AUTO_PASS_MIN_VALID_ROWS = 1
+AUTO_PASS_MIN_BANK_CONFIDENCE = 0.90
+AUTO_PASS_MIN_MATCH_SCORE = 0.99
+AUTO_PASS_ALLOWED_MATCH_TYPES = {"ordered_signature"}
 
 
 def normalize_source_type(value: str | None) -> str:
@@ -79,6 +87,127 @@ def _next_trust_state(
     if confirmation_count >= 2 and correction_rate <= 0.5:
         return "verified"
     return current
+
+
+def _int_metric(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _float_metric(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _valid_transaction_rows(variant: dict[str, Any]) -> int:
+    dry_run = variant.get("dry_run_summary") or {}
+    if not isinstance(dry_run, dict):
+        return 0
+    return _int_metric(dry_run.get("valid_transaction_rows"))
+
+
+def build_auto_pass_gate(
+    variant: dict[str, Any],
+    *,
+    source_type: str | None = None,
+    bank_confidence: float | None = None,
+    bank_ambiguous: bool | None = None,
+    mapping_valid: bool | None = None,
+    match_type: str | None = None,
+    match_score: float | None = None,
+) -> dict[str, Any]:
+    """Evaluate Phase 5 auto-pass readiness without enabling auto-pass."""
+    clean_source = normalize_source_type(source_type or variant.get("source_type") or "excel")
+    trust_state = str(variant.get("trust_state") or "").strip().lower()
+    confirmation_count = _int_metric(variant.get("confirmation_count"))
+    correction_count = _int_metric(variant.get("correction_count"))
+    reviewer_count = _int_metric(variant.get("reviewer_count"))
+    valid_rows = _valid_transaction_rows(variant)
+    correction_rate = correction_count / confirmation_count if confirmation_count else 0.0
+    if "correction_rate" in variant:
+        correction_rate = _float_metric(variant.get("correction_rate"))
+    clean_match_type = str(match_type or variant.get("match_type") or "").strip()
+    clean_match_score = _float_metric(match_score if match_score is not None else variant.get("match_score"))
+
+    blocked_reasons: list[str] = []
+    if clean_source != "excel":
+        blocked_reasons.append("source_not_excel")
+    if trust_state != "trusted":
+        blocked_reasons.append("not_trusted")
+    if confirmation_count < AUTO_PASS_MIN_CONFIRMATIONS:
+        blocked_reasons.append("insufficient_confirmations")
+    if reviewer_count < AUTO_PASS_MIN_REVIEWERS:
+        blocked_reasons.append("insufficient_reviewers")
+    if correction_rate > AUTO_PASS_MAX_CORRECTION_RATE:
+        blocked_reasons.append("correction_rate_high")
+    if valid_rows < AUTO_PASS_MIN_VALID_ROWS:
+        blocked_reasons.append("no_valid_preview_rows")
+    if bank_confidence is not None and _float_metric(bank_confidence) < AUTO_PASS_MIN_BANK_CONFIDENCE:
+        blocked_reasons.append("bank_confidence_low")
+    if bank_ambiguous is True:
+        blocked_reasons.append("bank_ambiguous")
+    if mapping_valid is False:
+        blocked_reasons.append("mapping_invalid")
+    if clean_match_type and clean_match_type not in AUTO_PASS_ALLOWED_MATCH_TYPES:
+        blocked_reasons.append("match_not_exact")
+    if match_score is not None and clean_match_score < AUTO_PASS_MIN_MATCH_SCORE:
+        blocked_reasons.append("match_score_low")
+
+    rollback_reasons: list[str] = []
+    if trust_state == "trusted":
+        if confirmation_count < AUTO_PASS_MIN_CONFIRMATIONS:
+            rollback_reasons.append("trusted_without_enough_confirmations")
+        if reviewer_count < AUTO_PASS_MIN_REVIEWERS:
+            rollback_reasons.append("trusted_without_enough_reviewers")
+        if correction_rate > AUTO_PASS_MAX_CORRECTION_RATE:
+            rollback_reasons.append("trusted_correction_rate_high")
+        if valid_rows < AUTO_PASS_MIN_VALID_ROWS:
+            rollback_reasons.append("trusted_without_valid_preview_rows")
+
+    would_auto_pass = not blocked_reasons
+    rollback_recommended = bool(rollback_reasons)
+    status = "blocked"
+    if rollback_recommended:
+        status = "rollback_review"
+    elif would_auto_pass:
+        status = "ready_observe_only"
+
+    return {
+        "mode": AUTO_PASS_MODE,
+        "status": status,
+        "would_auto_pass": would_auto_pass,
+        "auto_pass_eligible": False,
+        "blocked_reasons": blocked_reasons,
+        "rollback_recommended": rollback_recommended,
+        "rollback_reasons": rollback_reasons,
+        "thresholds": {
+            "min_confirmations": AUTO_PASS_MIN_CONFIRMATIONS,
+            "min_reviewers": AUTO_PASS_MIN_REVIEWERS,
+            "max_correction_rate": AUTO_PASS_MAX_CORRECTION_RATE,
+            "min_valid_transaction_rows": AUTO_PASS_MIN_VALID_ROWS,
+            "min_bank_confidence": AUTO_PASS_MIN_BANK_CONFIDENCE,
+            "min_match_score": AUTO_PASS_MIN_MATCH_SCORE,
+            "allowed_match_types": sorted(AUTO_PASS_ALLOWED_MATCH_TYPES),
+        },
+        "metrics": {
+            "source_type": clean_source,
+            "trust_state": trust_state,
+            "confirmation_count": confirmation_count,
+            "reviewer_count": reviewer_count,
+            "correction_count": correction_count,
+            "correction_rate": round(correction_rate, 4),
+            "valid_transaction_rows": valid_rows,
+            "bank_confidence": round(_float_metric(bank_confidence), 4) if bank_confidence is not None else None,
+            "bank_ambiguous": bank_ambiguous,
+            "mapping_valid": mapping_valid,
+            "match_type": clean_match_type,
+            "match_score": round(clean_match_score, 4) if match_score is not None else None,
+        },
+    }
 
 
 def upsert_template_variant(
@@ -196,6 +325,9 @@ def find_matching_template_variant(
     header_row: int | None = None,
     include_candidate: bool = True,
     allowed_trust_states: set[str] | list[str] | tuple[str, ...] | None = None,
+    bank_confidence: float | None = None,
+    bank_ambiguous: bool | None = None,
+    mapping_valid: bool | None = None,
 ) -> dict | None:
     clean_bank = str(bank_key or "").strip().lower()
     if not clean_bank or clean_bank in {"unknown", "generic"}:
@@ -252,11 +384,22 @@ def find_matching_template_variant(
         return None
     ranked.sort(key=lambda item: item[0], reverse=True)
     _, row, match_type, match_score = ranked[0]
+    variant = variant_to_dict(row)
+    gate = build_auto_pass_gate(
+        variant,
+        source_type=clean_source,
+        bank_confidence=bank_confidence,
+        bank_ambiguous=bank_ambiguous,
+        mapping_valid=mapping_valid,
+        match_type=match_type,
+        match_score=match_score,
+    )
     return {
-        **variant_to_dict(row),
+        **variant,
         "match_type": match_type,
         "match_score": match_score,
-        "auto_pass_eligible": False,
+        "auto_pass_gate": gate,
+        "auto_pass_eligible": gate["auto_pass_eligible"],
         "suggestion_only": True,
     }
 
@@ -299,7 +442,7 @@ def variant_to_dict(row: BankTemplateVariant) -> dict:
     confirmation_count = int(row.confirmation_count or 0)
     correction_count = int(row.correction_count or 0)
     correction_rate = correction_count / confirmation_count if confirmation_count else 0.0
-    return {
+    result = {
         "variant_id": row.id,
         "bank_key": row.bank_key,
         "source_type": row.source_type,
@@ -325,3 +468,6 @@ def variant_to_dict(row: BankTemplateVariant) -> dict:
         "promoted_by": row.promoted_by or "",
         "notes": row.notes or "",
     }
+    result["auto_pass_gate"] = build_auto_pass_gate(result)
+    result["auto_pass_eligible"] = False
+    return result

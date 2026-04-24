@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from persistence.base import Base
 from persistence.models import BankTemplateVariant
 from services.template_variant_service import (
+    build_auto_pass_gate,
     find_matching_template_variant,
     list_template_variants,
     promote_template_variant,
@@ -81,6 +82,29 @@ def test_template_variant_can_become_trusted_after_multiple_reviewers(tmp_path):
     assert variant["confirmation_count"] == 3
     assert variant["reviewer_count"] == 2
     assert variant["trust_state"] == "trusted"
+    assert variant["auto_pass_gate"]["status"] == "ready_observe_only"
+    assert variant["auto_pass_gate"]["would_auto_pass"] is True
+    assert variant["auto_pass_gate"]["auto_pass_eligible"] is False
+
+
+def test_auto_pass_gate_reports_blockers_and_rollback_conditions():
+    gate = build_auto_pass_gate({
+        "source_type": "excel",
+        "trust_state": "trusted",
+        "confirmation_count": 1,
+        "reviewer_count": 1,
+        "correction_count": 1,
+        "correction_rate": 1.0,
+        "dry_run_summary": {"valid_transaction_rows": 0},
+    })
+
+    assert gate["mode"] == "observe_only"
+    assert gate["would_auto_pass"] is False
+    assert gate["auto_pass_eligible"] is False
+    assert gate["status"] == "rollback_review"
+    assert gate["rollback_recommended"] is True
+    assert "insufficient_confirmations" in gate["blocked_reasons"]
+    assert "trusted_correction_rate_high" in gate["rollback_reasons"]
 
 
 def test_find_matching_template_variant_keeps_candidate_exact_order_only(tmp_path):
@@ -153,6 +177,8 @@ def test_find_matching_template_variant_allows_trusted_set_signature(tmp_path):
     assert matched is not None
     assert matched["variant_id"] == variant["variant_id"]
     assert matched["match_type"] == "set_signature"
+    assert matched["auto_pass_gate"]["auto_pass_eligible"] is False
+    assert "match_not_exact" in matched["auto_pass_gate"]["blocked_reasons"]
 
 
 def test_manual_promotion_requires_named_reviewer_and_lists_variants(tmp_path):

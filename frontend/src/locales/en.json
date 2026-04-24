@@ -437,7 +437,15 @@
       "notePlaceholder": "Promotion note",
       "promoteVerified": "Promote to verified",
       "promoteTrusted": "Promote to trusted",
-      "noPromotionNeeded": "trusted"
+      "noPromotionNeeded": "trusted",
+      "autoPassGate": "Auto-pass Gate",
+      "observeOnly": "Observe only",
+      "gateReady": "Ready by metrics",
+      "gateBlocked": "Blocked",
+      "rollbackReview": "Rollback review",
+      "gateReadyDescription": "This variant meets the current gate, but automation is still disabled.",
+      "gateBlockedDescription": "This variant cannot auto-pass until the gate blockers are cleared.",
+      "rollbackReasons": "Rollback reasons"
     },
     "toast": {
       "keyRequired": "Key is required",

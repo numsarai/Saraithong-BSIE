@@ -27,7 +27,7 @@ from paths import OUTPUT_DIR
 from services.file_ingestion_service import persist_upload
 from services.mapping_validation_service import validate_mapping
 from services.persistence_pipeline_service import create_parser_run
-from services.template_variant_service import find_matching_template_variant
+from services.template_variant_service import build_auto_pass_gate, find_matching_template_variant
 from utils.app_helpers import repair_suggested_mapping
 
 logger = logging.getLogger(__name__)
@@ -287,14 +287,27 @@ def _is_stable_variant_bank(detection: dict[str, Any], source_type: str) -> bool
         return False
     if bool(detection.get("ambiguous")):
         return False
-    try:
-        confidence = float(detection.get("confidence") or 0.0)
-    except (TypeError, ValueError):
-        confidence = 0.0
+    confidence = _bank_confidence_value(detection)
     return confidence >= VARIANT_BANK_CONFIDENCE_THRESHOLD
 
 
-def _template_variant_summary(variant: dict[str, Any]) -> dict[str, Any]:
+def _bank_confidence_value(detection: dict[str, Any]) -> float:
+    try:
+        return float(detection.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _template_variant_summary(variant: dict[str, Any], detection: dict[str, Any], *, mapping_valid: bool) -> dict[str, Any]:
+    gate = build_auto_pass_gate(
+        variant,
+        source_type=variant.get("source_type") or "excel",
+        bank_confidence=_bank_confidence_value(detection),
+        bank_ambiguous=bool(detection.get("ambiguous", False)),
+        mapping_valid=mapping_valid,
+        match_type=variant.get("match_type"),
+        match_score=variant.get("match_score"),
+    )
     return {
         "variant_id": variant["variant_id"],
         "bank_key": variant["bank_key"],
@@ -304,8 +317,10 @@ def _template_variant_summary(variant: dict[str, Any]) -> dict[str, Any]:
         "confirmation_count": variant["confirmation_count"],
         "correction_count": variant["correction_count"],
         "reviewer_count": variant["reviewer_count"],
+        "correction_rate": variant.get("correction_rate", 0.0),
         "suggestion_only": True,
-        "auto_pass_eligible": False,
+        "auto_pass_eligible": gate["auto_pass_eligible"],
+        "auto_pass_gate": gate,
     }
 
 
@@ -346,6 +361,8 @@ def _select_bulk_confirmed_mapping(
                 header_row=header_row,
                 include_candidate=False,
                 allowed_trust_states={"trusted"},
+                bank_confidence=_bank_confidence_value(detection),
+                bank_ambiguous=bool(detection.get("ambiguous", False)),
             )
         if variant:
             variant_mapping = repair_suggested_mapping(
@@ -353,10 +370,11 @@ def _select_bulk_confirmed_mapping(
                 auto_suggested,
                 columns,
             )
-            if validate_mapping(variant_mapping, columns, bank=bank_key)["ok"]:
+            variant_validation = validate_mapping(variant_mapping, columns, bank=bank_key)
+            if variant_validation["ok"]:
                 confirmed_mapping = variant_mapping
                 suggestion_source = "template_variant"
-                template_variant_match = _template_variant_summary(variant)
+                template_variant_match = _template_variant_summary(variant, detection, mapping_valid=True)
 
     return {
         "confirmed_mapping": confirmed_mapping,

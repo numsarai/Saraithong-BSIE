@@ -150,6 +150,8 @@ def test_bulk_mapping_uses_only_trusted_template_variants():
     assert mapping_context["suggestion_source"] == "template_variant"
     assert mapping_context["template_variant_match"]["variant_id"] == "VARIANT-TRUSTED"
     assert mapping_context["template_variant_match"]["auto_pass_eligible"] is False
+    assert mapping_context["template_variant_match"]["auto_pass_gate"]["mode"] == "observe_only"
+    assert "no_valid_preview_rows" in mapping_context["template_variant_match"]["auto_pass_gate"]["blocked_reasons"]
     assert mapping_context["confirmed_mapping"]["amount"] is None
     assert mapping_context["confirmed_mapping"]["debit"] == "ถอนเงิน"
     assert mapping_context["confirmed_mapping"]["credit"] == "เงินฝาก"

@@ -660,6 +660,8 @@ def test_upload_excel_applies_valid_template_variant_as_suggestion_only(tmp_path
     assert payload["template_variant_match"]["variant_id"] == "VARIANT-TRUSTED"
     assert payload["template_variant_match"]["suggestion_only"] is True
     assert payload["template_variant_match"]["auto_pass_eligible"] is False
+    assert payload["template_variant_match"]["auto_pass_gate"]["mode"] == "observe_only"
+    assert "no_valid_preview_rows" in payload["template_variant_match"]["auto_pass_gate"]["blocked_reasons"]
     assert payload["suggested_mapping"]["amount"] is None
     assert payload["suggested_mapping"]["debit"] == "ถอนเงิน"
     assert payload["suggested_mapping"]["credit"] == "เงินฝาก"

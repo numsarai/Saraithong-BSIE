@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-050: Auto-pass rollout starts with observe-only gates
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** Phase 5 needs metrics and rollback conditions before BSIE can safely auto-pass mappings from trusted Excel variants. Existing template variants already store trust state, confirmation count, reviewer count, correction count, and dry-run summary, but the system exposed only `auto_pass_eligible=false` without explaining readiness or rollback risk.
+- **Decision:** Add an observe-only auto-pass gate for bank template variants. The gate evaluates source type, trust state, confirmation count, reviewer diversity, correction rate, valid preview rows, bank confidence, ambiguity, mapping validation, exact match type, and match score. It returns `would_auto_pass`, blockers, rollback review reasons, thresholds, and metrics while keeping `auto_pass_eligible=false` so no caller can bypass analyst review yet.
+- **Alternatives:** (1) Enable auto-pass immediately for trusted variants -- faster, but unsafe without live blocker and rollback visibility. (2) Only document the future policy -- lower risk, but gives reviewers no operational signal in Bank Manager or upload/bulk responses. (3) Block trusted promotions that fail the gate -- too strong for the first Phase 5 slice because some legacy/manual promotions need review before enforcement.
+- **Consequences:** Reviewers can see which variants are ready by metrics, blocked, or should receive rollback review before automation is enabled. Upload and bulk variant matches now carry gate telemetry, but they remain suggestion-only and analyst confirmation still applies.
+
 ### DEC-049: Classification audit history drives audited reverts
 - **Date:** 2026-04-24
 - **Status:** accepted

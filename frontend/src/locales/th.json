@@ -437,7 +437,15 @@
       "notePlaceholder": "บันทึกการโปรโมต",
       "promoteVerified": "โปรโมตเป็น verified",
       "promoteTrusted": "โปรโมตเป็น trusted",
-      "noPromotionNeeded": "trusted"
+      "noPromotionNeeded": "trusted",
+      "autoPassGate": "Auto-pass Gate",
+      "observeOnly": "Observe only",
+      "gateReady": "metrics พร้อม",
+      "gateBlocked": "ยังถูกกั้น",
+      "rollbackReview": "ควรทบทวน rollback",
+      "gateReadyDescription": "variant นี้ผ่าน gate ปัจจุบัน แต่ automation ยังไม่ถูกเปิดใช้",
+      "gateBlockedDescription": "variant นี้ยัง auto-pass ไม่ได้จนกว่าจะเคลียร์ blocker",
+      "rollbackReasons": "เหตุผล rollback"
     },
     "toast": {
       "keyRequired": "กรุณาระบุคีย์ธนาคาร",

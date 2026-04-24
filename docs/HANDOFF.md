@@ -10,10 +10,68 @@
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
 - **Baseline:** backend `397 passed`, frontend `54 passed`, frontend build passed without Vite chunk-size warning
-- **Auth/DB:** local JWT auth required (`BSIE_AUTH_REQUIRED=true`) + clean local SQLite WAL (`bsie.db`)
+- **Auth/DB:** local JWT auth required (`BSIE_AUTH_REQUIRED=true`) + clean local SQLite WAL (`bsie.db`); admin credential rotated for local login recovery
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Live-use Auth and Backup Retention
+## Done (latest session) — Admin Credential Recovery
+
+### What I changed
+- Rotated the local admin password for username `numsarai` after the operator could not remember the login credential.
+- Updated the existing `users` row with a new PBKDF2 password hash through `services.auth_service.hash_password`.
+- Kept the account active with `role=admin`.
+- Updated local gitignored `.env` so `BSIE_ADMIN_INITIAL_PASSWORD` matches the new credential for future default-admin recreation; the password value is intentionally not recorded in this handoff.
+- Verified the new credential through the running backend:
+  - `POST /api/auth/login` -> `200`
+  - `GET /api/auth/me` -> `200`, user `numsarai`, role `admin`
+- Verified database hygiene after the credential change:
+  - `GET /api/admin/data-hygiene` -> `ready`, `0` blockers, `0` warnings
+  - `GET /api/admin/db-status` -> evidence key counts still zero
+
+### Current local database state
+- Data Hygiene Audit: `ready`.
+- Evidence/runtime tables remain clean:
+  - `files=0`
+  - `parser_runs=0`
+  - `transactions=0`
+  - `accounts=0`
+- `audit_logs=1` from saved backup settings.
+- `admin_settings=1` for database backup policy.
+- `users=1` active admin user remains.
+
+### Files changed
+- `docs/HANDOFF.md`
+- Local-only environment/runtime changes not committed:
+  - `.env` updated with the new admin initial password
+  - `bsie.db` user password hash rotated
+
+### Tests run
+- Baseline before credential change:
+  - `.venv/bin/python -m pytest tests/ -q` -> `397 passed`
+  - `npm test -- --run` in `frontend/` -> `54 passed`
+- Runtime verification:
+  - `POST /api/auth/login` with rotated admin credential -> `200`
+  - `GET /api/auth/me` with new token -> `200`, admin user
+  - `GET /api/admin/data-hygiene` with new token -> `ready`, `0` blockers, `0` warnings
+  - `GET /api/admin/db-status` with new token -> clean evidence key counts
+
+### Decisions made
+- No architectural decision. This was an operational credential recovery for the local authenticated runtime.
+
+### Warnings / Next
+- The new admin password was given to the operator in the active session only; keep it private and store it securely.
+- Rotate the admin password again before broader team use if it is shared outside the current operator.
+- This did not change evidence rows, parser runs, accounts, transactions, mapping memory, or backup policy.
+- Next useful slice: log in at `http://127.0.0.1:6777/`, ingest the first real bank statement, and confirm the authenticated analyst workflow end to end.
+
+### Failed attempts
+- A first one-off Python reset script failed before edits because `load_dotenv()` auto-discovery asserted when executed from stdin. Reran with an explicit `.env` path; no database or environment changes occurred during the failed attempt.
+
+### Environment changes
+- Local `.env` `BSIE_ADMIN_INITIAL_PASSWORD` rotated.
+- Existing admin user's DB password hash rotated.
+- No dependencies installed.
+
+## Done (previous session) — Live-use Auth and Backup Retention
 
 ### What I changed
 - Added frontend/backend auth wiring so the browser app remains usable after `BSIE_AUTH_REQUIRED=true`.

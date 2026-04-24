@@ -1304,6 +1304,64 @@ def test_llm_copilot_endpoint_returns_scoped_read_only_answer():
     assert copilot.call_args.kwargs["task_mode"] == "alert_explanation"
 
 
+def test_llm_classification_preview_endpoint_is_read_only():
+    preview_result = {
+        "status": "ok",
+        "source": "local_llm_classification_preview",
+        "read_only": True,
+        "mutations_allowed": False,
+        "provider": "local",
+        "model": "qwen3.5:9b",
+        "total": 1,
+        "suggestion_count": 1,
+        "review_count": 1,
+        "min_confidence": 0.85,
+        "items": [
+            {
+                "transaction_id": "TXN-1",
+                "direction": "OUT",
+                "amount": -500.0,
+                "description": "ATM WDL",
+                "current": {"transaction_type": "OUT_TRANSFER", "confidence": 0.8, "counterparty_name": ""},
+                "ai": {"transaction_type": "WITHDRAW", "confidence": 0.91, "counterparty_name": "ATM Withdrawal"},
+                "suggested": {"transaction_type": "WITHDRAW", "confidence": 0.91, "counterparty_name": "ATM Withdrawal"},
+                "review_required": True,
+                "would_apply": True,
+                "action": "review_divergence",
+                "reason": "ai_type_differs_from_current",
+            }
+        ],
+        "warnings": [],
+    }
+    with patch("routers.llm.build_classification_preview", return_value=preview_result) as preview:
+        response = client.post(
+            "/api/llm/classification-preview",
+            json={
+                "model": "qwen3.5:9b",
+                "transactions": [
+                    {
+                        "transaction_id": "TXN-1",
+                        "direction": "OUT",
+                        "amount": -500,
+                        "description_raw": "ATM WDL",
+                        "transaction_type": "OUT_TRANSFER",
+                        "confidence": 0.8,
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "local_llm_classification_preview"
+    assert payload["read_only"] is True
+    assert payload["mutations_allowed"] is False
+    assert payload["items"][0]["action"] == "review_divergence"
+    preview.assert_called_once()
+    assert preview.call_args.args[0][0]["transaction_id"] == "TXN-1"
+    assert preview.call_args.kwargs["model"] == "qwen3.5:9b"
+
+
 def test_mapping_confirm_defaults_to_run_confirmation_without_shared_promotion():
     payload = {
         "bank": "scb",

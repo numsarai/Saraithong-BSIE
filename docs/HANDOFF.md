@@ -9,11 +9,66 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `385 passed`, frontend `48 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `388 passed`, frontend `49 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Local-first Classification Enrichment
+## Done (latest session) — Read-only Classification Preview
+
+### What I changed
+- Added a read-only local classification preview contract at `POST /api/llm/classification-preview`.
+- The endpoint accepts bounded analyst-provided transaction rows and returns current classification, local AI suggestion, suggested preview result, review/action reason, model, and warnings.
+- Preview intentionally bypasses the pipeline-wide `BSIE_ENABLE_LLM_CLASSIFICATION` flag because it is an explicit analyst action and never mutates evidence.
+- Added `build_classification_preview()` in `services/classification_service.py` with local-only settings, confidence threshold handling, divergence flags, and no apply path.
+- Added a compact Classification Preview card in AI Copilot Evidence mode for one transaction at a time.
+- Added frontend API wiring, i18n labels, backend endpoint tests, service tests, and Investigation Desk UI coverage.
+- Added DEC-044 and updated the local LLM roadmap.
+
+### Files changed
+- `routers/llm.py`
+- `services/classification_service.py`
+- `tests/test_classification_service.py`
+- `tests/test_app_api.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `385 passed`
+  - `npm test -- --run` in `frontend/` -> `48 passed`
+- Focused:
+  - `.venv/bin/python -m py_compile services/classification_service.py routers/llm.py tests/test_classification_service.py tests/test_app_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_classification_service.py tests/test_app_api.py::test_llm_classification_preview_endpoint_is_read_only -q` -> `8 passed`
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `6 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `388 passed`
+  - `npm test -- --run` in `frontend/` -> `49 passed`
+
+### Decisions made
+- Added DEC-044: classification preview is read-only and local-only.
+- The preview endpoint is not an apply/mutation path and must not be reused as one without an explicit analyst confirmation + audit design.
+
+### Warnings / Next
+- The UI preview currently handles one manually entered transaction at a time. The next useful slice is to add a scoped transaction picker/feed from selected run/file/account so analysts can preview real records without copying fields.
+- No persistence/audit is written for preview calls yet because no evidence changes happen; future apply workflows must add audit logging.
+- If the dev backend at `127.0.0.1:8757` is not running with reload, restart it before using the new endpoint from the browser.
+
+### Failed attempts
+- No failed implementation attempts in this session.
+
+### Environment changes
+- No dependencies installed.
+- Production frontend build refreshed `static/dist` through the normal build output, but those generated files are not tracked in the current git status.
+
+## Done (previous session) — Local-first Classification Enrichment
 
 ### What I changed
 - Moved optional AI classification enrichment to a local-first provider path.

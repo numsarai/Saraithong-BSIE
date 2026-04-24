@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-044: Classification preview is read-only and local-only
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** DEC-043 made optional classification enrichment local-first, but enabling broad automatic overrides without a preview/review surface would still be too abrupt for evidence-sensitive workflows. Investigators need a way to compare heuristic/current classification against local model suggestions before any future apply path exists.
+- **Decision:** Add `POST /api/llm/classification-preview` as a read-only local-only preview endpoint. It accepts bounded analyst-provided transaction rows, calls the local classification provider even when the pipeline-wide `BSIE_ENABLE_LLM_CLASSIFICATION` flag is off, and returns current classification, AI suggestion, suggested preview result, review requirement, action, reason, model, and warnings. The endpoint never writes records, never applies overrides, and exposes `read_only=true` / `mutations_allowed=false`. The AI Copilot Evidence UI includes a compact manual preview form so analysts can test one transaction at a time.
+- **Alternatives:** (1) Enable the pipeline enrichment flag and inspect output packages -- too coarse and can change processing results while testing. (2) Add an apply button immediately -- premature before review/audit semantics are designed. (3) Put this in generic project chat -- weaker contract and less clear that it is a local-only classification preview.
+- **Consequences:** Analysts can evaluate local model behavior safely before rollout. A future apply workflow must add explicit analyst confirmation, audit logging, and persisted review history rather than reusing this preview endpoint as a mutation path.
+
 ### DEC-043: Optional AI classification enrichment is local-first
 - **Date:** 2026-04-24
 - **Status:** accepted

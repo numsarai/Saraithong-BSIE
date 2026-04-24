@@ -294,7 +294,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 4 — AI Copilot / Investigation Copilot
 
-สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036, unified AI Copilot workspace implemented ตาม DEC-038, Evidence task modes implemented ตาม DEC-039, scoped review/audit history implemented ตาม DEC-040, scoped graph metrics implemented ตาม DEC-041, case tag scope implemented ตาม DEC-042, และ optional AI classification enrichment moved to local-first ตาม DEC-043
+สถานะ: started เมื่อ 2026-04-24; backend scope/context/audit slice implemented ตาม DEC-036, unified AI Copilot workspace implemented ตาม DEC-038, Evidence task modes implemented ตาม DEC-039, scoped review/audit history implemented ตาม DEC-040, scoped graph metrics implemented ตาม DEC-041, case tag scope implemented ตาม DEC-042, optional AI classification enrichment moved to local-first ตาม DEC-043, และ read-only classification preview implemented ตาม DEC-044
 
 เป้าหมาย:
 
@@ -329,6 +329,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] แตก read-only tool modes: account summary, alert explanation, review checklist, และ draft report paragraph
 - [x] ห้าม mutate evidence, override, classify, promote, หรือ auto-generate findings โดยไม่มี analyst action ใน task prompt contract
 - [x] ย้าย optional AI classification enrichment ให้ local-first หลัง scope/citation/audit stable โดย default provider เป็น local Ollama และ legacy OpenAI ต้องเลือก explicit
+- [x] เพิ่ม read-only classification preview ใน Evidence UI + `/api/llm/classification-preview` เพื่อเทียบ heuristic/current กับ local AI suggestion โดยยังไม่ apply หรือ mutate evidence
 
 ### Phase 5 — Auto-pass Rollout
 

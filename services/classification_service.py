@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 import httpx
@@ -27,6 +27,7 @@ SUPPORTED_TRANSACTION_TYPES = {
 }
 LOCAL_CLASSIFICATION_BATCH_SIZE = 25
 LOCAL_CLASSIFICATION_MAX_TOKENS = 2048
+CLASSIFICATION_PREVIEW_MAX_TRANSACTIONS = 25
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -293,6 +294,170 @@ def _run_classification_provider(df: pd.DataFrame, settings: ClassificationSetti
         return run_llm_pipeline(df)
     logger.warning("  -> Unsupported classification LLM provider '%s'. Keeping heuristic classification.", settings.llm_provider)
     return {}
+
+
+def _preview_settings(model: str = "") -> ClassificationSettings:
+    base = get_classification_settings()
+    selected_model = str(model or "").strip() or _classification_model_name("local")
+    return replace(
+        base,
+        llm_enabled=True,
+        llm_provider="local",
+        llm_model_name=selected_model,
+        llm_max_transactions=min(base.llm_max_transactions, CLASSIFICATION_PREVIEW_MAX_TRANSACTIONS),
+    )
+
+
+def _preview_record(row: dict[str, Any], index: int) -> dict[str, Any]:
+    txn_id = _safe_text(row.get("transaction_id"), limit=120) or f"preview_{index + 1}"
+    current_type = (
+        _safe_text(row.get("transaction_type"), limit=40)
+        or _safe_text(row.get("heuristic_transaction_type"), limit=40)
+    )
+    confidence = row.get("confidence", row.get("heuristic_confidence", 0.0))
+    description = (
+        _safe_text(row.get("description"), limit=320)
+        or _safe_text(row.get("description_normalized"), limit=320)
+        or _safe_text(row.get("description_raw"), limit=320)
+    )
+    return {
+        "transaction_id": txn_id,
+        "date": _safe_text(row.get("date") or row.get("transaction_date"), limit=40),
+        "direction": _safe_text(row.get("direction"), limit=12).upper(),
+        "amount": _safe_float(row.get("amount")),
+        "description": description,
+        "description_raw": description,
+        "channel": _safe_text(row.get("channel"), limit=80),
+        "counterparty_account": _safe_text(row.get("counterparty_account"), limit=80),
+        "counterparty_name": _safe_text(row.get("counterparty_name"), limit=160),
+        "transaction_type": current_type.upper(),
+        "confidence": max(0.0, min(1.0, _safe_float(confidence))),
+        "heuristic_transaction_type": current_type.upper(),
+        "heuristic_confidence": max(0.0, min(1.0, _safe_float(confidence))),
+    }
+
+
+def _preview_item(record: dict[str, Any], llm: dict[str, Any] | None, settings: ClassificationSettings) -> dict[str, Any]:
+    current_type = _safe_text(record.get("transaction_type"), limit=40)
+    current_name = _safe_text(record.get("counterparty_name"), limit=160)
+    current_confidence = max(0.0, min(1.0, _safe_float(record.get("confidence"))))
+    current = {
+        "transaction_type": current_type,
+        "confidence": current_confidence,
+        "counterparty_name": current_name,
+    }
+
+    base = {
+        "transaction_id": record["transaction_id"],
+        "direction": record["direction"],
+        "amount": record["amount"],
+        "description": record["description"],
+        "current": current,
+        "ai": None,
+        "suggested": current,
+        "review_required": False,
+        "would_apply": False,
+        "action": "no_ai_suggestion",
+        "reason": "llm_empty",
+    }
+    if not llm:
+        return base
+
+    ai_type = _safe_text(llm.get("transaction_type"), limit=40)
+    ai_name = _safe_text(llm.get("counterparty_name"), limit=160)
+    ai_confidence = max(0.0, min(1.0, _safe_float(llm.get("confidence"))))
+    ai = {
+        "transaction_type": ai_type,
+        "confidence": ai_confidence,
+        "counterparty_name": ai_name,
+        "nlp_promptpay": _safe_bool(llm.get("nlp_promptpay")),
+        "nlp_accounts": _safe_text(llm.get("nlp_accounts"), limit=240),
+    }
+    if ai_confidence < settings.llm_min_confidence:
+        return {
+            **base,
+            "ai": ai,
+            "review_required": True,
+            "action": "below_threshold",
+            "reason": "llm_below_threshold",
+        }
+
+    suggested = dict(current)
+    if settings.allow_transaction_type_override and ai_type:
+        suggested["transaction_type"] = ai_type
+        suggested["confidence"] = ai_confidence
+    if settings.allow_counterparty_name_override and ai_name:
+        suggested["counterparty_name"] = ai_name
+
+    type_changed = bool(ai_type and ai_type != current_type)
+    name_changed = bool(ai_name and ai_name != current_name)
+    if type_changed:
+        action = "review_divergence"
+        reason = "ai_type_differs_from_current"
+    elif name_changed:
+        action = "review_name_suggestion"
+        reason = "ai_name_differs_from_current"
+    else:
+        action = "ai_confirmed"
+        reason = "ai_matches_current"
+
+    return {
+        **base,
+        "ai": ai,
+        "suggested": suggested,
+        "review_required": bool(type_changed or name_changed),
+        "would_apply": bool(suggested != current),
+        "action": action,
+        "reason": reason,
+    }
+
+
+def build_classification_preview(transactions: list[dict[str, Any]], *, model: str = "") -> dict[str, Any]:
+    """
+    Run a read-only local classification preview over analyst-provided transaction rows.
+
+    This intentionally bypasses BSIE_ENABLE_LLM_CLASSIFICATION because the preview is an explicit
+    analyst action and does not mutate persisted evidence.
+    """
+    if not transactions:
+        raise ValueError("transactions required")
+
+    warnings: list[str] = []
+    if len(transactions) > CLASSIFICATION_PREVIEW_MAX_TRANSACTIONS:
+        warnings.append(f"truncated_to_{CLASSIFICATION_PREVIEW_MAX_TRANSACTIONS}_transactions")
+
+    records = [
+        _preview_record(row, index)
+        for index, row in enumerate(transactions[:CLASSIFICATION_PREVIEW_MAX_TRANSACTIONS])
+        if isinstance(row, dict)
+    ]
+    if not records:
+        raise ValueError("no valid transaction objects")
+
+    settings = _preview_settings(model)
+    df = pd.DataFrame(records)
+    llm_results = _run_local_llm_pipeline(df, settings)
+    items = [_preview_item(record, llm_results.get(record["transaction_id"]), settings) for record in records]
+    suggestions = [item for item in items if item.get("ai")]
+    review_items = [item for item in items if item.get("review_required")]
+
+    if not suggestions:
+        warnings.append("local_llm_returned_no_valid_suggestions")
+
+    return {
+        "status": "ok" if suggestions else "no_suggestions",
+        "source": "local_llm_classification_preview",
+        "read_only": True,
+        "mutations_allowed": False,
+        "provider": "local",
+        "model": settings.llm_model_name,
+        "total": len(items),
+        "suggestion_count": len(suggestions),
+        "review_count": len(review_items),
+        "min_confidence": settings.llm_min_confidence,
+        "items": items,
+        "warnings": warnings,
+    }
 
 
 def apply_ai_classification_enrichment(df: pd.DataFrame) -> pd.DataFrame:

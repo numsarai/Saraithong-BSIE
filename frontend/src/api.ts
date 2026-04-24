@@ -496,6 +496,19 @@ export async function askCopilot(payload: {
   return r.json()
 }
 
+export async function previewClassification(payload: {
+  transactions: Record<string, unknown>[]
+  model?: string
+}) {
+  const r = await apiFetch('/api/llm/classification-preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function benchmarkLlm(opts?: {
   roles?: string[]
   iterations?: number

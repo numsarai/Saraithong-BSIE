@@ -14,6 +14,7 @@ from services.auth_service import require_auth
 from pydantic import BaseModel, Field
 
 from persistence.base import get_db_session
+from services.classification_service import build_classification_preview
 from services.copilot_service import (
     CopilotNotFoundError,
     CopilotScopeError,
@@ -60,6 +61,11 @@ class SummarizeRequest(BaseModel):
 class ClassifyRequest(BaseModel):
     transaction: dict = Field(default_factory=dict)
     model: str = ""
+
+
+class ClassificationPreviewRequest(BaseModel):
+    transactions: list[dict] = Field(default_factory=list)
+    model: str = Field(default="", max_length=100)
 
 
 class BenchmarkRequest(BaseModel):
@@ -147,6 +153,33 @@ async def api_llm_classify(req: ClassifyRequest):
     try:
         result = await classify_transaction(req.transaction, model=req.model)
         return result
+    except ConnectionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.post("/classification-preview")
+async def api_llm_classification_preview(req: ClassificationPreviewRequest):
+    """Run a read-only local transaction classification preview."""
+    if not req.transactions:
+        raise HTTPException(status_code=400, detail="ต้องระบุรายการธุรกรรมอย่างน้อย 1 รายการ")
+    model = ""
+    if req.model.strip():
+        try:
+            model = _validate_model(req.model.strip())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        import asyncio
+        result = await asyncio.to_thread(
+            build_classification_preview,
+            req.transactions,
+            model=model,
+        )
+        return JSONResponse(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except ConnectionError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except RuntimeError as exc:

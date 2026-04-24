@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BrainCircuit, FileText, ListChecks, Loader2, ScrollText, Send, ShieldAlert, ShieldCheck, Target } from 'lucide-react'
-import { askCopilot, getCaseTagDetail, listCaseTags, type CaseTagDetail, type CaseTagItem, type CaseTagLinkedObject } from '@/api'
+import { BrainCircuit, FileText, ListChecks, Loader2, ScrollText, Send, ShieldAlert, ShieldCheck, Sparkles, Target } from 'lucide-react'
+import { askCopilot, getCaseTagDetail, listCaseTags, previewClassification, type CaseTagDetail, type CaseTagItem, type CaseTagLinkedObject } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -28,6 +28,17 @@ interface CopilotTabProps {
 
 const EMPTY_SCOPE: CopilotScope = { parser_run_id: '', file_id: '', account: '', case_tag_id: '', case_tag: '' }
 const TASK_MODES: CopilotTaskMode[] = ['account_summary', 'alert_explanation', 'review_checklist', 'draft_report_paragraph']
+const TRANSACTION_TYPES = ['IN_TRANSFER', 'OUT_TRANSFER', 'DEPOSIT', 'WITHDRAW', 'FEE', 'SALARY', 'IN_UNKNOWN', 'OUT_UNKNOWN']
+const INITIAL_CLASSIFICATION_PREVIEW = {
+  transaction_id: 'TXN-PREVIEW-1',
+  date: '',
+  direction: 'OUT',
+  amount: '',
+  description: '',
+  transaction_type: 'OUT_TRANSFER',
+  confidence: '0.80',
+  counterparty_name: '',
+}
 const TASK_MODE_ICONS = {
   account_summary: FileText,
   alert_explanation: ShieldAlert,
@@ -79,6 +90,10 @@ export function CopilotTab({
   const [caseTagDetailError, setCaseTagDetailError] = useState('')
   const [answer, setAnswer] = useState<any>(null)
   const [error, setError] = useState('')
+  const [classificationForm, setClassificationForm] = useState(INITIAL_CLASSIFICATION_PREVIEW)
+  const [classificationPreview, setClassificationPreview] = useState<any>(null)
+  const [classificationPreviewError, setClassificationPreviewError] = useState('')
+  const [isPreviewingClassification, setIsPreviewingClassification] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -214,6 +229,34 @@ export function CopilotTab({
       setIsAsking(false)
     }
   }
+
+  const submitClassificationPreview = async () => {
+    setIsPreviewingClassification(true)
+    setClassificationPreviewError('')
+    try {
+      const payload = await previewClassification({
+        transactions: [
+          {
+            transaction_id: classificationForm.transaction_id.trim() || 'TXN-PREVIEW-1',
+            date: classificationForm.date.trim(),
+            direction: classificationForm.direction,
+            amount: Number(classificationForm.amount || 0),
+            description_raw: classificationForm.description.trim(),
+            transaction_type: classificationForm.transaction_type,
+            confidence: Number(classificationForm.confidence || 0),
+            counterparty_name: classificationForm.counterparty_name.trim(),
+          },
+        ],
+      })
+      setClassificationPreview(payload)
+    } catch (err: any) {
+      setClassificationPreviewError(err.message || String(err))
+    } finally {
+      setIsPreviewingClassification(false)
+    }
+  }
+
+  const previewItem = Array.isArray(classificationPreview?.items) ? classificationPreview.items[0] : null
 
   return (
     <div className="space-y-4">
@@ -384,6 +427,139 @@ export function CopilotTab({
             {t('investigation.copilot.clearScope')}
           </Button>
         </div>
+      </Card>
+
+      <Card className="space-y-4">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <CardTitle className="mb-0">
+            <Sparkles size={18} />
+            {t('investigation.copilot.classificationPreview')}
+          </CardTitle>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="green">{t('investigation.copilot.readOnly')}</Badge>
+            <Badge variant="blue">{t('investigation.copilot.localOnly')}</Badge>
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.previewTxnId')}
+            <input
+              value={classificationForm.transaction_id}
+              onChange={(event) => setClassificationForm((state) => ({ ...state, transaction_id: event.target.value }))}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 font-mono text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.previewDate')}
+            <input
+              type="date"
+              value={classificationForm.date}
+              onChange={(event) => setClassificationForm((state) => ({ ...state, date: event.target.value }))}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.previewDirection')}
+            <select
+              value={classificationForm.direction}
+              onChange={(event) => setClassificationForm((state) => ({ ...state, direction: event.target.value }))}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            >
+              <option value="OUT">OUT</option>
+              <option value="IN">IN</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.previewAmount')}
+            <input
+              type="number"
+              value={classificationForm.amount}
+              onChange={(event) => setClassificationForm((state) => ({ ...state, amount: event.target.value }))}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted xl:col-span-2">
+            {t('investigation.copilot.previewDescription')}
+            <textarea
+              value={classificationForm.description}
+              onChange={(event) => setClassificationForm((state) => ({ ...state, description: event.target.value }))}
+              rows={3}
+              className="min-h-[92px] resize-y rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.previewCurrentType')}
+            <select
+              value={classificationForm.transaction_type}
+              onChange={(event) => setClassificationForm((state) => ({ ...state, transaction_type: event.target.value }))}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            >
+              {TRANSACTION_TYPES.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.previewConfidence')}
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.01"
+              value={classificationForm.confidence}
+              onChange={(event) => setClassificationForm((state) => ({ ...state, confidence: event.target.value }))}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted xl:col-span-2">
+            {t('investigation.copilot.previewCounterparty')}
+            <input
+              value={classificationForm.counterparty_name}
+              onChange={(event) => setClassificationForm((state) => ({ ...state, counterparty_name: event.target.value }))}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
+            />
+          </label>
+          <div className="flex items-end">
+            <Button onClick={submitClassificationPreview} disabled={isPreviewingClassification || !classificationForm.description.trim()}>
+              {isPreviewingClassification ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {isPreviewingClassification ? t('investigation.copilot.previewingClassification') : t('investigation.copilot.previewClassificationAction')}
+            </Button>
+          </div>
+        </div>
+        {classificationPreviewError && (
+          <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+            {classificationPreviewError}
+          </div>
+        )}
+        {previewItem && (
+          <div className="space-y-3 rounded-lg border border-border bg-surface2 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={previewItem.review_required ? 'yellow' : 'green'}>{previewItem.action}</Badge>
+              <Badge variant="blue">{classificationPreview.model || 'local'}</Badge>
+              <span className="font-mono text-xs text-muted">{previewItem.transaction_id}</span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border border-border bg-surface px-3 py-2">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('investigation.copilot.previewCurrent')}</div>
+                <div className="font-mono text-sm text-text">{previewItem.current?.transaction_type || '—'}</div>
+                <div className="text-xs text-muted">{Number(previewItem.current?.confidence || 0).toFixed(2)}</div>
+                {previewItem.current?.counterparty_name && <div className="text-xs text-muted">{previewItem.current.counterparty_name}</div>}
+              </div>
+              <div className="rounded-md border border-border bg-surface px-3 py-2">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('investigation.copilot.previewAi')}</div>
+                <div className="font-mono text-sm text-text">{previewItem.ai?.transaction_type || '—'}</div>
+                <div className="text-xs text-muted">{Number(previewItem.ai?.confidence || 0).toFixed(2)}</div>
+                {previewItem.ai?.counterparty_name && <div className="text-xs text-muted">{previewItem.ai.counterparty_name}</div>}
+              </div>
+              <div className="rounded-md border border-border bg-surface px-3 py-2">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{t('investigation.copilot.previewSuggested')}</div>
+                <div className="font-mono text-sm text-text">{previewItem.suggested?.transaction_type || '—'}</div>
+                <div className="text-xs text-muted">{previewItem.reason || '—'}</div>
+                {previewItem.suggested?.counterparty_name && <div className="text-xs text-muted">{previewItem.suggested.counterparty_name}</div>}
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card className="space-y-4">

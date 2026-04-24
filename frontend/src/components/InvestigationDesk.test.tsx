@@ -250,6 +250,34 @@ vi.mock('@/api', () => ({
     audit_id: 'AUDIT-COPILOT-1',
     usage: { prompt_tokens: 10, completion_tokens: 5 },
   })),
+  previewClassification: vi.fn(async () => ({
+    status: 'ok',
+    source: 'local_llm_classification_preview',
+    read_only: true,
+    mutations_allowed: false,
+    provider: 'local',
+    model: 'qwen3.5:9b',
+    total: 1,
+    suggestion_count: 1,
+    review_count: 1,
+    min_confidence: 0.85,
+    items: [
+      {
+        transaction_id: 'TXN-PREVIEW-1',
+        direction: 'OUT',
+        amount: -500,
+        description: 'ATM WDL 1234567890',
+        current: { transaction_type: 'OUT_TRANSFER', confidence: 0.8, counterparty_name: '' },
+        ai: { transaction_type: 'WITHDRAW', confidence: 0.91, counterparty_name: 'ATM Withdrawal' },
+        suggested: { transaction_type: 'WITHDRAW', confidence: 0.91, counterparty_name: 'ATM Withdrawal' },
+        review_required: true,
+        would_apply: true,
+        action: 'review_divergence',
+        reason: 'ai_type_differs_from_current',
+      },
+    ],
+    warnings: [],
+  })),
   reviewAccount: vi.fn(async () => ({ status: 'ok' })),
   reviewDuplicate: vi.fn(async () => ({ status: 'ok' })),
   reviewMatch: vi.fn(async () => ({ status: 'ok' })),
@@ -257,7 +285,7 @@ vi.mock('@/api', () => ({
   searchTransactionRecords: vi.fn(async () => ({ items: [] })),
 }))
 
-const { askCopilot, createExportJob, getAuditLogs, getLearningFeedbackLogs } = await import('@/api')
+const { askCopilot, createExportJob, getAuditLogs, getLearningFeedbackLogs, previewClassification } = await import('@/api')
 const { useStore } = await import('@/store')
 
 vi.mock('sonner', () => ({
@@ -408,5 +436,33 @@ describe('InvestigationDesk date formatting', () => {
       operator: 'Case Reviewer',
       max_transactions: 20,
     }))
+  })
+
+  it('previews local classification suggestions without applying them', async () => {
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'AI Copilot' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Evidence' }))
+    fireEvent.change(screen.getByLabelText('Preview Description'), { target: { value: 'ATM WDL 1234567890' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Classification' }))
+
+    await waitFor(() => expect(previewClassification).toHaveBeenCalledWith({
+      transactions: [
+        {
+          transaction_id: 'TXN-PREVIEW-1',
+          date: '',
+          direction: 'OUT',
+          amount: 0,
+          description_raw: 'ATM WDL 1234567890',
+          transaction_type: 'OUT_TRANSFER',
+          confidence: 0.8,
+          counterparty_name: '',
+        },
+      ],
+    }))
+    expect(await screen.findByText('review_divergence')).toBeInTheDocument()
+    expect(await screen.findByText('ai_type_differs_from_current')).toBeInTheDocument()
+    expect((await screen.findAllByText('WITHDRAW')).length).toBeGreaterThanOrEqual(2)
+    expect((await screen.findAllByText('ATM Withdrawal')).length).toBeGreaterThanOrEqual(2)
   })
 })

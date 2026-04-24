@@ -26,6 +26,33 @@ MAPPING_FIELDS = {
     "direction_marker",
 }
 
+DIRECTION_IN_MARKERS = {
+    "credit",
+    "cr",
+    "c",
+    "in",
+    "deposit",
+    "credit/in",
+    "ฝาก",
+    "ฝากเงิน",
+    "รับ",
+    "เข้า",
+    "เงินเข้า",
+}
+DIRECTION_OUT_MARKERS = {
+    "debit",
+    "dr",
+    "d",
+    "out",
+    "withdraw",
+    "debit/out",
+    "ถอน",
+    "ถอนเงิน",
+    "จ่าย",
+    "ออก",
+    "เงินออก",
+}
+
 
 def _issue(code: str, message: str, *, field: str = "", column: str = "", fields: list[str] | None = None) -> dict:
     item = {"code": code, "message": message}
@@ -122,22 +149,34 @@ def validate_mapping(
     has_amount = bool(cleaned.get("amount"))
     has_debit = bool(cleaned.get("debit"))
     has_credit = bool(cleaned.get("credit"))
+    has_direction_marker = bool(cleaned.get("direction_marker"))
     if not has_amount and not (has_debit or has_credit):
         errors.append(
             _issue(
                 "missing_amount_path",
-                "Map either a signed amount column or at least one debit/credit column.",
+                "Map either a signed amount column, an amount + direction marker pair, or at least one debit/credit column.",
             )
         )
-    if has_amount and (has_debit or has_credit):
+    if has_direction_marker and not has_amount:
+        errors.append(
+            _issue(
+                "direction_marker_requires_amount",
+                "Direction marker layouts must also map the unsigned amount column.",
+                field="amount",
+            )
+        )
+    if (has_amount or has_direction_marker) and (has_debit or has_credit):
         errors.append(
             _issue(
                 "conflicting_amount_paths",
-                "Use either signed amount or debit/credit columns, not both.",
-                fields=["amount", *([field for field in ("debit", "credit") if cleaned.get(field)])],
+                "Use either signed/direction-marker amount or debit/credit columns, not both.",
+                fields=[
+                    *([field for field in ("amount", "direction_marker") if cleaned.get(field)]),
+                    *([field for field in ("debit", "credit") if cleaned.get(field)]),
+                ],
             )
         )
-    if (has_debit and not has_credit) or (has_credit and not has_debit):
+    if not has_direction_marker and ((has_debit and not has_credit) or (has_credit and not has_debit)):
         missing_side = "credit" if has_debit else "debit"
         warnings.append(
             _issue(
@@ -150,7 +189,9 @@ def validate_mapping(
     if not str(bank or "").strip():
         warnings.append(_issue("missing_bank", "Selected bank is empty; mapping can be used for this run but should not be promoted."))
 
-    if has_amount:
+    if has_amount and has_direction_marker:
+        amount_mode = "direction_marker"
+    elif has_amount:
         amount_mode = "signed"
     elif has_debit or has_credit:
         amount_mode = "debit_credit"
@@ -193,7 +234,9 @@ def build_mapping_preview(
         raw_amount = row.get(cleaned.get("amount") or "")
         raw_debit = row.get(cleaned.get("debit") or "")
         raw_credit = row.get(cleaned.get("credit") or "")
-        amount = _preview_amount(raw_amount, raw_debit, raw_credit, cleaned)
+        raw_direction_marker = row.get(cleaned.get("direction_marker") or "")
+        direction_marker_sign = _direction_marker_sign(raw_direction_marker) if cleaned.get("direction_marker") else None
+        amount = _preview_amount(raw_amount, raw_debit, raw_credit, direction_marker_sign, cleaned)
         balance = _clean_amount(row.get(cleaned.get("balance") or ""))
 
         row_warnings: list[str] = []
@@ -205,6 +248,8 @@ def build_mapping_preview(
         if amount is None:
             missing_amount_rows += 1
             row_warnings.append("amount_missing")
+            if cleaned.get("direction_marker") and raw_direction_marker not in (None, "") and direction_marker_sign is None:
+                row_warnings.append("direction_marker_unrecognized")
         else:
             valid_transaction_rows += 1
 
@@ -230,6 +275,7 @@ def build_mapping_preview(
                     "amount": raw_amount,
                     "debit": raw_debit,
                     "credit": raw_credit,
+                    "direction_marker": raw_direction_marker,
                     "balance": row.get(cleaned.get("balance") or ""),
                 },
                 "warnings": row_warnings,
@@ -264,9 +310,33 @@ def validate_and_preview_mapping(
     }
 
 
-def _preview_amount(raw_amount: Any, raw_debit: Any, raw_credit: Any, mapping: dict[str, str | None]) -> float | None:
+def _direction_marker_sign(raw_marker: Any) -> int | None:
+    marker = normalize_text(raw_marker).lower()
+    if not marker:
+        return None
+    if marker in DIRECTION_IN_MARKERS:
+        return 1
+    if marker in DIRECTION_OUT_MARKERS:
+        return -1
+    return None
+
+
+def _preview_amount(
+    raw_amount: Any,
+    raw_debit: Any,
+    raw_credit: Any,
+    direction_marker_sign: int | None,
+    mapping: dict[str, str | None],
+) -> float | None:
     if mapping.get("amount"):
-        return _clean_amount(raw_amount)
+        amount = _clean_amount(raw_amount)
+        if amount is None:
+            return None
+        if mapping.get("direction_marker"):
+            if direction_marker_sign is None:
+                return None
+            return round(abs(amount) * direction_marker_sign, 6)
+        return amount
 
     debit = _clean_amount(raw_debit) or 0.0
     credit = _clean_amount(raw_credit) or 0.0

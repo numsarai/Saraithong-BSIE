@@ -325,7 +325,7 @@ describe('Step2Map analyst gate', () => {
     expect(screen.getByRole('button', { name: /mapping confirmed/i })).toBeInTheDocument()
 
     const selects = screen.getAllByRole('combobox')
-    fireEvent.change(selects[5], { target: { value: '' } })
+    fireEvent.change(selects[6], { target: { value: '' } })
 
     await waitFor(() => expect(continueButton).toBeDisabled())
   })

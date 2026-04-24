@@ -15,6 +15,7 @@ ASSIST_FIELDS = (
     "time",
     "description",
     "amount",
+    "direction_marker",
     "debit",
     "credit",
     "balance",
@@ -139,14 +140,15 @@ def _build_prompt(
     return (
         "You are assisting a Thai bank statement mapping review inside BSIE.\n"
         "Use only the provided column names. Do not invent columns, accounts, dates, amounts, banks, or transactions.\n"
+        "For unsigned amount columns paired with DR/CR, IN/OUT, or ฝาก/ถอน markers, map the amount column to amount and the marker column to direction_marker.\n"
         "Return JSON only with this exact shape:\n"
         "{\n"
-        "  \"mapping\": {\"date\": null, \"time\": null, \"description\": null, \"amount\": null, \"debit\": null, \"credit\": null, \"balance\": null, \"channel\": null, \"counterparty_account\": null, \"counterparty_name\": null},\n"
+        "  \"mapping\": {\"date\": null, \"time\": null, \"description\": null, \"amount\": null, \"direction_marker\": null, \"debit\": null, \"credit\": null, \"balance\": null, \"channel\": null, \"counterparty_account\": null, \"counterparty_name\": null},\n"
         "  \"confidence\": 0.0,\n"
         "  \"reasons\": [\"short evidence-based reason\"],\n"
         "  \"warnings\": [\"uncertainty or missing evidence\"]\n"
         "}\n"
-        "If unsure, leave the field null and explain in warnings. Prefer either signed amount OR debit/credit, not both.\n\n"
+        "If unsure, leave the field null and explain in warnings. Prefer exactly one amount path: signed amount, amount + direction_marker, or debit/credit.\n\n"
         f"Context JSON:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
     )
 
@@ -178,14 +180,15 @@ def _build_vision_prompt(
         "You are assisting a Thai bank statement mapping review inside BSIE using the original PDF/image preview.\n"
         "Use the visual evidence only to choose among the provided OCR/extracted column names.\n"
         "Do not invent columns, rows, transactions, accounts, names, dates, amounts, banks, or balances.\n"
+        "For unsigned amount columns paired with DR/CR, IN/OUT, or ฝาก/ถอน markers, map the amount column to amount and the marker column to direction_marker.\n"
         "Return JSON only with this exact shape:\n"
         "{\n"
-        "  \"mapping\": {\"date\": null, \"time\": null, \"description\": null, \"amount\": null, \"debit\": null, \"credit\": null, \"balance\": null, \"channel\": null, \"counterparty_account\": null, \"counterparty_name\": null},\n"
+        "  \"mapping\": {\"date\": null, \"time\": null, \"description\": null, \"amount\": null, \"direction_marker\": null, \"debit\": null, \"credit\": null, \"balance\": null, \"channel\": null, \"counterparty_account\": null, \"counterparty_name\": null},\n"
         "  \"confidence\": 0.0,\n"
         "  \"reasons\": [\"short visual evidence-based reason\"],\n"
         "  \"warnings\": [\"uncertainty, OCR issue, cropped area, or missing evidence\"]\n"
         "}\n"
-        "If unsure, leave the field null and explain in warnings. Prefer either signed amount OR debit/credit, not both.\n\n"
+        "If unsure, leave the field null and explain in warnings. Prefer exactly one amount path: signed amount, amount + direction_marker, or debit/credit.\n\n"
         f"Context JSON:\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
     )
 

@@ -18,6 +18,7 @@ export function Step2Map() {
     { key: 'time',                 label: t('step2.fields.time'),               required: false },
     { key: 'description',          label: t('step2.fields.description'),        required: true  },
     { key: 'amount',               label: t('step2.fields.amount'),             required: false },
+    { key: 'direction_marker',     label: t('step2.fields.directionMarker'),    required: false },
     { key: 'debit',                label: t('step2.fields.debit'),              required: false },
     { key: 'credit',               label: t('step2.fields.credit'),             required: false },
     { key: 'balance',              label: t('step2.fields.balance'),            required: false },
@@ -49,7 +50,7 @@ export function Step2Map() {
 
   const update = (field: string, value: string) => {
     const nextMapping = { ...confirmedMapping, [field]: value || null }
-    const criticalField = field === 'date' || field === 'description' || field === 'amount' || field === 'debit' || field === 'credit'
+    const criticalField = field === 'date' || field === 'description' || field === 'amount' || field === 'direction_marker' || field === 'debit' || field === 'credit'
     if (criticalField && mappingReviewed) {
       setMappingReviewed(false)
     }
@@ -246,9 +247,13 @@ export function Step2Map() {
   })
   const confidence  = reviewGate.confidencePercent
   const hasSignedAmount = !!confirmedMapping['amount']
+  const hasDirectionMarker = !!confirmedMapping['direction_marker']
+  const hasDirectionMarkerAmount = hasSignedAmount && hasDirectionMarker
   const hasDebitCredit = !!confirmedMapping['debit'] || !!confirmedMapping['credit']
   const hasCounterparty = !!confirmedMapping['counterparty_account'] || !!confirmedMapping['counterparty_name']
-  const amountModeLabel = hasSignedAmount ? 'Signed Amount Mode' : hasDebitCredit ? 'Debit / Credit Mode' : 'Amount Not Mapped'
+  const amountModeLabel = hasDirectionMarkerAmount ? 'Direction Marker Mode' : hasSignedAmount ? 'Signed Amount Mode' : hasDebitCredit ? 'Debit / Credit Mode' : 'Amount Not Mapped'
+  const inboundAmountRule = hasDirectionMarkerAmount ? 'CR / IN marker -> IN' : hasSignedAmount ? 'Positive signed amount -> IN' : 'Credit column -> IN'
+  const outboundAmountRule = hasDirectionMarkerAmount ? 'DR / OUT marker -> OUT' : hasSignedAmount ? 'Negative signed amount -> OUT' : 'Debit column -> OUT'
   const counterpartyLabel = hasCounterparty ? 'Counterparty mapped' : 'Counterparty not mapped yet'
   const candidateKeys = Array.isArray(detectedBank?.top_candidates) ? detectedBank.top_candidates : []
   const selectedBank = banks.find((bank: any) => bank.key === bankKey) || null
@@ -579,7 +584,7 @@ export function Step2Map() {
             detail={hasCounterparty
               ? 'Counterparty account/name flows into the subject account.'
               : 'Incoming money reaches the subject account, but the source side is still weak.'}
-            rule={hasSignedAmount ? 'Positive signed amount -> IN' : 'Credit column -> IN'}
+            rule={inboundAmountRule}
           />
           <FlowCard
             title="Transfer Out"
@@ -590,7 +595,7 @@ export function Step2Map() {
             detail={hasCounterparty
               ? 'Subject account sends money outward to the mapped counterparty side.'
               : 'Outgoing money leaves the subject account, but destination identity is still weak.'}
-            rule={hasSignedAmount ? 'Negative signed amount -> OUT' : 'Debit column -> OUT'}
+            rule={outboundAmountRule}
           />
           <FlowCard
             title="Deposit"
@@ -599,7 +604,7 @@ export function Step2Map() {
             middle={<ArrowRight size={16} className="text-success" />}
             right={<FlowNode icon={<Building2 size={16} />} label="Subject Bank / Account" accent="blue" />}
             detail="If no real counterparty is present, an inbound money source is treated like deposit into the bank account."
-            rule={hasSignedAmount ? 'Positive amount with no counterparty -> Deposit' : 'Credit without transfer identity -> Deposit'}
+            rule={hasDirectionMarkerAmount ? 'CR / IN marker with no counterparty -> Deposit' : hasSignedAmount ? 'Positive amount with no counterparty -> Deposit' : 'Credit without transfer identity -> Deposit'}
           />
           <FlowCard
             title="Withdraw"
@@ -608,7 +613,7 @@ export function Step2Map() {
             middle={<ArrowRight size={16} className="text-danger" />}
             right={<FlowNode icon={<Wallet size={16} />} label="Cash / Money Out" accent="red" />}
             detail="If money leaves the bank without a real counterparty, BSIE maps it as withdrawal or cash-out."
-            rule={hasSignedAmount ? 'Negative amount with no counterparty -> Withdraw' : 'Debit without transfer identity -> Withdraw'}
+            rule={hasDirectionMarkerAmount ? 'DR / OUT marker with no counterparty -> Withdraw' : hasSignedAmount ? 'Negative amount with no counterparty -> Withdraw' : 'Debit without transfer identity -> Withdraw'}
           />
         </div>
 
@@ -927,6 +932,7 @@ export function Step2Map() {
                     onChange={e => setLearnForm(f => ({ ...f, format_type: e.target.value }))}
                     className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none cursor-pointer">
                     <option value="standard">Standard (single amount)</option>
+                    <option value="direction_marker">Direction marker (amount + DR/CR)</option>
                     <option value="dual_account">Dual Account (debit + credit)</option>
                   </select>
                 </div>
@@ -936,6 +942,7 @@ export function Step2Map() {
                     onChange={e => setLearnForm(f => ({ ...f, amount_mode: e.target.value }))}
                     className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none cursor-pointer">
                     <option value="signed">Signed (single +/- column)</option>
+                    <option value="direction_marker">Amount + Direction Marker</option>
                     <option value="debit_credit">Debit / Credit columns</option>
                   </select>
                 </div>
@@ -1016,15 +1023,19 @@ function evaluateLocalMapping(mapping: Record<string, string | null>, columns: s
   }
 
   const hasAmount = !!mapping.amount
+  const hasDirectionMarker = !!mapping.direction_marker
   const hasDebit = !!mapping.debit
   const hasCredit = !!mapping.credit
   if (!hasAmount && !hasDebit && !hasCredit) {
-    errors.push({ code: 'missing_amount_path', message: 'Map either a signed amount column or at least one debit/credit column.' })
+    errors.push({ code: 'missing_amount_path', message: 'Map either a signed amount column, an amount + direction marker pair, or at least one debit/credit column.' })
   }
-  if (hasAmount && (hasDebit || hasCredit)) {
-    errors.push({ code: 'conflicting_amount_paths', message: 'Use either signed amount or debit/credit columns, not both.' })
+  if (hasDirectionMarker && !hasAmount) {
+    errors.push({ code: 'direction_marker_requires_amount', field: 'amount', message: 'Direction marker layouts must also map the unsigned amount column.' })
   }
-  if ((hasDebit && !hasCredit) || (hasCredit && !hasDebit)) {
+  if ((hasAmount || hasDirectionMarker) && (hasDebit || hasCredit)) {
+    errors.push({ code: 'conflicting_amount_paths', message: 'Use either signed/direction-marker amount or debit/credit columns, not both.' })
+  }
+  if (!hasDirectionMarker && ((hasDebit && !hasCredit) || (hasCredit && !hasDebit))) {
     warnings.push({
       code: 'one_sided_amount_path',
       field: hasDebit ? 'credit' : 'debit',

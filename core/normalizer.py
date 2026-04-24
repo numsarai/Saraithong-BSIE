@@ -8,6 +8,7 @@ Supports three format types:
   standard      – single amount/debit/credit + optional counterparty columns
   dual_account  – separate sender/receiver account+name columns (KBANK, SCB)
                   Direction determined by debit/credit values.
+  direction_marker – unsigned amount plus a DR/CR or IN/OUT marker column.
   ktb_transfer  – KTB transfer log: unsigned amount, direction from blank side
 """
 
@@ -23,6 +24,33 @@ from utils.text_utils import normalize_text
 from utils.date_utils import parse_date, parse_time
 
 logger = logging.getLogger(__name__)
+
+DIRECTION_IN_MARKERS = {
+    "credit",
+    "cr",
+    "c",
+    "in",
+    "deposit",
+    "credit/in",
+    "ฝาก",
+    "ฝากเงิน",
+    "รับ",
+    "เข้า",
+    "เงินเข้า",
+}
+DIRECTION_OUT_MARKERS = {
+    "debit",
+    "dr",
+    "d",
+    "out",
+    "withdraw",
+    "debit/out",
+    "ถอน",
+    "ถอนเงิน",
+    "จ่าย",
+    "ออก",
+    "เงินออก",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -57,6 +85,17 @@ def _clean_amount(value: object) -> Optional[float]:
     except ValueError:
         logger.debug(f"Could not parse amount: {value!r}")
         return None
+
+
+def _direction_marker_sign(value: object) -> int | None:
+    marker = normalize_text(value).lower()
+    if not marker:
+        return None
+    if marker in DIRECTION_IN_MARKERS:
+        return 1
+    if marker in DIRECTION_OUT_MARKERS:
+        return -1
+    return None
 
 
 def _resolve_mapping_columns(df, mapping):
@@ -210,18 +249,19 @@ def _normalize_standard(row, df, mapping, subject_account, subject_name, bank_na
     rec["description"] = normalize_text(get("description"))
 
     # ── Amount ──────────────────────────────────────────────────────────────
-    if amount_mode == "debit_credit":
+    if amount_mode == "direction_marker":
+        raw_amount = _clean_amount(get("amount"))
+        marker_sign = _direction_marker_sign(get("direction_marker"))
+        amount = round(abs(raw_amount) * marker_sign, 6) if raw_amount is not None and marker_sign else None
+    elif amount_mode == "debit_credit":
         raw_debit  = _clean_amount(get("debit"))  or 0.0
         raw_credit = _clean_amount(get("credit")) or 0.0
         amount = round(raw_credit - raw_debit, 6)
         if not amount and mapping.get("direction_marker"):
             raw_amount = _clean_amount(get("amount"))
-            marker = normalize_text(get("direction_marker")).lower()
-            if raw_amount is not None:
-                if marker in {"credit", "cr", "in", "deposit"}:
-                    amount = abs(raw_amount)
-                elif marker in {"debit", "dr", "out", "withdraw"}:
-                    amount = -abs(raw_amount)
+            marker_sign = _direction_marker_sign(get("direction_marker"))
+            if raw_amount is not None and marker_sign:
+                amount = round(abs(raw_amount) * marker_sign, 6)
     else:
         amount = _clean_amount(get("amount"))
         if amount is None:
@@ -471,14 +511,14 @@ def _normalize_direction_marker(row, df, mapping, subject_account, subject_name,
     rec["description"] = normalize_text(get("description"))
 
     raw_amount = _clean_amount(get("amount"))
-    marker = normalize_text(get("direction_marker")).lower()
+    marker_sign = _direction_marker_sign(get("direction_marker"))
     direction = "UNKNOWN"
     signed_amount = raw_amount
 
-    if marker in {"credit", "cr", "in", "deposit"}:
+    if marker_sign == 1:
         direction = "IN"
         signed_amount = abs(raw_amount) if raw_amount is not None else None
-    elif marker in {"debit", "dr", "out", "withdraw"}:
+    elif marker_sign == -1:
         direction = "OUT"
         signed_amount = -abs(raw_amount) if raw_amount is not None else None
 

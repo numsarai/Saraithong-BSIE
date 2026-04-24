@@ -216,6 +216,7 @@ FIXTURES: list[dict[str, Any]] = [
             "time": "เวลา",
             "description": "คำอธิบาย",
             "amount": "จำนวนเงิน",
+            "direction_marker": "ประเภทรายการ",
             "balance": "ยอดคงเหลือ",
             "channel": "ช่องทาง",
             "counterparty_account": "เลขที่บัญชีคู่โอน",

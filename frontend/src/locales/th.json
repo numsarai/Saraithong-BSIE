@@ -89,6 +89,7 @@
       "time": "เวลา",
       "description": "รายละเอียด",
       "amount": "จำนวนเงิน (มีเครื่องหมาย)",
+      "directionMarker": "ตัวบอกทิศทาง",
       "debit": "ถอน / หัก",
       "credit": "ฝาก / เข้า",
       "balance": "ยอดคงเหลือ",
@@ -380,8 +381,10 @@
     "bankName": "ชื่อธนาคาร",
     "form": {
       "formatTypeStandard": "มาตรฐาน (คอลัมน์ยอดเดียว)",
+      "formatTypeDirectionMarker": "ตัวบอกทิศทาง (ยอดเงิน + DR/CR)",
       "amountModeDualAccount": "Dual Account (หัก + ฝาก)",
       "amountModeSigned": "Signed (+/- ในคอลัมน์เดียว)",
+      "amountModeDirectionMarker": "ยอดเงิน + ตัวบอกทิศทาง",
       "amountModeDebitCredit": "หัก / ฝาก (แยกคอลัมน์)"
     },
     "aliasHint": "เพิ่มชื่อหัวคอลัมน์ทั้งหมดที่ธนาคารนี้ใช้ BSIE จะ fuzzy-match เพื่อตรวจจับและแมปคอลัมน์อัตโนมัติ",
@@ -392,6 +395,7 @@
       "time": "เวลา",
       "description": "รายละเอียด",
       "amount": "จำนวนเงิน (มีเครื่องหมาย)",
+      "directionMarker": "ตัวบอกทิศทาง",
       "debit": "หัก",
       "credit": "ฝาก",
       "balance": "ยอดคงเหลือ",

@@ -61,6 +61,45 @@ def test_mapping_assist_parses_repairs_and_validates_llm_json(monkeypatch):
     assert any("missing column" in warning for warning in result["warnings"])
 
 
+def test_mapping_assist_preserves_direction_marker_amount_path(monkeypatch):
+    async def fake_chat(*args, **kwargs):
+        return {
+            "model": kwargs["model"],
+            "response": """
+            {
+              "mapping": {
+                "date": "วันที่",
+                "description": "รายการ",
+                "amount": "จำนวนเงิน",
+                "direction_marker": "ประเภทรายการ",
+                "debit": "ประเภทรายการ",
+                "balance": "ยอดคงเหลือ"
+              },
+              "confidence": 0.88,
+              "reasons": ["DR/CR marker signs the unsigned amount"],
+              "warnings": []
+            }
+            """,
+        }
+
+    monkeypatch.setattr("services.mapping_assist_service.chat", fake_chat)
+
+    result = asyncio.run(
+        suggest_mapping_with_llm(
+            bank="bay",
+            columns=["วันที่", "รายการ", "ประเภทรายการ", "จำนวนเงิน", "ยอดคงเหลือ"],
+            sample_rows=[{"วันที่": "2026-01-08", "รายการ": "โอน", "ประเภทรายการ": "DR", "จำนวนเงิน": "500"}],
+            current_mapping={},
+        )
+    )
+
+    assert result["mapping"]["amount"] == "จำนวนเงิน"
+    assert result["mapping"]["direction_marker"] == "ประเภทรายการ"
+    assert result["mapping"]["debit"] is None
+    assert result["validation"]["ok"] is True
+    assert result["validation"]["amount_mode"] == "direction_marker"
+
+
 def test_mapping_assist_rejects_non_json_llm_response(monkeypatch):
     async def fake_chat(*args, **kwargs):
         return {"model": "qwen2.5:14b", "response": "not json"}

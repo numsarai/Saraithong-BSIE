@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { ArrowUpCircle, ChevronLeft, Building2, Plus, RefreshCw, Save, ShieldCheck, Trash2, X } from 'lucide-react'
 
 const LOGICAL_FIELDS = [
-  'date','time','description','amount','debit','credit',
+  'date','time','description','amount','direction_marker','debit','credit',
   'balance','channel','counterparty_account','counterparty_name',
   'sender_account','sender_name','receiver_account','receiver_name',
 ]
@@ -21,6 +21,7 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
   time: 'bankManager.fields.time',
   description: 'bankManager.fields.description',
   amount: 'bankManager.fields.amount',
+  direction_marker: 'bankManager.fields.directionMarker',
   debit: 'bankManager.fields.debit',
   credit: 'bankManager.fields.credit',
   balance: 'bankManager.fields.balance',
@@ -634,6 +635,7 @@ function BankForm({ form, setForm, newAlias, setNewAlias, addAlias, removeAlias,
               onChange={e => setForm({ ...form, format_type: e.target.value })}
               className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none cursor-pointer">
               <option value="standard">{t('bankManager.form.formatTypeStandard')}</option>
+              <option value="direction_marker">{t('bankManager.form.formatTypeDirectionMarker')}</option>
               <option value="dual_account">{t('bankManager.form.amountModeDualAccount')}</option>
             </select>
           </div>
@@ -643,6 +645,7 @@ function BankForm({ form, setForm, newAlias, setNewAlias, addAlias, removeAlias,
               onChange={e => setForm({ ...form, amount_mode: e.target.value })}
               className="bg-surface2 border border-border rounded-lg px-3 py-2 text-sm text-text focus:border-accent outline-none cursor-pointer">
               <option value="signed">{t('bankManager.form.amountModeSigned')}</option>
+              <option value="direction_marker">{t('bankManager.form.amountModeDirectionMarker')}</option>
               <option value="debit_credit">{t('bankManager.form.amountModeDebitCredit')}</option>
             </select>
           </div>

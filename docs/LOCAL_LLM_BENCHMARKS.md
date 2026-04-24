@@ -2,6 +2,48 @@
 
 > Local-only benchmark log. Prompts are synthetic and do not include case evidence.
 
+## 2026-04-24 — Direction-Marker Mapping Follow-up
+
+### Environment
+
+- Branch: `Smarter-BSIE`
+- Runtime: local Ollama via `OLLAMA_BASE_URL=http://localhost:11434`
+- Benchmark source: `scripts/benchmark_mapping_models.py`
+- Endpoint path: native Ollama `/api/chat` through `think=false`
+- Evidence data: none; all fixtures are synthetic
+
+This follow-up made `direction_marker` a first-class mapping path for layouts with one unsigned amount column plus a separate direction marker such as `DR`/`CR`, `IN`/`OUT`, or Thai deposit/withdraw markers.
+
+Targeted BAY command:
+
+```bash
+.venv/bin/python scripts/benchmark_mapping_models.py --models gemma4:26b --fixture bay_direction_marker_amount --mode both --run-id direction-marker-bay-20260424115658
+```
+
+Targeted result:
+
+| Model | Fixture | Text score | Text validation | Vision score | Vision validation |
+|---|---|---:|---|---:|---|
+| `gemma4:26b` | `bay_direction_marker_amount` | 8 / 8 = 100.00% | `True` | 8 / 8 = 100.00% | `True` |
+
+8-bank re-run command:
+
+```bash
+.venv/bin/python scripts/benchmark_mapping_models.py --models gemma4:26b --mode both --run-id direction-marker-8bank-gemma26b-20260424115736
+```
+
+8-bank re-run result:
+
+| Model | Text score | Text avg | Vision score | Vision avg | Notes |
+|---|---:|---:|---:|---:|---|
+| `gemma4:26b` | 54 / 55 = 98.18% | 6,216.47 ms | 54 / 55 = 98.18% | 6,728.69 ms | Validation passed for every fixture; only miss remains the intentionally ambiguous TTB balance choice |
+
+### Takeaways
+
+- `bay_direction_marker_amount` now validates cleanly without forcing the marker column into debit/credit.
+- The expected field total increased from 54 to 55 because the BAY fixture now explicitly scores `direction_marker`.
+- `gemma4:26b` remains the mapping-assist default recommendation; the deterministic backend fix removed the BAY validation blocker.
+
 ## 2026-04-24 — Expanded 8-Bank Mapping Fixture Benchmark
 
 ### Environment
@@ -43,7 +85,7 @@ Command:
 
 Additional validation notes:
 
-- `bay_direction_marker_amount` scored correct on expected fields for `gemma4:26b`, but validation was `false` because the current mapping schema/validator has no explicit direction-marker field for unsigned amount + `DR`/`CR` layouts.
+- At the time of this run, `bay_direction_marker_amount` scored correct on expected fields for `gemma4:26b`, but validation was `false` because direction-marker amount layouts were not yet first-class. This was fixed in the direction-marker follow-up above.
 - `ttb_ambiguous_amount_balance` exposed the intended ambiguity: `gemma4:26b` selected `ยอดหลังรายการ` while the fixture expected `ยอดคงเหลือ`.
 
 ### Takeaways

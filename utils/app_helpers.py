@@ -110,8 +110,13 @@ def repair_suggested_mapping(
     }
     auto_suggested = auto_suggested or {}
 
+    if repaired.get("amount") and repaired.get("direction_marker"):
+        repaired["debit"] = None
+        repaired["credit"] = None
+
     if repaired.get("debit") and repaired.get("credit"):
         repaired["amount"] = None
+        repaired["direction_marker"] = None
 
     if repaired.get("amount") and repaired.get("balance") and repaired["amount"] == repaired["balance"]:
         repaired["amount"] = None
@@ -122,8 +127,16 @@ def repair_suggested_mapping(
     for field, value in auto_suggested.items():
         if field == "amount" and repaired.get("debit") and repaired.get("credit"):
             continue
+        if field == "direction_marker" and (repaired.get("debit") or repaired.get("credit")):
+            continue
+        if field in {"debit", "credit"} and repaired.get("amount") and repaired.get("direction_marker"):
+            continue
         if field not in repaired or repaired.get(field) is None:
             repaired[field] = value if value in available_columns else None
+
+    if repaired.get("amount") and repaired.get("direction_marker"):
+        repaired["debit"] = None
+        repaired["credit"] = None
 
     return repaired
 

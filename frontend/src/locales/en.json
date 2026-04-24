@@ -89,6 +89,7 @@
       "time": "Time",
       "description": "Description",
       "amount": "Amount (signed)",
+      "directionMarker": "Direction Marker",
       "debit": "Debit / Withdraw",
       "credit": "Credit / Deposit",
       "balance": "Balance",
@@ -380,8 +381,10 @@
     "bankName": "Bank Name",
     "form": {
       "formatTypeStandard": "Standard (single amount column)",
+      "formatTypeDirectionMarker": "Direction marker (amount + DR/CR)",
       "amountModeDualAccount": "Dual Account (debit + credit)",
       "amountModeSigned": "Signed (+/- in one column)",
+      "amountModeDirectionMarker": "Amount + Direction Marker",
       "amountModeDebitCredit": "Debit / Credit (separate columns)"
     },
     "aliasHint": "Add all possible column header names this bank uses. BSIE will fuzzy-match these to auto-detect and map columns.",
@@ -392,6 +395,7 @@
       "time": "Time",
       "description": "Description",
       "amount": "Amount (signed)",
+      "directionMarker": "Direction Marker",
       "debit": "Debit",
       "credit": "Credit",
       "balance": "Balance",

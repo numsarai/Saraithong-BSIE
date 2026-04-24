@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-024: Direction-marker amount layouts are first-class mapping paths
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** BAY-like statements can represent transaction direction as one unsigned amount column plus a separate marker column (`DR`/`CR`, `IN`/`OUT`, or Thai deposit/withdraw markers). Treating that marker as debit/credit made otherwise correct mappings fail validation and could hide the true statement layout.
+- **Decision:** Add `amount + direction_marker` as a distinct validated amount path. Mapping assist may suggest `direction_marker`, preview signs unsigned amounts from the marker, the normalizer supports the same marker mode, and BAY's built-in config now declares `format_type`/`amount_mode` as `direction_marker`.
+- **Alternatives:** (1) Keep forcing marker columns into `debit`/`credit` — validates poorly and misrepresents the source layout. (2) Treat all such amounts as signed amounts — loses direction when the amount column is unsigned. (3) Handle BAY as a one-off special case — duplicates logic and makes future marker layouts harder to audit.
+- **Consequences:** Direction-marker mappings can pass validation and dry-run preview without debit/credit columns. Regression tests now cover validator, assist repair, and normalizer behavior. Future marker aliases should be added to the shared marker sets before relying on them in configs.
+
 ### DEC-023: Mapping model benchmarks must cover all supported bank keys before policy changes
 - **Date:** 2026-04-24
 - **Status:** accepted

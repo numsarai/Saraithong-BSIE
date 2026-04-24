@@ -9,11 +9,69 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `348 passed`, frontend `37 passed`, frontend build passed
+- **Baseline:** backend `353 passed`, frontend `37 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Expanded 8-Bank Mapping Benchmark Fixtures
+## Done (latest session) — Direction-Marker Amount Path
+
+### What I changed
+- Made `amount + direction_marker` a first-class mapping path for unsigned amount layouts with `DR`/`CR`, `IN`/`OUT`, or Thai deposit/withdraw markers.
+- Updated mapping validation and dry-run preview so direction-marker mappings validate cleanly and preview signed amounts/directions deterministically.
+- Exposed `direction_marker` to local LLM mapping assist prompts and frontend mapping UI.
+- Hardened profile/LLM mapping repair so direction-marker amount paths do not get mixed with debit/credit mappings.
+- Updated `core/normalizer.py` and `config/bay.json` so runtime normalization uses the same direction-marker semantics as preview.
+- Updated the synthetic BAY benchmark fixture to score `direction_marker` explicitly.
+
+### Files changed
+- `services/mapping_validation_service.py`
+- `services/mapping_assist_service.py`
+- `utils/app_helpers.py`
+- `core/normalizer.py`
+- `config/bay.json`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/BankManager.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `scripts/benchmark_mapping_models.py`
+- `tests/test_mapping_validation_service.py`
+- `tests/test_mapping_assist_service.py`
+- `tests/test_normalizer_direction_marker.py`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `docs/LOCAL_LLM_BENCHMARKS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+### Benchmark results
+- Targeted BAY fixture:
+  - command: `.venv/bin/python scripts/benchmark_mapping_models.py --models gemma4:26b --fixture bay_direction_marker_amount --mode both --run-id direction-marker-bay-20260424115658`
+  - result: `gemma4:26b` text `8/8`, vision `8/8`, validation `True` for both.
+- 8-bank rerun for `gemma4:26b`:
+  - command: `.venv/bin/python scripts/benchmark_mapping_models.py --models gemma4:26b --mode both --run-id direction-marker-8bank-gemma26b-20260424115736`
+  - result: text `54/55` = `98.18%`, vision `54/55` = `98.18%`, validation `True` for every fixture.
+  - remaining miss: intentional TTB balance ambiguity (`ยอดหลังรายการ` vs expected `ยอดคงเหลือ`).
+
+### Tests run
+- `.venv/bin/python -m pytest tests/test_mapping_validation_service.py tests/test_mapping_assist_service.py tests/test_normalizer_direction_marker.py tests/test_benchmark_mapping_models.py -q` -> `12 passed`
+- `.venv/bin/python -m pytest tests/ -q` -> `353 passed`
+- `npm test -- --run` in `frontend/` -> `37 passed`
+- `npm run build` in `frontend/` -> passed
+- JSON validation for `config/bay.json`, `frontend/src/locales/en.json`, and `frontend/src/locales/th.json` -> passed
+
+### Decisions made
+- Added DEC-024: direction-marker amount layouts are first-class mapping paths.
+- Keep `gemma4:26b` as mapping-assist default; the BAY validation blocker is now deterministic code, not a model-quality issue.
+
+### Warnings / Next
+- The only benchmark miss left for `gemma4:26b` is the intentionally ambiguous TTB balance choice; next useful deterministic improvement is balance-column disambiguation.
+- If more Thai marker words appear in real statements, add them to the marker sets in both validator and normalizer before trusting them.
+
+### Environment changes
+- No dependencies installed.
+- Generated ignored benchmark artifacts under `artifacts/llm_mapping_benchmarks/`.
+
+## Done (previous session) — Expanded 8-Bank Mapping Benchmark Fixtures
 
 ### What I changed
 - Expanded `scripts/benchmark_mapping_models.py` fixtures from 3 layouts to 8 bank-covering fixtures:

@@ -443,6 +443,77 @@ describe('Step2Map analyst gate', () => {
     )
   })
 
+  it('surfaces OCR account-presence lineage for investigator review', async () => {
+    vi.mocked(verifyAccountPresence).mockResolvedValueOnce({
+      status: 'ok',
+      source: 'deterministic_account_presence',
+      file_type: 'image',
+      subject_account_raw: '1234567890',
+      normalized_account: '1234567890',
+      found: true,
+      possible_match: true,
+      match_status: 'exact_found',
+      locations: [{
+        sheet_name: 'Image OCR',
+        page_number: 2,
+        row_number: 5,
+        column_number: 1,
+        column_label: 'ocr_token',
+        source_region: 'ocr_token',
+        row_zone: 'ocr_token',
+        match_type: 'exact_digits',
+        value_preview: 'account 1234567890',
+        ocr_confidence: 0.87,
+        x_center: 120.5,
+        y_center: 240.25,
+      }],
+      possible_locations: [{
+        sheet_name: 'Image OCR',
+        page_number: 2,
+        row_number: 8,
+        column_number: 3,
+        column_label: 'candidate account',
+        source_region: 'ocr_table',
+        row_zone: 'body',
+        match_type: 'possible_leading_zero_loss',
+        value_preview: '123456789',
+      }],
+      summary: {
+        exact_match_count: 1,
+        possible_match_count: 1,
+        pages_scanned: 2,
+        tables_scanned: 1,
+        cells_scanned: 30,
+        ocr_tokens_scanned: 14,
+        locations_returned: 2,
+      },
+      warnings: ['Possible leading-zero loss candidate also exists'],
+    })
+    seedUpload({
+      account_guess: '1234567890',
+      identity_guess: {
+        account: '1234567890',
+        name: 'Detected Name',
+        account_source: 'ocr_header',
+      },
+      sheet_name: 'Image OCR',
+    }, 'scan.png')
+
+    render(<Step2Map />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /verify evidence/i }))
+
+    expect(await screen.findByText(/Exact evidence matches/i)).toBeInTheDocument()
+    expect(screen.getByText(/Image OCR Page 2 Token 5/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/ocr token/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/OCR confidence 87%/i)).toBeInTheDocument()
+    expect(screen.getByText(/Position: x 120.5, y 240.3/i)).toBeInTheDocument()
+    expect(screen.getByText(/Preview: account 1234567890/i)).toBeInTheDocument()
+    expect(screen.getByText(/Possible leading-zero matches/i)).toBeInTheDocument()
+    expect(screen.getByText(/Image OCR Page 2 R8C3/i)).toBeInTheDocument()
+    expect(screen.getByText(/Possible leading-zero loss candidate also exists/i)).toBeInTheDocument()
+  })
+
   it('requires analyst confirmation when workbook verification does not find the selected account', async () => {
     vi.mocked(verifyAccountPresence).mockResolvedValueOnce({
       status: 'ok',

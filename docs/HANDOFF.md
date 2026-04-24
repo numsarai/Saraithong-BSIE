@@ -9,11 +9,46 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `370 passed`, frontend `45 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `370 passed`, frontend `46 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Frontend Workflow Code-Splitting
+## Done (latest session) — OCR Account Presence Review UI
+
+### What I changed
+- Step 2 now surfaces richer account-presence lineage after `Verify Evidence`.
+- Exact and possible leading-zero matches are displayed separately.
+- Each returned location now shows source region (`page_text`, `pdf_table`, `ocr_table`, `ocr_token`, etc.), page/line/row/column or OCR token position, match type, OCR confidence when available, OCR x/y center when available, and raw value preview.
+- Account-presence summary chips now show source file type plus scan counts such as pages, tables, cells, OCR tokens, and returned locations.
+- Added a frontend regression for OCR-token account-presence lineage display.
+
+### Files changed
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `370 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `12 passed`
+- Focused:
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx` in `frontend/` -> `13 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+- Full verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `370 passed`
+  - `npm test -- --run` in `frontend/` -> `46 passed`
+
+### Decisions made
+- No new architecture decision. This is a frontend evidence-review presentation improvement on top of DEC-030/DEC-031.
+
+### Warnings / Next
+- The UI now displays available OCR/page lineage, but it still depends on the deterministic account-presence service returning those fields.
+- The next useful slice is to let investigators jump from a match row/token to a document preview region, or continue toward Phase 4 investigation copilot scope locking.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Frontend Workflow Code-Splitting
 
 ### What I changed
 - `frontend/src/App.tsx` now lazy-loads the five workflow step components (`Step1Upload` through `Step5Results`) instead of importing them into the initial app chunk.

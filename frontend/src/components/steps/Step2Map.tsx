@@ -327,6 +327,10 @@ export function Step2Map() {
           : 'Not provided'
   const presenceStatus = String(accountPresence?.match_status || '').replace(/_/g, ' ')
   const presenceBadgeVariant: 'blue' | 'green' | 'red' | 'gray' = accountPresence?.found ? 'green' : accountPresence?.possible_match ? 'blue' : accountPresence ? 'red' : 'gray'
+  const exactPresenceLocations = Array.isArray(accountPresence?.locations) ? accountPresence.locations : []
+  const possiblePresenceLocations = Array.isArray(accountPresence?.possible_locations) ? accountPresence.possible_locations : []
+  const presenceSummaryItems = buildPresenceSummaryItems(accountPresence)
+  const hasPresenceLocations = exactPresenceLocations.length > 0 || possiblePresenceLocations.length > 0
   const rankedCandidates = candidateKeys.map((key: string) => ({
     key,
     name: banks.find((bank: any) => bank.key === key)?.name || key.toUpperCase(),
@@ -499,13 +503,32 @@ export function Step2Map() {
                 {presenceLoading ? 'Verifying' : 'Verify Evidence'}
               </Button>
             </div>
-            {accountPresence?.locations?.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {accountPresence.locations.slice(0, 4).map((location: any) => (
-                  <span key={`${location.sheet_name}:${location.row_number}:${location.column_number}`} className="rounded-full border border-success/20 bg-success/10 px-2 py-1 text-[11px] text-success">
-                    {location.sheet_name} R{location.row_number}C{location.column_number} {location.column_label ? `(${location.column_label})` : ''}
-                  </span>
+            {accountPresence && presenceSummaryItems.length > 0 && (
+              <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+                {presenceSummaryItems.map((item) => (
+                  <div key={item.label} className="rounded-lg border border-border/60 bg-surface2/50 px-2.5 py-2">
+                    <div className="text-[10px] uppercase text-muted font-semibold">{item.label}</div>
+                    <div className="mt-0.5 text-xs font-semibold text-text">{item.value}</div>
+                  </div>
                 ))}
+              </div>
+            )}
+            {hasPresenceLocations && (
+              <div className="mt-3 space-y-2">
+                {exactPresenceLocations.length > 0 && (
+                  <AccountPresenceLocationList
+                    title="Exact evidence matches"
+                    locations={exactPresenceLocations}
+                    tone="green"
+                  />
+                )}
+                {possiblePresenceLocations.length > 0 && (
+                  <AccountPresenceLocationList
+                    title="Possible leading-zero matches"
+                    locations={possiblePresenceLocations}
+                    tone="yellow"
+                  />
+                )}
               </div>
             )}
             {accountPresence?.warnings?.length > 0 && (
@@ -1244,6 +1267,122 @@ function evaluateLocalMapping(mapping: Record<string, string | null>, columns: s
   }
 
   return { errors, warnings, duplicateColumns }
+}
+
+function buildPresenceSummaryItems(accountPresence: any | null) {
+  if (!accountPresence) return []
+  const summary = accountPresence.summary || {}
+  const items: Array<{ label: string; value: string }> = []
+  const fileType = String(accountPresence.file_type || '').trim()
+  if (fileType) {
+    items.push({ label: 'Source', value: formatEvidenceItem(fileType) })
+  }
+  appendCount(items, 'Pages', summary.pages_scanned)
+  appendCount(items, 'Tables', summary.tables_scanned)
+  appendCount(items, 'Cells', summary.cells_scanned)
+  appendCount(items, 'OCR tokens', summary.ocr_tokens_scanned)
+  appendCount(items, 'Locations', summary.locations_returned)
+  return items.slice(0, 8)
+}
+
+function appendCount(items: Array<{ label: string; value: string }>, label: string, value: unknown) {
+  if (value === null || value === undefined || value === '') return
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return
+  items.push({ label, value: String(numeric) })
+}
+
+function AccountPresenceLocationList({
+  title,
+  locations,
+  tone,
+}: {
+  title: string
+  locations: any[]
+  tone: 'green' | 'yellow'
+}) {
+  const toneClasses = tone === 'green'
+    ? 'border-success/20 bg-success/[0.06]'
+    : 'border-warning/25 bg-warning/[0.08]'
+
+  return (
+    <div className="rounded-lg border border-border/70 bg-surface2/40 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-[11px] uppercase text-muted font-semibold">{title}</div>
+        <Badge variant={tone}>{locations.length}</Badge>
+      </div>
+      <div className="space-y-2">
+        {locations.slice(0, 6).map((location, index) => (
+          <div key={presenceLocationKey(location, index)} className={`rounded-lg border px-3 py-2 ${toneClasses}`}>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-text">{formatPresenceLocationTitle(location)}</span>
+              <Badge variant={tone}>{formatEvidenceItem(location.source_region || 'table')}</Badge>
+              <Badge variant="gray">{formatEvidenceItem(location.match_type || 'match')}</Badge>
+              {formatOcrConfidence(location.ocr_confidence) && (
+                <Badge variant="blue">OCR confidence {formatOcrConfidence(location.ocr_confidence)}</Badge>
+              )}
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+              {location.column_label && <span>Column: {formatEvidenceItem(location.column_label)}</span>}
+              {location.row_zone && <span>Zone: {formatEvidenceItem(location.row_zone)}</span>}
+              {formatOcrPosition(location) && <span>{formatOcrPosition(location)}</span>}
+            </div>
+            {location.value_preview && (
+              <div className="mt-1 truncate text-[11px] text-text2">Preview: {String(location.value_preview)}</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function presenceLocationKey(location: any, index: number) {
+  return [
+    location.source_region || 'table',
+    location.sheet_name || 'evidence',
+    location.page_number || '',
+    location.row_number || location.row_index || '',
+    location.column_number || location.column_index || '',
+    location.value_preview || '',
+    index,
+  ].join(':')
+}
+
+function formatPresenceLocationTitle(location: any) {
+  const sheet = String(location.sheet_name || 'Evidence').trim()
+  const pageNumber = location.page_number ? Number(location.page_number) : null
+  const sheetAlreadyNamesPage = pageNumber !== null && sheet.toLowerCase().includes(`page ${pageNumber}`)
+  const pageLabel = pageNumber !== null && !sheetAlreadyNamesPage ? `Page ${pageNumber}` : ''
+  const sourceRegion = String(location.source_region || '').trim()
+  const rowNumber = Number(location.row_number || 0)
+  const columnNumber = Number(location.column_number || 0)
+  let position = ''
+  if (sourceRegion === 'ocr_token') {
+    position = rowNumber ? `Token ${rowNumber}` : 'OCR token'
+  } else if (sourceRegion === 'page_text') {
+    position = rowNumber ? `Line ${rowNumber}` : 'Page text'
+  } else if (rowNumber && columnNumber) {
+    position = `R${rowNumber}C${columnNumber}`
+  } else if (rowNumber) {
+    position = `Row ${rowNumber}`
+  }
+  return [sheet, pageLabel, position].filter(Boolean).join(' ')
+}
+
+function formatOcrConfidence(value: unknown) {
+  if (value === null || value === undefined || value === '') return ''
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return ''
+  const percent = numeric > 1 ? numeric : numeric * 100
+  return `${Math.round(percent)}%`
+}
+
+function formatOcrPosition(location: any) {
+  const x = Number(location.x_center)
+  const y = Number(location.y_center)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return ''
+  return `Position: x ${x.toFixed(1)}, y ${y.toFixed(1)}`
 }
 
 function FlowCard({

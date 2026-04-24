@@ -237,7 +237,8 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] แยก local Ollama model roles สำหรับ text / vision / fast fallback
 - [x] เพิ่ม benchmark harness สำหรับ text / fast / optional vision roles
 - [x] เพิ่ม OCR/vision mapping assist แยกจาก Excel text context
-- [ ] รันและบันทึก benchmark บนเครื่องจริงสำหรับ `qwen2.5:14b` / fallback model เมื่อ Ollama models พร้อม
+- [x] รันและบันทึก benchmark บนเครื่องจริงรอบแรกใน `docs/LOCAL_LLM_BENCHMARKS.md`
+- [ ] ติดตั้ง/รัน benchmark ซ้ำสำหรับ baseline `qwen2.5:14b` และ `qwen2.5vl:7b`
 
 หมายเหตุ:
 
@@ -247,6 +248,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - LLM endpoints ใช้ config กลางจาก `services/llm_service.py`; text chat/mapping ใช้ text role และ image/PDF analysis ใช้ vision role
 - `/api/llm/benchmark` ใช้ synthetic prompt เท่านั้น, ปิด DB auto-context, ไม่ persist ผล และคืน `offline` / `partial` เมื่อ Ollama หรือ JSON output ยังไม่พร้อม
 - `/api/mapping/assist/vision` รับ `file_id` เท่านั้น, resolve จาก evidence storage, กัน path นอก `EVIDENCE_DIR`, ใช้ภาพ/หน้าแรก PDF เป็น visual context และยังเป็น suggestion-only
+- Benchmark จริงรอบแรกพบว่า `qwen2.5:14b` และ `qwen2.5vl:7b` ยังไม่ได้ติดตั้ง; `qwen3.6:27b` ใช้ได้แต่ช้าเกิน UX mapping; `gemma4:e4b` เร็วกว่าแต่ JSON compliance ยังแปรผัน
 
 ไฟล์หลัก:
 
@@ -256,6 +258,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - `routers/llm.py`
 - `frontend/src/api.ts`
 - `frontend/src/components/steps/Step2Map.tsx`
+- `docs/LOCAL_LLM_BENCHMARKS.md`
 
 ### Phase 4 — Investigation Copilot
 

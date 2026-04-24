@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-018: Benchmark results do not change the configured baseline roles yet
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** The first live benchmark found installed `qwen3.6:27b` and `gemma4:e4b`, while the documented baseline text/vision models from DEC-008 were not installed. `qwen3.6:27b` produced valid JSON but was too slow for interactive mapping UX.
+- **Decision:** Keep the existing role defaults unchanged for now. Record the local benchmark in `docs/LOCAL_LLM_BENCHMARKS.md`, but do not switch text defaults to `qwen3.6:27b` or use `gemma4:e4b` as the primary mapping model based on a single run.
+- **Alternatives:** (1) Change text default to `qwen3.6:27b` because it is installed — works but is too slow. (2) Change text default to `gemma4:e4b` because it is faster — weaker for Thai/JSON/mapping reasoning and showed variable JSON compliance. (3) Block Phase 4 until baseline models are installed — unnecessary because Phase 4 can preserve role-based config.
+- **Consequences:** The next benchmark should install/pull the intended `qwen2.5:14b` and `qwen2.5vl:7b` models, then rerun text/fast/vision measurements before changing defaults.
+
 ### DEC-017: OCR/vision mapping assist reads evidence by file_id and remains suggestion-only
 - **Date:** 2026-04-24
 - **Status:** accepted

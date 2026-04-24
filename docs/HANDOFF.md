@@ -13,7 +13,56 @@
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 3 OCR/Vision Mapping Assist
+## Done (latest session) — Phase 3 Local LLM Benchmark Run
+
+### What I changed
+- Ran the local-only LLM benchmark harness against the current Ollama install.
+- Recorded benchmark results in `docs/LOCAL_LLM_BENCHMARKS.md`.
+- Added `DEC-018`: Benchmark results do not change the configured baseline roles yet.
+- Updated the Phase 3 roadmap to show the first live benchmark is recorded and that baseline text/vision models still need install/rerun.
+
+### Benchmark results
+- Installed Ollama models at run time:
+  - `qwen3.6:27b`
+  - `qwen3.5:27b`
+  - `gemma4:latest`
+  - `gemma4:e4b`
+- Default role run:
+  - `text` -> `qwen2.5:14b`: model not installed, Ollama 404
+  - `fast` -> `gemma4:e4b`: responded in `40,880.92 ms` but strict JSON check failed in that run
+  - `vision` -> `qwen2.5vl:7b`: model not installed, Ollama 404
+- Installed-model override run:
+  - `text` -> `qwen3.6:27b`: JSON valid, `105,522.48 ms`
+  - `fast` -> `gemma4:e4b`: JSON valid, `14,392.83 ms`
+
+### Files changed
+- `docs/LOCAL_LLM_BENCHMARKS.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before docs update:
+  - `.venv/bin/python -m pytest tests/ -q` -> `344 passed`
+  - `npm test` in `frontend/` -> `37 passed`
+
+### Decisions made
+- Keep the configured role defaults unchanged for now; do not switch text default to installed `qwen3.6:27b` because it is too slow for interactive mapping UX.
+- Do not promote `gemma4:e4b` to primary mapping model based on a single run because JSON compliance varied.
+
+### Warnings
+- `qwen2.5:14b` and `qwen2.5vl:7b` are not currently installed in Ollama.
+- Vision mapping assist live use still requires a vision-capable local model.
+- Next benchmark should rerun after pulling the intended baseline models.
+
+### Failed attempts / Notes
+- Default benchmark run was `partial` because baseline text/vision models were missing.
+
+### Environment changes
+- No dependencies installed.
+- No model pulls were performed.
+
+## Done (previous session) — Phase 3 OCR/Vision Mapping Assist
 
 ### What I changed
 - Added OCR/vision mapping assist for PDF/image uploads.

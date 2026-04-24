@@ -38,6 +38,10 @@ class MappingAssistRequest(BaseModel):
     model: str = ""
 
 
+class MappingVisionAssistRequest(MappingAssistRequest):
+    file_id: str = ""
+
+
 class TemplateVariantPromotionRequest(BaseModel):
     trust_state: str
     reviewer: str = "analyst"

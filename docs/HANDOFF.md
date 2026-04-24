@@ -9,11 +9,77 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `341 passed`, frontend `36 passed`, frontend build passed
+- **Baseline:** backend `344 passed`, frontend `37 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 3 Local LLM Benchmark Harness
+## Done (latest session) — Phase 3 OCR/Vision Mapping Assist
+
+### What I changed
+- Added OCR/vision mapping assist for PDF/image uploads.
+- Added `MappingVisionAssistRequest` with required `file_id`.
+- Added `suggest_mapping_with_vision_llm(...)` in `services/mapping_assist_service.py`:
+  - loads the original evidence file from the stored path
+  - uses the first PDF page or image bytes as local vision context
+  - sends OCR/extracted columns, sample rows, detected bank context, and current mapping
+  - requires JSON output
+  - drops invented/nonexistent columns
+  - repairs debit/credit vs signed amount conflicts
+  - validates the merged mapping before returning it
+  - returns `suggestion_only=true` and `auto_pass_eligible=false`
+- Added `POST /api/mapping/assist/vision` in `routers/ingestion.py`.
+- The endpoint resolves files by `file_id` only, rejects stored paths outside `EVIDENCE_DIR`, and does not accept arbitrary client paths.
+- Added frontend `assistVisionMapping(...)` API client.
+- Added Step 2 `Ask Vision` action for PDF/image uploads only.
+- Updated English/Thai i18n strings and regression coverage.
+
+### Files changed
+- `persistence/schemas.py`
+- `services/mapping_assist_service.py`
+- `routers/ingestion.py`
+- `frontend/src/api.ts`
+- `frontend/src/components/steps/Step2Map.tsx`
+- `frontend/src/components/steps/Step2Map.test.tsx`
+- `frontend/src/App.workflow.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `tests/test_mapping_assist_service.py`
+- `tests/test_app_api.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before changes:
+  - `.venv/bin/python -m pytest tests/ -q` -> `341 passed`
+  - `npm test` in `frontend/` -> `36 passed`
+- Focused after changes:
+  - `.venv/bin/python -m py_compile services/mapping_assist_service.py routers/ingestion.py persistence/schemas.py tests/test_mapping_assist_service.py tests/test_app_api.py` -> passed
+  - `.venv/bin/python -m pytest tests/test_mapping_assist_service.py tests/test_app_api.py -q` -> `51 passed`
+  - `npm test -- --run src/components/steps/Step2Map.test.tsx src/App.workflow.test.tsx` -> `10 passed`
+- Final verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `344 passed`
+  - `npm test` in `frontend/` -> `37 passed`
+  - `npm run build` in `frontend/` -> passed, Vite large chunk warning only
+
+### Decisions made
+- Added `DEC-017`: OCR/vision mapping assist reads evidence by file_id and remains suggestion-only.
+- Vision assist is analyst-requested only; it is not run automatically during upload and does not create new columns or rows.
+
+### Warnings
+- Requires local Ollama plus a vision-capable model for live use.
+- Only the first PDF page is used as the vision preview in this slice.
+- OCR repair and row extraction are still future work; this only helps map existing OCR/extracted columns.
+- No auto-pass behavior was added.
+
+### Failed attempts / Notes
+- None in this slice.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Phase 3 Local LLM Benchmark Harness
 
 ### What I changed
 - Added a local-only benchmark harness for configured Ollama model roles.

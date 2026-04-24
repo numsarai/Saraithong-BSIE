@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-017: OCR/vision mapping assist reads evidence by file_id and remains suggestion-only
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** PDF/image statements can produce weak OCR headers where text-only mapping assist has limited context. Vision assistance can help interpret the original document preview, but it must not bypass analyst review or accept arbitrary file paths.
+- **Decision:** Add `/api/mapping/assist/vision`, backed by `suggest_mapping_with_vision_llm(...)`. The endpoint accepts `file_id`, resolves the stored evidence file, rejects paths outside `EVIDENCE_DIR`, sends only the first PDF page or image bytes to the local vision model, constrains output to existing OCR/extracted columns, validates the merged mapping, and returns `suggestion_only=true` / `auto_pass_eligible=false`.
+- **Alternatives:** (1) Upload a second copy of the file from the browser — simpler UI but duplicates evidence handling. (2) Let the vision model create new columns/rows — tempting for OCR repair but unsafe because it can invent evidence. (3) Run automatically during upload — adds latency and weakens explicit analyst control.
+- **Consequences:** Analysts can request visual help for PDF/image mapping while preserving evidence lineage, path confinement, validation, and explicit apply/confirm gates. OCR repair and row extraction remain future work.
+
 ### DEC-016: Local LLM benchmark uses synthetic prompts only
 - **Date:** 2026-04-24
 - **Status:** accepted

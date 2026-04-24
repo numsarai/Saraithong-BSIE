@@ -67,7 +67,9 @@
       "title": "Local LLM Mapping Assist",
       "description": "Request a local-only mapping suggestion for analyst review.",
       "run": "Ask Assist",
+      "runVision": "Ask Vision",
       "running": "Asking…",
+      "visionRunning": "Reading image…",
       "empty": "No AI suggestion requested for this mapping.",
       "ready": "Mapping assist suggestion ready",
       "failed": "Mapping assist failed",
@@ -76,9 +78,11 @@
       "valid": "Valid",
       "needsReview": "Needs review",
       "suggestionOnly": "suggestion only",
+      "vision": "vision",
       "reasons": "Reasons",
       "warnings": "Warnings",
-      "noColumns": "No uploaded columns available"
+      "noColumns": "No uploaded columns available",
+      "noFile": "No source file is available for vision assist"
     },
     "fields": {
       "date": "Date",

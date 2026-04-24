@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { normalizeOperatorName, useStore } from '@/store'
-import { assistMapping, confirmMapping, getBanks, learnBank, previewMapping } from '@/api'
+import { assistMapping, assistVisionMapping, confirmMapping, getBanks, learnBank, previewMapping } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -30,7 +30,7 @@ export function Step2Map() {
     setConfirmedMapping, sampleRows, bankKey, setBankKey, setStep, confidenceScores,
     headerRow, sheetName, memoryMatch, bankMemoryMatch, templateVariantMatch, suggestionSource,
     bankReviewed, mappingReviewed, setBankReviewed, setMappingReviewed,
-    isBlockedCase, canProceedToConfig, operatorName,
+    isBlockedCase, canProceedToConfig, operatorName, fileId, fileName,
   } = useStore()
   const [saving, setSaving]         = useState(false)
   const [banks, setBanks]           = useState<any[]>([])
@@ -85,6 +85,36 @@ export function Step2Map() {
     setAssistLoading(true)
     try {
       const result = await assistMapping({
+        bank: bankKey,
+        detected_bank: detectedBank,
+        columns: allColumns,
+        sample_rows: sampleRows,
+        current_mapping: confirmedMapping,
+        sheet_name: sheetName,
+        header_row: headerRow,
+      })
+      setMappingAssist(result)
+      toast.success(t('step2.assist.ready'))
+    } catch (e: any) {
+      toast.error(`${t('step2.assist.failed')}: ${e.message}`)
+    } finally {
+      setAssistLoading(false)
+    }
+  }
+
+  const handleVisionMappingAssist = async () => {
+    if (!allColumns.length) {
+      toast.error(t('step2.assist.noColumns'))
+      return
+    }
+    if (!fileId) {
+      toast.error(t('step2.assist.noFile'))
+      return
+    }
+    setAssistLoading(true)
+    try {
+      const result = await assistVisionMapping({
+        file_id: fileId,
         bank: bankKey,
         detected_bank: detectedBank,
         columns: allColumns,
@@ -236,6 +266,7 @@ export function Step2Map() {
   const suggestionSourceLabel = formatEvidenceItem(suggestionSource || 'auto')
   const templateVariantScore = Math.round(Number(templateVariantMatch?.match_score || 0) * 100)
   const templateVariantTrust = formatEvidenceItem(templateVariantMatch?.trust_state || '')
+  const isVisionAssistAvailable = !!fileId && /\.(pdf|png|jpe?g|bmp)$/i.test(String(fileName || ''))
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -669,10 +700,18 @@ export function Step2Map() {
             <CardTitle className="!mb-1">{t('step2.assist.title')}</CardTitle>
             <p className="text-sm text-muted">{t('step2.assist.description')}</p>
           </div>
-          <Button size="sm" variant="outline" onClick={handleMappingAssist} disabled={assistLoading || allColumns.length === 0}>
-            {assistLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            {assistLoading ? t('step2.assist.running') : t('step2.assist.run')}
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={handleMappingAssist} disabled={assistLoading || allColumns.length === 0}>
+              {assistLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              {assistLoading ? t('step2.assist.running') : t('step2.assist.run')}
+            </Button>
+            {isVisionAssistAvailable && (
+              <Button size="sm" variant="outline" onClick={handleVisionMappingAssist} disabled={assistLoading || allColumns.length === 0}>
+                {assistLoading ? <Loader2 size={13} className="animate-spin" /> : <FileSearch size={13} />}
+                {assistLoading ? t('step2.assist.visionRunning') : t('step2.assist.runVision')}
+              </Button>
+            )}
+          </div>
         </div>
 
         {!mappingAssist && (
@@ -690,6 +729,9 @@ export function Step2Map() {
               <Badge variant="gray">{mappingAssist.model || 'local-llm'}</Badge>
               <Badge variant="blue">{Math.round(Number(mappingAssist.confidence || 0) * 100)}%</Badge>
               <Badge variant="gray">{t('step2.assist.suggestionOnly')}</Badge>
+              {mappingAssist.source === 'local_llm_vision_mapping_assist' && (
+                <Badge variant="blue">{t('step2.assist.vision')}</Badge>
+              )}
             </div>
 
             {Array.isArray(mappingAssist.reasons) && mappingAssist.reasons.length > 0 && (

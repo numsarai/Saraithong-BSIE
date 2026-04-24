@@ -67,7 +67,9 @@
       "title": "Local LLM Mapping Assist",
       "description": "ขอคำแนะนำ mapping จาก Local LLM เพื่อให้ผู้วิเคราะห์ตรวจทาน",
       "run": "ขอคำแนะนำ",
+      "runVision": "ดูจากภาพ/PDF",
       "running": "กำลังถาม…",
+      "visionRunning": "กำลังอ่านภาพ…",
       "empty": "ยังไม่ได้ขอคำแนะนำ AI สำหรับ mapping นี้",
       "ready": "ได้คำแนะนำ mapping assist แล้ว",
       "failed": "Mapping assist ล้มเหลว",
@@ -76,9 +78,11 @@
       "valid": "ผ่าน validation",
       "needsReview": "ต้องตรวจทาน",
       "suggestionOnly": "คำแนะนำเท่านั้น",
+      "vision": "vision",
       "reasons": "เหตุผล",
       "warnings": "คำเตือน",
-      "noColumns": "ไม่มีคอลัมน์จากไฟล์อัปโหลด"
+      "noColumns": "ไม่มีคอลัมน์จากไฟล์อัปโหลด",
+      "noFile": "ไม่มีไฟล์ต้นฉบับสำหรับ vision assist"
     },
     "fields": {
       "date": "วันที่",

@@ -23,6 +23,25 @@ vi.mock('@/api', () => ({
     warnings: [],
     validation: { ok: true, errors: [], warnings: [], amount_mode: 'debit_credit', mapped_fields: ['date', 'description', 'debit', 'credit'] },
   })),
+  assistVisionMapping: vi.fn(async () => ({
+    status: 'ok',
+    source: 'local_llm_vision_mapping_assist',
+    suggestion_only: true,
+    auto_pass_eligible: false,
+    model: 'qwen2.5vl:7b',
+    mapping: {
+      date: 'วันที่',
+      description: 'รายละเอียด',
+      debit: 'ถอนเงิน',
+      credit: 'ฝากเงิน',
+      balance: null,
+    },
+    confidence: 0.79,
+    reasons: ['Visual table labels match OCR columns'],
+    warnings: [],
+    file_context: { source_type: 'pdf_vision', page_count: 1, preview_page: 1 },
+    validation: { ok: true, errors: [], warnings: [], amount_mode: 'debit_credit', mapped_fields: ['date', 'description', 'debit', 'credit'] },
+  })),
   confirmMapping: vi.fn(async () => ({ status: 'ok' })),
   previewMapping: vi.fn(async () => ({
     status: 'ok',
@@ -49,11 +68,12 @@ vi.mock('sonner', () => ({
   },
 }))
 
-const { assistMapping, confirmMapping, previewMapping } = await import('@/api')
+const { assistMapping, assistVisionMapping, confirmMapping, previewMapping } = await import('@/api')
 
-function seedUpload(data: Record<string, unknown> = {}) {
+function seedUpload(data: Record<string, unknown> = {}, filename = 'example.xlsx') {
   useStore.getState().setUploadResult({
     temp_file_path: '/tmp/example.xlsx',
+    file_id: 'file-1',
     detected_bank: {
       key: 'scb',
       bank: 'SCB',
@@ -76,7 +96,7 @@ function seedUpload(data: Record<string, unknown> = {}) {
     memory_match: null,
     bank_memory_match: null,
     ...data,
-  }, 'example.xlsx')
+  }, filename)
 }
 
 describe('Step2Map analyst gate', () => {
@@ -200,6 +220,47 @@ describe('Step2Map analyst gate', () => {
         credit: null,
       },
       sheet_name: 'Sheet1',
+      header_row: 1,
+    })
+    expect(useStore.getState().confirmedMapping.credit).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /apply suggestion/i }))
+
+    await waitFor(() => expect(useStore.getState().confirmedMapping.credit).toBe('ฝากเงิน'))
+    expect(useStore.getState().confirmedMapping.debit).toBe('ถอนเงิน')
+  })
+
+  it('uses local vision mapping assist for PDF/image uploads only after analyst action', async () => {
+    seedUpload({
+      suggested_mapping: {
+        date: 'วันที่',
+        description: 'รายละเอียด',
+        amount: null,
+        debit: null,
+        credit: null,
+      },
+      sheet_name: 'PDF_OCR',
+    }, 'scan.pdf')
+
+    render(<Step2Map />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /ask vision/i }))
+
+    expect(await screen.findByText(/visual table labels match ocr columns/i)).toBeInTheDocument()
+    expect(assistVisionMapping).toHaveBeenCalledWith({
+      file_id: 'file-1',
+      bank: 'scb',
+      detected_bank: expect.objectContaining({ key: 'scb' }),
+      columns: ['วันที่', 'รายละเอียด', 'จำนวนเงิน', 'ถอนเงิน', 'ฝากเงิน'],
+      sample_rows: [{ วันที่: '2026-01-01', รายละเอียด: 'โอนเงิน', จำนวนเงิน: '100.00' }],
+      current_mapping: {
+        date: 'วันที่',
+        description: 'รายละเอียด',
+        amount: null,
+        debit: null,
+        credit: null,
+      },
+      sheet_name: 'PDF_OCR',
       header_row: 1,
     })
     expect(useStore.getState().confirmedMapping.credit).toBeNull()

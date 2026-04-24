@@ -218,7 +218,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 3 — LLM-Assisted Detect / Mapping
 
-สถานะ: guarded mapping-assist + role-based local model config + benchmark harness implemented เมื่อ 2026-04-24
+สถานะ: guarded text/vision mapping-assist + role-based local model config + benchmark harness implemented เมื่อ 2026-04-24
 
 เป้าหมาย:
 
@@ -236,8 +236,8 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - [x] แสดงเหตุผล/คำเตือนใน UI และให้ analyst กด apply เอง
 - [x] แยก local Ollama model roles สำหรับ text / vision / fast fallback
 - [x] เพิ่ม benchmark harness สำหรับ text / fast / optional vision roles
+- [x] เพิ่ม OCR/vision mapping assist แยกจาก Excel text context
 - [ ] รันและบันทึก benchmark บนเครื่องจริงสำหรับ `qwen2.5:14b` / fallback model เมื่อ Ollama models พร้อม
-- [ ] เพิ่ม OCR/vision mapping assist แยกจาก Excel text context
 
 หมายเหตุ:
 
@@ -246,6 +246,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - Step 2 ไม่ auto-apply ผลจาก LLM; analyst ต้องกด `Apply suggestion`
 - LLM endpoints ใช้ config กลางจาก `services/llm_service.py`; text chat/mapping ใช้ text role และ image/PDF analysis ใช้ vision role
 - `/api/llm/benchmark` ใช้ synthetic prompt เท่านั้น, ปิด DB auto-context, ไม่ persist ผล และคืน `offline` / `partial` เมื่อ Ollama หรือ JSON output ยังไม่พร้อม
+- `/api/mapping/assist/vision` รับ `file_id` เท่านั้น, resolve จาก evidence storage, กัน path นอก `EVIDENCE_DIR`, ใช้ภาพ/หน้าแรก PDF เป็น visual context และยังเป็น suggestion-only
 
 ไฟล์หลัก:
 

@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from io import BytesIO
 import json
+from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, patch
 
 import pandas as pd
@@ -963,6 +964,65 @@ def test_mapping_assist_endpoint_returns_suggestion_only_payload():
     assist.assert_awaited_once()
     assert assist.call_args.kwargs["bank"] == "scb"
     assert assist.call_args.kwargs["columns"] == ["วันที่", "รายการ", "จำนวนเงิน"]
+
+
+def test_mapping_vision_assist_endpoint_uses_stored_evidence_file(tmp_path):
+    source = tmp_path / "original.pdf"
+    source.write_bytes(b"%PDF-1.4\nfake")
+    assist_result = {
+        "status": "ok",
+        "source": "local_llm_vision_mapping_assist",
+        "suggestion_only": True,
+        "auto_pass_eligible": False,
+        "model": "qwen2.5vl:7b",
+        "mapping": {"date": "วันที่", "description": "รายการ", "debit": "ถอน", "credit": "ฝาก"},
+        "confidence": 0.78,
+        "reasons": ["visual labels matched"],
+        "warnings": [],
+        "file_context": {"source_type": "pdf_vision", "page_count": 1, "preview_page": 1},
+        "validation": {"ok": True, "errors": [], "warnings": [], "amount_mode": "debit_credit", "mapped_fields": ["date", "description", "debit", "credit"]},
+    }
+    with (
+        patch("paths.EVIDENCE_DIR", tmp_path),
+        patch("routers.ingestion.get_file_record", return_value=SimpleNamespace(stored_path=str(source))),
+        patch("routers.ingestion.suggest_mapping_with_vision_llm", new=AsyncMock(return_value=assist_result)) as assist,
+    ):
+        response = client.post(
+            "/api/mapping/assist/vision",
+            json={
+                "file_id": "FILE-1",
+                "bank": "scb",
+                "detected_bank": {"key": "scb", "confidence": 0.91},
+                "columns": ["วันที่", "รายการ", "ถอน", "ฝาก"],
+                "sample_rows": [{"วันที่": "2026-01-01", "รายการ": "โอน", "ฝาก": "100.00"}],
+                "current_mapping": {"date": "วันที่", "description": "รายการ"},
+                "sheet_name": "PDF_OCR",
+                "header_row": 0,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "local_llm_vision_mapping_assist"
+    assert payload["suggestion_only"] is True
+    assert payload["file_context"]["source_type"] == "pdf_vision"
+    assist.assert_awaited_once()
+    assert assist.call_args.kwargs["file_path"] == source.resolve()
+    assert assist.call_args.kwargs["columns"] == ["วันที่", "รายการ", "ถอน", "ฝาก"]
+
+
+def test_mapping_vision_assist_requires_file_id():
+    response = client.post(
+        "/api/mapping/assist/vision",
+        json={
+            "bank": "scb",
+            "columns": ["วันที่", "รายการ", "ถอน", "ฝาก"],
+            "current_mapping": {},
+        },
+    )
+
+    assert response.status_code == 400
+    assert "file_id" in response.text
 
 
 def test_llm_benchmark_endpoint_returns_local_only_payload():

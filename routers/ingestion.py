@@ -28,10 +28,10 @@ from core.pdf_loader import parse_pdf_file
 from core.subject_inference import infer_subject_identity_from_frames
 from database import db_create_job
 from persistence.base import get_db_session
-from persistence.schemas import MappingAssistRequest, MappingConfirmRequest, MappingPreviewRequest, ProcessRequest, TemplateVariantPromotionRequest
+from persistence.schemas import MappingAssistRequest, MappingConfirmRequest, MappingPreviewRequest, MappingVisionAssistRequest, ProcessRequest, TemplateVariantPromotionRequest
 from services.audit_service import record_learning_feedback
 from services.file_ingestion_service import get_file_record, persist_upload
-from services.mapping_assist_service import suggest_mapping_with_llm
+from services.mapping_assist_service import suggest_mapping_with_llm, suggest_mapping_with_vision_llm
 from services.mapping_validation_service import validate_and_preview_mapping, validate_mapping
 from services.persistence_pipeline_service import create_parser_run
 from services.template_variant_service import (
@@ -517,6 +517,48 @@ async def api_assist_mapping(request: Request):
             model=body.model,
         )
         return JSONResponse(result)
+    except ConnectionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/mapping/assist/vision")
+async def api_assist_mapping_vision(request: Request):
+    """Return a local vision-LLM mapping suggestion for PDF/image analyst review only."""
+    payload = await request.json()
+    body = MappingVisionAssistRequest.model_validate(payload)
+    file_id = str(body.file_id or "").strip()
+    if not file_id:
+        raise HTTPException(400, "file_id is required for vision mapping assist")
+    file_record = get_file_record(file_id)
+    if not file_record:
+        raise HTTPException(404, "File not found")
+    file_path = Path(file_record.stored_path)
+    from paths import EVIDENCE_DIR
+    evidence_root = EVIDENCE_DIR.resolve()
+    resolved_path = file_path.resolve()
+    if resolved_path != evidence_root and evidence_root not in resolved_path.parents:
+        raise HTTPException(400, "Source file is outside evidence storage")
+    if not resolved_path.exists():
+        raise HTTPException(404, "Source evidence file not found")
+    try:
+        result = await suggest_mapping_with_vision_llm(
+            file_path=resolved_path,
+            bank=body.bank,
+            detected_bank=body.detected_bank,
+            columns=body.columns,
+            sample_rows=body.sample_rows,
+            current_mapping=body.current_mapping,
+            sheet_name=body.sheet_name,
+            header_row=body.header_row,
+            model=body.model,
+        )
+        return JSONResponse(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ConnectionError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:

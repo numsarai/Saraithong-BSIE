@@ -7,6 +7,7 @@ import { useStore } from '@/store'
 vi.mock('@/api', () => ({
   uploadFile: vi.fn(),
   assistMapping: vi.fn(async () => ({ status: 'ok' })),
+  assistVisionMapping: vi.fn(async () => ({ status: 'ok' })),
   confirmMapping: vi.fn(async () => ({ status: 'ok' })),
   previewMapping: vi.fn(async () => ({
     status: 'ok',

@@ -17,6 +17,14 @@
 
 ---
 
+### DEC-015: Local Ollama endpoints resolve models by role
+- **Date:** 2026-04-24
+- **Status:** accepted
+- **Context:** DEC-008 defined separate local model roles for text, vision, and fast fallback, but the runtime still had endpoint-level defaults such as `gemma4:latest` and file analysis defaults that could drift from the documented baseline.
+- **Decision:** `services/llm_service.py` now owns role-based model resolution through `OLLAMA_TEXT_MODEL`, `OLLAMA_VISION_MODEL`, `OLLAMA_FAST_MODEL`, optional `OLLAMA_MAPPING_MODEL`, and `OLLAMA_DEFAULT_MODEL` fallback. Text chat/summarization/classification use the text role, image/PDF file analysis uses the vision role, and `/api/llm/status` exposes the active non-secret role config for the UI.
+- **Alternatives:** (1) Keep defaults in each router/request model — simple but inconsistent and hard to audit. (2) Require users to always pass `model` — flexible but noisy and unsafe for reproducible default flows.
+- **Consequences:** Local LLM behavior is easier to reproduce and benchmark. Explicit per-request models still work, but empty/default frontend requests follow the centralized self-hosted role config.
+
 ### DEC-014: Local LLM mapping assist is suggestion-only and validation-gated
 - **Date:** 2026-04-24
 - **Status:** accepted

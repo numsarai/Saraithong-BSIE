@@ -41,17 +41,17 @@ class ChatRequest(BaseModel):
     message: str = Field(max_length=4000)
     account: str = ""
     transactions: list[dict] = Field(default_factory=list)
-    model: str = "gemma4:latest"
+    model: str = ""
 
 
 class SummarizeRequest(BaseModel):
     account: str
-    model: str = "gemma4:latest"
+    model: str = ""
 
 
 class ClassifyRequest(BaseModel):
     transaction: dict = Field(default_factory=dict)
-    model: str = "gemma4:latest"
+    model: str = ""
 
 
 @router.get("/status")
@@ -136,14 +136,14 @@ MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 async def api_llm_analyze_file(
     file: UploadFile = File(...),
     message: str = Form(default="วิเคราะห์เอกสารนี้ สรุปข้อมูลที่พบ"),
-    model: str = Form(default="gemma4:e4b"),
+    model: str = Form(default=""),
 ):
     """
     Upload a file for LLM analysis.
 
-    - **Images** (PNG, JPEG, WebP, BMP): sent directly to Gemma 4 multimodal vision.
+    - **Images** (PNG, JPEG, WebP, BMP): sent directly to the configured vision model.
     - **PDF**: first page rendered to image, then sent to vision.
-    - **Excel/CSV**: parsed to text rows, then sent as text context.
+    - **Excel/CSV**: parsed to text rows, then sent to the configured text model.
     """
     from services.llm_service import chat_with_file, chat
 

@@ -149,11 +149,12 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - หลีกเลี่ยง `:latest` ใน production-like flows เพื่อให้ reproducible
 - ควรแยก env ระหว่าง text model และ vision model
 
-ตัวแปรแวดล้อมที่อยากได้ในอนาคต:
+ตัวแปรแวดล้อมที่รองรับแล้ว:
 
 - `OLLAMA_TEXT_MODEL`
 - `OLLAMA_VISION_MODEL`
 - `OLLAMA_FAST_MODEL`
+- `OLLAMA_MAPPING_MODEL`
 - `OLLAMA_BASE_URL`
 - `OLLAMA_TIMEOUT`
 
@@ -217,7 +218,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 
 ### Phase 3 — LLM-Assisted Detect / Mapping
 
-สถานะ: first guarded mapping-assist slice implemented เมื่อ 2026-04-24
+สถานะ: guarded mapping-assist + role-based local model config implemented เมื่อ 2026-04-24
 
 เป้าหมาย:
 
@@ -233,6 +234,7 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
   - layout clues
 - [x] บังคับ structured JSON output และ fail closed เมื่อ LLM ตอบไม่เป็น JSON
 - [x] แสดงเหตุผล/คำเตือนใน UI และให้ analyst กด apply เอง
+- [x] แยก local Ollama model roles สำหรับ text / vision / fast fallback
 - [ ] เพิ่ม benchmark บนเครื่องจริงสำหรับ `qwen2.5:14b` / fallback model
 - [ ] เพิ่ม OCR/vision mapping assist แยกจาก Excel text context
 
@@ -241,11 +243,14 @@ LLM ต้องตอบเป็น structured JSON เท่านั้น
 - `/api/mapping/assist` เป็น suggestion-only และคืน `auto_pass_eligible=false`
 - service drop column ที่ LLM แต่งขึ้นเอง, repair amount/debit-credit conflict, และ validate mapping ก่อนคืนผล
 - Step 2 ไม่ auto-apply ผลจาก LLM; analyst ต้องกด `Apply suggestion`
+- LLM endpoints ใช้ config กลางจาก `services/llm_service.py`; text chat/mapping ใช้ text role และ image/PDF analysis ใช้ vision role
 
 ไฟล์หลัก:
 
 - `services/mapping_assist_service.py`
+- `services/llm_service.py`
 - `routers/ingestion.py`
+- `routers/llm.py`
 - `frontend/src/components/steps/Step2Map.tsx`
 
 ### Phase 4 — Investigation Copilot

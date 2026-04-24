@@ -41,7 +41,9 @@ export function LlmChat({ account, transactions, compact }: LlmChatProps) {
     getLlmStatus()
       .then((data) => {
         setOllamaOnline(data.status === 'ok')
-        if (data.models?.length) setModelName(data.models[0])
+        const roleModel = data.model_roles?.text || data.llm_config?.roles?.text
+        if (roleModel) setModelName(roleModel)
+        else if (data.models?.length) setModelName(data.models[0])
       })
       .catch(() => setOllamaOnline(false))
   }, [])

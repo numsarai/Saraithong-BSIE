@@ -5,7 +5,7 @@ import os
 import re
 from typing import Any
 
-from services.llm_service import DEFAULT_MODEL, chat
+from services.llm_service import DEFAULT_TEXT_MODEL, chat, resolve_model
 from services.mapping_validation_service import validate_mapping
 from utils.app_helpers import repair_suggested_mapping
 
@@ -21,7 +21,7 @@ ASSIST_FIELDS = (
     "counterparty_account",
     "counterparty_name",
 )
-DEFAULT_MAPPING_MODEL = os.getenv("OLLAMA_TEXT_MODEL", "").strip() or DEFAULT_MODEL
+DEFAULT_MAPPING_MODEL = os.getenv("OLLAMA_MAPPING_MODEL", "").strip() or DEFAULT_TEXT_MODEL
 
 
 def _clean_columns(columns: list[Any] | None) -> list[str]:
@@ -165,10 +165,11 @@ async def suggest_mapping_with_llm(
         sheet_name=str(sheet_name or "").strip(),
         header_row=int(header_row or 0),
     )
+    selected_model = resolve_model(str(model or "").strip() or DEFAULT_MAPPING_MODEL, "text")
     result = await chat(
         prompt,
         auto_context=False,
-        model=str(model or "").strip() or DEFAULT_MAPPING_MODEL,
+        model=selected_model,
     )
     raw = _extract_json_object(result.get("response", ""))
     llm_mapping, mapping_warnings = _clean_llm_mapping(raw.get("mapping"), clean_columns)
@@ -190,7 +191,7 @@ async def suggest_mapping_with_llm(
         "source": "local_llm_mapping_assist",
         "suggestion_only": True,
         "auto_pass_eligible": False,
-        "model": result.get("model") or (str(model or "").strip() or DEFAULT_MAPPING_MODEL),
+        "model": result.get("model") or selected_model,
         "mapping": merged_mapping,
         "confidence": confidence_float,
         "reasons": _list_text(raw.get("reasons")),

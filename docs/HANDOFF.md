@@ -9,11 +9,66 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `334 passed`, frontend `36 passed`, frontend build passed
+- **Baseline:** backend `336 passed`, frontend `36 passed`, frontend build passed
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Phase 3 Local LLM Mapping Assist
+## Done (latest session) — Phase 3 Local LLM Model Role Config
+
+### What I changed
+- Added centralized local Ollama model role config in `services/llm_service.py`.
+- Added role defaults:
+  - text: `OLLAMA_TEXT_MODEL` / fallback `qwen2.5:14b`
+  - vision: `OLLAMA_VISION_MODEL` / fallback `qwen2.5vl:7b`
+  - fast: `OLLAMA_FAST_MODEL` / fallback `gemma4:e4b`
+  - mapping override: `OLLAMA_MAPPING_MODEL`
+- Added `resolve_model(...)` and `get_llm_model_config()`.
+- Text chat, summarization, classification, and Excel/text file analysis now default to the text role.
+- Image/PDF file analysis now defaults to the vision role.
+- `/api/llm/status` now returns non-secret model role config for UI/debug visibility.
+- Updated the LLM chat UI to display the configured text model when status returns role config.
+- Updated `.env.example`, roadmap, decision log, and regression coverage.
+
+### Files changed
+- `.env.example`
+- `services/llm_service.py`
+- `services/mapping_assist_service.py`
+- `routers/llm.py`
+- `frontend/src/components/LlmChat.tsx`
+- `tests/test_llm_service.py`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+
+### Tests run
+- Baseline before changes:
+  - `.venv/bin/python -m pytest tests/ -q` -> `334 passed`
+  - `npm test` in `frontend/` -> `36 passed`
+- Focused after changes:
+  - `.venv/bin/python -m pytest tests/test_llm_service.py tests/test_mapping_assist_service.py tests/test_app_api.py -q` -> `49 passed`
+  - `npm test -- --run src/App.workflow.test.tsx` -> `2 passed`
+- Final verification:
+  - `.venv/bin/python -m pytest tests/ -q` -> `336 passed`
+  - `npm test` in `frontend/` -> `36 passed`
+  - `npm run build` in `frontend/` -> passed, Vite large chunk warning only
+
+### Decisions made
+- Added `DEC-015`: Local Ollama endpoints resolve models by role.
+- Explicit per-request model overrides still work; empty/default frontend requests now resolve through the centralized local role config.
+
+### Warnings
+- Requires local Ollama to be running for live use.
+- Model names are defaults only; the operator still needs to pull/install the configured Ollama models locally.
+- No auto-pass behavior was added.
+
+### Failed attempts / Notes
+- None in this slice.
+
+### Environment changes
+- No dependencies installed.
+- `.env.example` now documents optional local Ollama variables.
+
+## Done (previous session) — Phase 3 Local LLM Mapping Assist
 
 ### What I changed
 - Added guarded local LLM mapping assist for Step 2.

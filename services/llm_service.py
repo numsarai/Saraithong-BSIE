@@ -8,6 +8,7 @@ All processing stays on-premise — no data leaves the machine.
 
 import base64
 import logging
+import os as _os
 import re
 from pathlib import Path
 from typing import Any
@@ -23,11 +24,44 @@ logger = logging.getLogger("bsie.llm")
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _CONTEXT_FILE = _BASE_DIR / "config" / "llm_context.md"
 
-import os as _os
-
-OLLAMA_BASE_URL = _os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-DEFAULT_MODEL = _os.getenv("OLLAMA_DEFAULT_MODEL", "gemma4:latest")
+OLLAMA_BASE_URL = (
+    _os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip()
+    or "http://localhost:11434"
+)
+DEFAULT_TEXT_MODEL = (
+    _os.getenv("OLLAMA_TEXT_MODEL", _os.getenv("OLLAMA_DEFAULT_MODEL", "qwen2.5:14b")).strip()
+    or "qwen2.5:14b"
+)
+DEFAULT_VISION_MODEL = _os.getenv("OLLAMA_VISION_MODEL", "qwen2.5vl:7b").strip() or "qwen2.5vl:7b"
+DEFAULT_FAST_MODEL = _os.getenv("OLLAMA_FAST_MODEL", "gemma4:e4b").strip() or "gemma4:e4b"
+DEFAULT_MODEL = _os.getenv("OLLAMA_DEFAULT_MODEL", DEFAULT_TEXT_MODEL).strip() or DEFAULT_TEXT_MODEL
 REQUEST_TIMEOUT = float(_os.getenv("OLLAMA_TIMEOUT", "120.0"))
+
+_MODEL_ROLE_DEFAULTS = {
+    "default": DEFAULT_MODEL,
+    "text": DEFAULT_TEXT_MODEL,
+    "vision": DEFAULT_VISION_MODEL,
+    "fast": DEFAULT_FAST_MODEL,
+}
+
+
+def resolve_model(model: str | None = "", role: str = "default") -> str:
+    """Return an explicit model or the configured default for the requested role."""
+    explicit = str(model or "").strip()
+    if explicit:
+        return explicit
+    role_key = str(role or "default").strip().lower()
+    return _MODEL_ROLE_DEFAULTS.get(role_key, DEFAULT_MODEL)
+
+
+def get_llm_model_config() -> dict[str, Any]:
+    """Expose non-secret local LLM runtime defaults for status/debug UI."""
+    return {
+        "base_url": OLLAMA_BASE_URL,
+        "timeout_seconds": REQUEST_TIMEOUT,
+        "default_model": DEFAULT_MODEL,
+        "roles": dict(_MODEL_ROLE_DEFAULTS),
+    }
 
 
 def _load_system_prompt() -> str:
@@ -333,15 +367,27 @@ def _format_all_accounts(accounts: list[dict[str, Any]]) -> str:
 
 async def check_ollama_status() -> dict[str, Any]:
     """Check if Ollama is running and which models are available."""
+    config = get_llm_model_config()
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
             resp.raise_for_status()
             data = resp.json()
             models = [m["name"] for m in data.get("models", [])]
-            return {"status": "ok", "models": models}
+            return {
+                "status": "ok",
+                "models": models,
+                "model_roles": config["roles"],
+                "llm_config": config,
+            }
     except Exception as exc:
-        return {"status": "offline", "error": str(exc), "models": []}
+        return {
+            "status": "offline",
+            "error": str(exc),
+            "models": [],
+            "model_roles": config["roles"],
+            "llm_config": config,
+        }
 
 
 async def chat(
@@ -350,7 +396,7 @@ async def chat(
     account: str = "",
     transactions: list[dict[str, Any]] | None = None,
     auto_context: bool = True,
-    model: str = DEFAULT_MODEL,
+    model: str = "",
 ) -> dict[str, Any]:
     """
     Send a chat message to the local LLM with project context.
@@ -392,9 +438,10 @@ async def chat(
 
     parts.append(f"\nคำถาม: {message}")
     user_content = "\n".join(parts)
+    selected_model = resolve_model(model, "text")
 
     payload = {
-        "model": model,
+        "model": selected_model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
@@ -414,7 +461,7 @@ async def chat(
 
         return {
             "response": content,
-            "model": data.get("model", model),
+            "model": data.get("model", selected_model),
             "prompt_tokens": usage.get("prompt_tokens", 0),
             "completion_tokens": usage.get("completion_tokens", 0),
         }
@@ -428,7 +475,7 @@ async def chat(
 
 async def summarize_account(
     account: str,
-    model: str = DEFAULT_MODEL,
+    model: str = "",
 ) -> dict[str, Any]:
     """Summarize an account by pulling all data from the database."""
     message = (
@@ -444,7 +491,7 @@ async def summarize_account(
 
 async def classify_transaction(
     transaction: dict[str, Any],
-    model: str = DEFAULT_MODEL,
+    model: str = "",
 ) -> dict[str, Any]:
     """Classify a single transaction — normal, suspicious, or needs review."""
     message = (
@@ -462,11 +509,11 @@ async def chat_with_file(
     file_bytes: bytes,
     file_type: str,
     *,
-    model: str = DEFAULT_MODEL,
+    model: str = "",
 ) -> dict[str, Any]:
     """
     Send an image/PDF file to the LLM for multimodal analysis.
-    Gemma 4 supports image inputs natively.
+    The configured vision model must support image inputs.
 
     Args:
         message: User's question about the file.
@@ -476,10 +523,11 @@ async def chat_with_file(
     """
     system_prompt = _load_system_prompt()
     b64_data = base64.b64encode(file_bytes).decode("utf-8")
+    selected_model = resolve_model(model, "vision")
 
     # Ollama's OpenAI-compatible API with image content
     payload = {
-        "model": model,
+        "model": selected_model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {
@@ -511,7 +559,7 @@ async def chat_with_file(
 
         return {
             "response": content,
-            "model": data.get("model", model),
+            "model": data.get("model", selected_model),
             "prompt_tokens": usage.get("prompt_tokens", 0),
             "completion_tokens": usage.get("completion_tokens", 0),
         }

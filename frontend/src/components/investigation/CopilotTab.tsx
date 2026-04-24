@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BrainCircuit, FileText, ListChecks, Loader2, ScrollText, Send, ShieldAlert, ShieldCheck } from 'lucide-react'
-import { askCopilot } from '@/api'
+import { askCopilot, listCaseTags, type CaseTagItem } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
@@ -62,8 +62,30 @@ export function CopilotTab({
   const [question, setQuestion] = useState('')
   const [maxTransactions, setMaxTransactions] = useState('20')
   const [isAsking, setIsAsking] = useState(false)
+  const [caseTags, setCaseTags] = useState<CaseTagItem[]>([])
+  const [isLoadingCaseTags, setIsLoadingCaseTags] = useState(false)
+  const [caseTagError, setCaseTagError] = useState('')
   const [answer, setAnswer] = useState<any>(null)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setIsLoadingCaseTags(true)
+    setCaseTagError('')
+    listCaseTags()
+      .then((payload) => {
+        if (!cancelled) setCaseTags(Array.isArray(payload.items) ? payload.items : [])
+      })
+      .catch((err: any) => {
+        if (!cancelled) setCaseTagError(err.message || String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingCaseTags(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const quickScopes = useMemo(() => [
     {
@@ -97,6 +119,17 @@ export function CopilotTab({
       value: { account: normalizeAccount(crossAccountNumber) },
     },
   ], [crossAccountNumber, filterFileId, filterRunId, selectedAccountNumber, selectedFileId, selectedRunId, t])
+
+  const selectedCaseTagId = caseTags.some((tag) => tag.id === scope.case_tag_id) ? scope.case_tag_id : ''
+
+  const selectCaseTag = (caseTagId: string) => {
+    const tag = caseTags.find((item) => item.id === caseTagId)
+    setScope((state) => ({
+      ...state,
+      case_tag_id: tag?.id || '',
+      case_tag: tag?.tag || '',
+    }))
+  }
 
   const submit = async () => {
     if (!hasScope(scope)) return
@@ -132,7 +165,7 @@ export function CopilotTab({
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
             {t('investigation.copilot.parserRunId')}
             <input
@@ -158,10 +191,28 @@ export function CopilotTab({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('investigation.copilot.caseTagPicker')}
+            <select
+              value={selectedCaseTagId}
+              onChange={(event) => selectCaseTag(event.target.value)}
+              disabled={isLoadingCaseTags}
+              className="rounded-lg border border-border bg-surface2 px-3 py-2 text-sm normal-case tracking-normal text-text outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="">
+                {isLoadingCaseTags ? t('investigation.copilot.caseTagLoading') : t('investigation.copilot.caseTagSelect')}
+              </option>
+              {caseTags.map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.tag}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-muted">
             {t('investigation.copilot.caseTagId')}
             <input
               value={scope.case_tag_id}
-              onChange={(event) => setScope((state) => ({ ...state, case_tag_id: event.target.value.trim() }))}
+              onChange={(event) => setScope((state) => ({ ...state, case_tag_id: event.target.value.trim(), case_tag: '' }))}
               className="rounded-lg border border-border bg-surface2 px-3 py-2 font-mono text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
             />
           </label>
@@ -169,11 +220,16 @@ export function CopilotTab({
             {t('investigation.copilot.caseTag')}
             <input
               value={scope.case_tag}
-              onChange={(event) => setScope((state) => ({ ...state, case_tag: event.target.value.trim() }))}
+              onChange={(event) => setScope((state) => ({ ...state, case_tag_id: '', case_tag: event.target.value.trim() }))}
               className="rounded-lg border border-border bg-surface2 px-3 py-2 font-mono text-sm normal-case tracking-normal text-text outline-none focus:border-accent"
             />
           </label>
         </div>
+        {caseTagError && (
+          <div className="text-xs text-danger">
+            {t('investigation.copilot.caseTagLoadFailed')}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2">
           {quickScopes.map((item) => (

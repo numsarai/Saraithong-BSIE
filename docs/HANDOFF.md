@@ -9,11 +9,57 @@
 - **Date:** 2026-04-24
 - **Branch:** `Smarter-BSIE`
 - **Runtime mode:** local-only อีกครั้ง
-- **Baseline:** backend `381 passed`, frontend `47 passed`, frontend build passed without Vite chunk-size warning
+- **Baseline:** backend `381 passed`, frontend `48 passed`, frontend build passed without Vite chunk-size warning
 - **Auth/DB:** local JWT auth + local SQLite WAL (`bsie.db`)
 - **Cloud status:** repo ไม่ผูกกับ Vercel, Fly.io, หรือ Supabase แล้วใน working tree ปัจจุบัน
 
-## Done (latest session) — Evidence Copilot Case Tag Scope
+## Done (latest session) — Evidence Copilot Case Tag Picker
+
+### What I changed
+- Added `listCaseTags()` to the frontend API contract for `GET /api/case-tags`.
+- Evidence Copilot now loads case tags when the tab mounts.
+- Added a Case Tag picker that fills both `case_tag_id` and `case_tag` in the copilot scope.
+- Kept manual Case Tag ID and Case Tag Name fields as fallback paths; editing one clears the other to avoid accidental id/name mismatches.
+- Added loading and failure states for the picker without blocking manual scope entry.
+- Added Investigation Desk regression coverage for sending picker-selected tag scope.
+- Updated DEC-042 wording and the roadmap to reflect picker support.
+
+### Files changed
+- `frontend/src/api.ts`
+- `frontend/src/components/investigation/CopilotTab.tsx`
+- `frontend/src/components/InvestigationDesk.test.tsx`
+- `frontend/src/locales/en.json`
+- `frontend/src/locales/th.json`
+- `docs/DECISIONS.md`
+- `docs/LOCAL_LLM_MAPPING_ROADMAP.md`
+- `docs/HANDOFF.md`
+
+### Tests run
+- Baseline before edits:
+  - `.venv/bin/python -m pytest tests/ -q` -> `381 passed`
+  - `npm test -- --run` in `frontend/` -> `47 passed`
+- Focused:
+  - `npm test -- --run src/components/InvestigationDesk.test.tsx` in `frontend/` -> `5 passed`
+- Full verification:
+  - `git diff --check` -> passed
+  - `.venv/bin/python -m pytest tests/ -q` -> `381 passed`
+  - `npm test -- --run` in `frontend/` -> `48 passed`
+  - `npm run build` in `frontend/` -> passed without Vite chunk-size warning
+
+### Decisions made
+- No new DEC number. DEC-042 remains the governing decision; wording was updated to include picker plus manual fallback.
+
+### Warnings / Next
+- The picker lists all case tags sorted by backend response. A future slice can add search/filtering if case-tag volume grows.
+- Next useful slice: add richer case-level navigation around tagged evidence, or move toward the later local-first classification path after scope/citation/audit remain stable.
+
+### Failed attempts
+- Tried a quick in-app browser smoke check through Computer Use, but Codex app control is blocked for safety in this environment. Verification relied on frontend regression tests and production build instead.
+
+### Environment changes
+- No dependencies installed.
+
+## Done (previous session) — Evidence Copilot Case Tag Scope
 
 ### What I changed
 - Extended Evidence Copilot scope with `case_tag_id` and `case_tag`.

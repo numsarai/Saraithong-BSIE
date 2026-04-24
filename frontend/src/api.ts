@@ -350,6 +350,19 @@ export async function getAnnotations(nodeId?: string) {
   return r.json()
 }
 
+export type CaseTagItem = {
+  id: string
+  tag: string
+  description?: string | null
+  created_at?: string | null
+}
+
+export async function listCaseTags(): Promise<{ items: CaseTagItem[] }> {
+  const r = await apiFetch('/api/case-tags')
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export async function createAnnotation(nodeId: string, content: string, tag = '', createdBy = 'analyst') {
   const r = await apiFetch('/api/annotations', {
     method: 'POST',

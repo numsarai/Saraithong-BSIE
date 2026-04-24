@@ -193,6 +193,16 @@ vi.mock('@/api', () => ({
   updateDatabaseBackupSettings: vi.fn(async () => ({ enabled: false, interval_hours: 24, backup_format: 'json', effective_backup_format: 'json', retention_enabled: false, retain_count: 20, source: 'database' })),
   getLlmStatus: vi.fn(async () => ({ status: 'ok', model_roles: { text: 'qwen3.5:9b' }, models: ['qwen3.5:9b'] })),
   llmChat: vi.fn(async () => ({ response: 'ok' })),
+  listCaseTags: vi.fn(async () => ({
+    items: [
+      {
+        id: 'CASE-TAG-1',
+        tag: 'CASE-ALPHA',
+        description: 'Alpha evidence group',
+        created_at: '2026-03-31T02:00:00Z',
+      },
+    ],
+  })),
   askCopilot: vi.fn(async () => ({
     status: 'ok',
     source: 'local_llm_investigation_copilot',
@@ -341,5 +351,24 @@ describe('InvestigationDesk date formatting', () => {
     expect(await screen.findByText('พบรายการออกสำคัญ [txn:TX-1]')).toBeInTheDocument()
     expect(await screen.findByText('txn:TX-1')).toBeInTheDocument()
     expect(await screen.findByText('AUDIT-COPILOT-1')).toBeInTheDocument()
+  })
+
+  it('uses the case tag picker for evidence copilot scope', async () => {
+    renderWithQueryClient()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'AI Copilot' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Evidence' }))
+    expect(await screen.findByRole('option', { name: 'CASE-ALPHA' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Choose Case Tag'), { target: { value: 'CASE-TAG-1' } })
+    fireEvent.change(screen.getByLabelText('Analyst focus'), { target: { value: 'Review tagged evidence' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Copilot' }))
+
+    await waitFor(() => expect(askCopilot).toHaveBeenCalledWith({
+      question: 'Review tagged evidence',
+      task_mode: 'account_summary',
+      scope: { parser_run_id: '', file_id: '', account: '', case_tag_id: 'CASE-TAG-1', case_tag: 'CASE-ALPHA' },
+      operator: 'Case Reviewer',
+      max_transactions: 20,
+    }))
   })
 })
